@@ -265,7 +265,7 @@ function KpiCard({
         {variation !== undefined && (
           <span
             className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold ${
-              variation >= 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+              variation >= 0 ? "bg-[var(--badge-success-bg)] text-[var(--badge-success-text)]" : "bg-[var(--badge-error-bg)] text-[var(--badge-error-text)]"
             }`}
           >
             {variation >= 0 ? "+" : ""}{variation}%
@@ -366,7 +366,7 @@ function DashComercial({
         fecha: c.created_at,
         tipo: "Cliente ganado",
         texto: c.empresa ?? c.nombre_contacto,
-        color: "bg-green-100 text-green-700",
+        color: "bg-[var(--badge-success-bg)] text-[var(--badge-success-text)]",
       }));
     tipificaciones
       .filter(t => enRango(t.fecha, desde, hasta))
@@ -590,7 +590,7 @@ function DashFinanciero({
           Facturas críticas — mayor saldo vencido
         </h3>
         {criticas.length === 0 ? (
-          <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-lg px-4 py-3 text-sm">
+          <div className="flex items-center gap-2 text-[var(--badge-success-text)] bg-[var(--badge-success-bg)] rounded-lg px-4 py-3 text-sm">
             <span>✅</span> No hay facturas vencidas. ¡Todo al día!
           </div>
         ) : (
@@ -620,7 +620,7 @@ function DashFinanciero({
                     <td className="px-3 py-2.5 font-mono text-xs text-slate-700 dark:text-slate-300">{f.numero_factura}</td>
                     <td className="px-3 py-2.5 text-xs font-medium">{formatFecha(f.fecha_vencimiento)}</td>
                     <td className="px-3 py-2.5">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/40 dark:text-red-400">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-[var(--badge-error-bg)] px-2 py-0.5 text-xs font-semibold text-[var(--badge-error-text)]">
                         Vencido
                       </span>
                     </td>
@@ -708,7 +708,7 @@ function DashInventario({
             Productos críticos — stock bajo mínimo
           </h3>
           {criticos.length === 0 ? (
-            <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 dark:text-emerald-400 rounded-lg px-4 py-3 text-sm">
+            <div className="flex items-center gap-2 text-[var(--badge-success-text)] bg-[var(--badge-success-bg)] rounded-lg px-4 py-3 text-sm">
               <span>✅</span> Todos los productos tienen stock suficiente.
             </div>
           ) : (
@@ -739,7 +739,7 @@ function DashInventario({
                       <td className="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400 tabular-nums">{p.stock_minimo} {p.unidad_medida}</td>
                       <td className="px-3 py-2.5">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          p.stock_actual <= 0 ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+                          p.stock_actual <= 0 ? "bg-[var(--badge-error-bg)] text-[var(--badge-error-text)]" : "bg-[var(--badge-warning-bg)] text-[var(--badge-warning-text)]"
                         }`}>
                           {p.stock_actual <= 0 ? "Crítico" : "Bajo"}
                         </span>
@@ -964,7 +964,7 @@ function DashVentas({
               {desglose.map(r => (
                 <tr key={r.tipo} className="hover:bg-gray-50/60 transition-colors">
                   <td className="px-3 py-2.5">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.tipo === "CONTADO" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.tipo === "CONTADO" ? "bg-[var(--badge-success-bg)] text-[var(--badge-success-text)]" : "bg-[#E0F2FE] text-[#0284C7]"}`}>
                       {r.tipo}
                     </span>
                   </td>

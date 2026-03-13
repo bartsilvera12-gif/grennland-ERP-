@@ -231,20 +231,21 @@ export default function Sidebar() {
       transition={{ duration: 0.2 }}
       className="flex shrink-0 flex-col border-r border-slate-200/10 bg-[#0F172A] dark:bg-[#020617]"
     >
-      {/* Logo */}
-      <div className="flex h-16 items-center justify-between gap-2 border-b border-white/10 px-3">
-        <Link href="/" className={`flex items-center overflow-hidden min-w-0 ${collapsed ? "flex-1 justify-center" : "gap-3"}`}>
-          <div className="relative h-8 shrink-0" style={{ width: collapsed ? 32 : 72 }}>
+      {/* Logo - más grande y bien integrado (referencia Platelink) */}
+      <div className="flex h-20 items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+        <Link href="/" className={`flex items-center overflow-hidden min-w-0 ${collapsed ? "flex-1 justify-center" : "gap-4"}`}>
+          <div className="relative shrink-0 flex items-center" style={{ height: 44, width: collapsed ? 44 : 88 }}>
             <Image
               src="/neura-logo.png"
               alt="Neura"
-              width={72}
-              height={32}
-              className="h-8 w-auto object-contain object-left"
+              width={88}
+              height={44}
+              className="h-11 w-auto max-w-full object-contain object-left"
+              priority
             />
           </div>
           {!collapsed && (
-            <span className="text-sm font-bold text-white truncate">NEURA ERP</span>
+            <span className="text-lg font-extrabold tracking-tight text-white truncate">NEURA ERP</span>
           )}
         </Link>
         <button
