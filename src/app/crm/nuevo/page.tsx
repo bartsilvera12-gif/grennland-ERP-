@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { saveProspecto } from "@/lib/crm/storage";
+import { getEtapas } from "@/lib/crm/etapas";
 import { getCurrentUser } from "@/lib/auth";
 import { getPlanes } from "@/lib/planes/storage";
 import PlanSelector from "@/components/crm/PlanSelector";
-import type { EtapaFunnel } from "@/lib/crm/types";
+import type { EtapaCrm } from "@/lib/crm/etapas";
 import type { Plan } from "@/lib/planes/types";
 
 // ── Estilos ────────────────────────────────────────────────────────────────────
@@ -24,12 +25,6 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-const ETAPAS: { value: EtapaFunnel; label: string }[] = [
-  { value: "LEAD",        label: "Lead"        },
-  { value: "CONTACTADO",  label: "Contactado"  },
-  { value: "NEGOCIACION", label: "Negociación" },
-];
-
 // ── Componente ────────────────────────────────────────────────────────────────
 
 export default function NuevoProspectoPage() {
@@ -41,7 +36,7 @@ export default function NuevoProspectoPage() {
     email:                 "",
     telefono:              "",
     planIds:               [] as string[],
-    etapa:                 "LEAD" as EtapaFunnel,
+    etapa:                 "",
     proxima_accion:        "",
     fecha_proxima_accion:  "",
     responsable:           "",
@@ -49,6 +44,7 @@ export default function NuevoProspectoPage() {
 
   const [error, setError] = useState<string | null>(null);
   const [planes, setPlanes] = useState<Plan[]>([]);
+  const [etapas, setEtapas] = useState<EtapaCrm[]>([]);
   const [cargandoPlanes, setCargandoPlanes] = useState(true);
   const [usuarioActual, setUsuarioActual] = useState<{ nombre?: string; email?: string } | null>(null);
 
@@ -57,6 +53,16 @@ export default function NuevoProspectoPage() {
       .then(setPlanes)
       .catch(() => setPlanes([]))
       .finally(() => setCargandoPlanes(false));
+  }, []);
+
+  useEffect(() => {
+    getEtapas().then((e) => {
+      setEtapas(e);
+      if (e.length > 0 && !form.etapa) {
+        const inicial = e.find((x) => x.codigo === "LEAD") ?? e[0];
+        setForm((prev) => ({ ...prev, etapa: inicial.codigo }));
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -103,6 +109,7 @@ export default function NuevoProspectoPage() {
     if (!form.empresa.trim())   return setError("La empresa es obligatoria.");
     if (!form.contacto.trim())  return setError("El contacto es obligatorio.");
     if (form.planIds.length === 0) return setError("Seleccioná al menos un servicio/plan.");
+    if (!form.etapa) return setError("Seleccioná una etapa.");
 
     const guardado = await saveProspecto({
       empresa:              form.empresa.trim().toUpperCase(),
@@ -248,8 +255,8 @@ export default function NuevoProspectoPage() {
                   onChange={handleChange}
                   className={inputClass}
                 >
-                  {ETAPAS.map((e) => (
-                    <option key={e.value} value={e.value}>{e.label}</option>
+                  {etapas.filter((e) => e.codigo !== "GANADO" && e.codigo !== "PERDIDO").map((e) => (
+                    <option key={e.id} value={e.codigo}>{e.nombre}</option>
                   ))}
                 </select>
               </div>

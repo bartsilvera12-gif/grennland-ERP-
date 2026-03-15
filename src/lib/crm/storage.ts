@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { getCurrentUser } from "@/lib/auth";
-import type { Prospecto, Nota, EtapaFunnel } from "./types";
+import type { Prospecto, Nota } from "./types";
 
 // ─── Tipos de fila Supabase ───────────────────────────────────────────────────
 
@@ -53,7 +53,7 @@ function rowToProspecto(row: ProspectoRow, notas: Nota[]): Prospecto {
     telefono: row.telefono ?? undefined,
     servicio: row.servicio,
     valor_estimado: Number(row.valor_estimado),
-    etapa: row.etapa as EtapaFunnel,
+    etapa: row.etapa,
     proxima_accion: row.proxima_accion ?? undefined,
     fecha_proxima_accion: row.fecha_proxima_accion ?? undefined,
     creado_por: row.creado_por ?? undefined,
@@ -231,7 +231,7 @@ export async function updateProspecto(
 /** Cambia la etapa del prospecto. */
 export async function moveProspecto(
   id: string,
-  etapa: EtapaFunnel
+  etapa: string
 ): Promise<void> {
   await updateProspecto(id, { etapa });
 }

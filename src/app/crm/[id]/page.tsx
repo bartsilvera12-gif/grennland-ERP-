@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { addNota, deleteProspecto, getProspecto, moveProspecto, updateProspecto } from "@/lib/crm/storage";
+import { getEtapas, getEtapaClasses } from "@/lib/crm/etapas";
 import { getPlanes } from "@/lib/planes/storage";
 import PlanSelector from "@/components/crm/PlanSelector";
-import type { EtapaFunnel, Nota, Prospecto } from "@/lib/crm/types";
+import type { EtapaCrm } from "@/lib/crm/etapas";
+import type { Nota, Prospecto } from "@/lib/crm/types";
 import type { Plan } from "@/lib/planes/types";
 
 // ── Estilos ────────────────────────────────────────────────────────────────────
@@ -22,16 +24,6 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     </p>
   );
 }
-
-// ── Config etapas (sin PROPUESTA) ─────────────────────────────────────────────
-
-const TODAS_ETAPAS: { value: EtapaFunnel; label: string; color: string }[] = [
-  { value: "LEAD",        label: "Lead",        color: "bg-gray-100 text-gray-700 border-gray-300"   },
-  { value: "CONTACTADO",  label: "Contactado",  color: "bg-blue-50 text-blue-700 border-blue-300"    },
-  { value: "NEGOCIACION", label: "Negociación", color: "bg-amber-50 text-amber-700 border-amber-300" },
-  { value: "GANADO",      label: "Ganado",      color: "bg-green-50 text-green-700 border-green-300" },
-  { value: "PERDIDO",     label: "Perdido",     color: "bg-red-50 text-red-700 border-red-300"       },
-];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -74,7 +66,12 @@ export default function EditProspectoPage() {
   const [errorForm,         setErrorForm]         = useState<string | null>(null);
   const [confirmarEliminar, setConfirmarEliminar] = useState(false);
   const [planes,            setPlanes]            = useState<Plan[]>([]);
+  const [etapas,            setEtapas]            = useState<EtapaCrm[]>([]);
   const [cargandoPlanes,    setCargandoPlanes]    = useState(true);
+
+  useEffect(() => {
+    getEtapas().then(setEtapas);
+  }, []);
 
   useEffect(() => {
     getPlanes()
@@ -174,8 +171,8 @@ export default function EditProspectoPage() {
     if (actualizado) router.push("/crm");
   }
 
-  async function handleCambiarEtapa(etapa: EtapaFunnel) {
-    await moveProspecto(id, etapa);
+  async function handleCambiarEtapa(etapaCodigo: string) {
+    await moveProspecto(id, etapaCodigo);
     cargar();
   }
 
@@ -213,7 +210,8 @@ export default function EditProspectoPage() {
 
   if (!prospecto) return null;
 
-  const etapaActual = TODAS_ETAPAS.find((e) => e.value === prospecto.etapa);
+  const etapaActual = etapas.find((e) => e.codigo === prospecto.etapa);
+  const etapaActualClasses = etapaActual ? getEtapaClasses(etapaActual.color) : null;
 
   return (
     <div className="space-y-8 max-w-3xl">
@@ -230,9 +228,9 @@ export default function EditProspectoPage() {
           <h1 className="text-2xl font-bold text-gray-800">{prospecto.empresa}</h1>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-sm text-gray-400 font-mono">{prospecto.numero_control}</span>
-            {etapaActual && (
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${etapaActual.color}`}>
-                {etapaActual.label}
+            {etapaActual && etapaActualClasses && (
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${etapaActualClasses.border} ${etapaActualClasses.headerBg} ${etapaActualClasses.headerText}`}>
+                {etapaActual.nombre}
               </span>
             )}
           </div>
@@ -275,20 +273,23 @@ export default function EditProspectoPage() {
       <div className="bg-white rounded-xl shadow p-5">
         <SectionTitle>Etapa del funnel</SectionTitle>
         <div className="flex flex-wrap gap-2">
-          {TODAS_ETAPAS.map((e) => (
-            <button
-              key={e.value}
-              type="button"
-              onClick={() => handleCambiarEtapa(e.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                prospecto.etapa === e.value
-                  ? `${e.color} ring-2 ring-offset-1 ring-gray-400`
-                  : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
-              }`}
-            >
-              {e.label}
-            </button>
-          ))}
+          {etapas.map((e) => {
+            const cls = getEtapaClasses(e.color);
+            return (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => handleCambiarEtapa(e.codigo)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                  prospecto.etapa === e.codigo
+                    ? `${cls.headerBg} ${cls.headerText} ${cls.border} ring-2 ring-offset-1 ring-gray-400`
+                    : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                {e.nombre}
+              </button>
+            );
+          })}
         </div>
         {prospecto.etapa === "GANADO" && (
           <div className="mt-3 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5 flex items-center justify-between">

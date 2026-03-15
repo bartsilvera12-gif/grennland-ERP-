@@ -1,3 +1,4 @@
+/** Etapas clásicas (para compatibilidad). Las etapas reales vienen de crm_etapas. */
 export type EtapaFunnel =
   | "LEAD"
   | "CONTACTADO"
@@ -20,7 +21,7 @@ export interface Prospecto {
   telefono?:             string;
   servicio:              string;       // producto / servicio de interés
   valor_estimado:        number;       // en GS
-  etapa:                 EtapaFunnel;
+  etapa:                 string;       // codigo de crm_etapas (LEAD, GANADO, etc.)
   proxima_accion?:       string;       // descripción de la próxima acción
   fecha_proxima_accion?: string;       // YYYY-MM-DD
   creado_por?:           string;       // nombre del usuario que creó el prospecto

@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { getConfig, saveConfig, resetConfig } from "@/lib/config/storage";
+import { getCurrentUser } from "@/lib/auth";
+import { getEtapasParaConfig, createEtapa, updateEtapa, deleteEtapa, getEtapaClasses, type EtapaCrm } from "@/lib/crm/etapas";
 import type { ConfigGlobal, FormatoFecha, IdiomaDefault, MonedaBase, Timezone } from "@/lib/config/types";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
-type Tab = "facturacion" | "politicas" | "preferencias" | "metricas";
+type Tab = "facturacion" | "politicas" | "preferencias" | "metricas" | "crm";
 
 // ── Helpers UI ────────────────────────────────────────────────────────────────
 
@@ -53,6 +55,10 @@ export default function ConfiguracionPage() {
   const [config,    setConfig]    = useState<ConfigGlobal | null>(null);
   const [success,   setSuccess]   = useState(false);
   const [showReset, setShowReset] = useState(false);
+  const [esAdmin,   setEsAdmin]   = useState(false);
+  const [etapasCrm, setEtapasCrm] = useState<EtapaCrm[]>([]);
+  const [nuevaEtapa, setNuevaEtapa] = useState({ nombre: "", codigo: "", color: "gray", orden: 0 });
+  const [editandoEtapa, setEditandoEtapa] = useState<string | null>(null);
 
   type FormState = Omit<ConfigGlobal, "updated_at" | "updated_by">;
 
@@ -74,6 +80,17 @@ export default function ConfiguracionPage() {
     meta_facturacion_mensual: 80_000_000,
     meta_conversion_leads:    25,
   });
+
+  useEffect(() => {
+    getCurrentUser().then((u) => {
+      const rol = (u as { rol?: string })?.rol;
+      setEsAdmin(rol === "admin" || rol === "administrador" || rol === "super_admin");
+    });
+  }, []);
+
+  useEffect(() => {
+    if (tab === "crm") getEtapasParaConfig().then(setEtapasCrm);
+  }, [tab]);
 
   useEffect(() => {
     const cfg = getConfig();
@@ -149,6 +166,7 @@ export default function ConfiguracionPage() {
     { id: "politicas",    label: "Políticas del sistema",  icon: "📋" },
     { id: "preferencias", label: "Preferencias",           icon: "⚙️" },
     { id: "metricas",     label: "Métricas",               icon: "🎯" },
+    { id: "crm",          label: "Configuración CRM",      icon: "📊" },
   ];
 
   const facturaPreview = `${form.prefijo_factura}${String(form.numeracion_inicial).padStart(6, "0")}`;
@@ -522,6 +540,159 @@ export default function ConfiguracionPage() {
                 <MetricCard label="Facturación / mes" value={`Gs. ${config.meta_facturacion_mensual.toLocaleString("es-PY")}`} />
                 <MetricCard label="Conversión leads"  value={`${config.meta_conversion_leads}%`} sub="objetivo" />
               </div>
+            </Card>
+          </>
+        )}
+
+        {/* ══ TAB: CONFIGURACIÓN CRM ════════════════════════════════════ */}
+        {tab === "crm" && (
+          <>
+            <Card>
+              <SectionTitle>Estados del pipeline CRM</SectionTitle>
+              {!esAdmin ? (
+                <p className="text-sm text-gray-500">Solo usuarios con rol administrador pueden modificar las etapas del funnel.</p>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-400 mb-4 leading-relaxed">
+                    Definí las etapas (columnas) del pipeline comercial. Cada empresa tiene sus propias etapas.
+                  </p>
+                  <div className="space-y-4">
+                    {etapasCrm.map((e) => (
+                      <div key={e.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                        <span className={`w-3 h-3 rounded-full shrink-0 ${getEtapaClasses(e.color).dot}`} />
+                        <div className="flex-1 min-w-0">
+                          {editandoEtapa === e.id ? (
+                            <div className="flex flex-wrap gap-2 items-center">
+                              <input
+                                type="text"
+                                defaultValue={e.nombre}
+                                id={`edit-nombre-${e.id}`}
+                                className="w-32 px-2 py-1 text-sm border rounded"
+                              />
+                              <select
+                                id={`edit-color-${e.id}`}
+                                defaultValue={e.color}
+                                className="px-2 py-1 text-sm border rounded"
+                              >
+                                {["gray", "blue", "amber", "green", "red", "violet", "cyan", "pink"].map((c) => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                              </select>
+                              <input
+                                type="number"
+                                id={`edit-orden-${e.id}`}
+                                defaultValue={e.orden}
+                                className="w-16 px-2 py-1 text-sm border rounded"
+                              />
+                              <label className="flex items-center gap-1 text-xs">
+                                <input type="checkbox" id={`edit-activo-${e.id}`} defaultChecked={e.activo} />
+                                Activo
+                              </label>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const nombre = (document.getElementById(`edit-nombre-${e.id}`) as HTMLInputElement)?.value?.trim();
+                                  const color = (document.getElementById(`edit-color-${e.id}`) as HTMLSelectElement)?.value;
+                                  const orden = parseInt((document.getElementById(`edit-orden-${e.id}`) as HTMLInputElement)?.value ?? "0", 10);
+                                  const activo = (document.getElementById(`edit-activo-${e.id}`) as HTMLInputElement)?.checked ?? true;
+                                  if (nombre) await updateEtapa(e.id, { nombre, color, orden, activo });
+                                  setEditandoEtapa(null);
+                                  getEtapasParaConfig().then(setEtapasCrm);
+                                }}
+                                className="text-xs text-green-600 hover:text-green-800 font-medium"
+                              >
+                                Guardar
+                              </button>
+                              <button type="button" onClick={() => setEditandoEtapa(null)} className="text-xs text-gray-500">
+                                Cancelar
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="font-medium text-gray-800">{e.nombre}</span>
+                              <span className="text-xs text-gray-500 ml-2">({e.codigo}) · orden {e.orden}</span>
+                              {!e.activo && <span className="text-xs text-amber-600 ml-1">· Inactivo</span>}
+                            </>
+                          )}
+                        </div>
+                        {editandoEtapa !== e.id && (
+                          <div className="flex gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setEditandoEtapa(e.id)}
+                              className="text-xs text-gray-500 hover:text-gray-800 px-2 py-1 rounded hover:bg-gray-50"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (confirm("¿Eliminar esta etapa? Los prospectos en esta etapa quedarán sin etapa asignada.")) {
+                                  await deleteEtapa(e.id);
+                                  getEtapasParaConfig().then(setEtapasCrm);
+                                }
+                              }}
+                              className="text-xs text-red-500 hover:text-red-800 px-2 py-1 rounded hover:bg-red-50"
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <h5 className="text-xs font-semibold text-gray-600 mb-2">Crear nueva etapa</h5>
+                    <div className="flex flex-wrap gap-2 items-end">
+                      <div>
+                        <label className="text-[10px] text-gray-500 block mb-0.5">Nombre</label>
+                        <input
+                          type="text"
+                          value={nuevaEtapa.nombre}
+                          onChange={(ev) => setNuevaEtapa((prev) => ({ ...prev, nombre: ev.target.value, codigo: ev.target.value.replace(/\s+/g, "_").toUpperCase() }))}
+                          placeholder="Ej: Calificación"
+                          className="px-2 py-1.5 text-sm border rounded w-32"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-500 block mb-0.5">Color</label>
+                        <select
+                          value={nuevaEtapa.color}
+                          onChange={(ev) => setNuevaEtapa((prev) => ({ ...prev, color: ev.target.value }))}
+                          className="px-2 py-1.5 text-sm border rounded"
+                        >
+                          {["gray", "blue", "amber", "green", "red", "violet", "cyan", "pink"].map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-500 block mb-0.5">Orden</label>
+                        <input
+                          type="number"
+                          value={nuevaEtapa.orden || ""}
+                          onChange={(ev) => setNuevaEtapa((prev) => ({ ...prev, orden: parseInt(ev.target.value, 10) || 0 }))}
+                          className="px-2 py-1.5 text-sm border rounded w-16"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!nuevaEtapa.nombre.trim()) return;
+                          const codigo = nuevaEtapa.codigo || nuevaEtapa.nombre.replace(/\s+/g, "_").toUpperCase();
+                          const orden = nuevaEtapa.orden ?? (Math.max(0, ...etapasCrm.map((x) => x.orden)) + 1);
+                          await createEtapa({ nombre: nuevaEtapa.nombre.trim(), codigo, color: nuevaEtapa.color, orden });
+                          setNuevaEtapa({ nombre: "", codigo: "", color: "gray", orden: 0 });
+                          getEtapasParaConfig().then(setEtapasCrm);
+                        }}
+                        className="px-3 py-1.5 text-xs font-medium bg-[#0EA5E9] text-white rounded hover:bg-[#0284C7]"
+                      >
+                        Crear etapa
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
             </Card>
           </>
         )}
