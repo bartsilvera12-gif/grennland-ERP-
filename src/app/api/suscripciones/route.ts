@@ -1,0 +1,100 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { getUserAndEmpresa } from "@/lib/middleware/auth";
+import { successResponse, errorResponse } from "@/lib/api/response";
+import { API_ERRORS } from "@/lib/api/errors";
+import { emitEvent, EVENT_TYPES } from "@/lib/integrations/events";
+
+function getSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Supabase no configurado");
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const auth = await getUserAndEmpresa();
+    if (!auth) {
+      return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const clienteId = searchParams.get("cliente_id");
+
+    const supabase = getSupabase();
+    let query = supabase
+      .from("suscripciones")
+      .select("*")
+      .eq("empresa_id", auth.empresa_id)
+      .order("created_at", { ascending: false });
+
+    if (clienteId) {
+      query = query.eq("cliente_id", clienteId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      return NextResponse.json(errorResponse(error.message), { status: 400 });
+    }
+
+    return NextResponse.json(successResponse(data ?? []));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error";
+    return NextResponse.json(errorResponse(msg), { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const auth = await getUserAndEmpresa();
+    if (!auth) {
+      return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
+    }
+
+    const body = await request.json();
+    const { cliente_id, plan_id, precio, moneda, fecha_inicio, duracion_meses, dia_facturacion, dia_vencimiento, generar_factura_este_mes } = body;
+
+    if (!cliente_id?.trim()) {
+      return NextResponse.json(errorResponse("cliente_id es obligatorio"), { status: 400 });
+    }
+    if (precio == null || Number(precio) < 0) {
+      return NextResponse.json(errorResponse("precio debe ser >= 0"), { status: 400 });
+    }
+    if (!fecha_inicio) {
+      return NextResponse.json(errorResponse("fecha_inicio es obligatoria"), { status: 400 });
+    }
+
+    const insert = {
+      empresa_id: auth.empresa_id,
+      cliente_id: cliente_id.trim(),
+      plan_id: plan_id?.trim() || null,
+      precio: Number(precio),
+      moneda: moneda === "USD" ? "USD" : "GS",
+      fecha_inicio,
+      duracion_meses: Number(duracion_meses) || 12,
+      dia_facturacion: Math.min(28, Math.max(1, Number(dia_facturacion) || 1)),
+      dia_vencimiento: Math.min(31, Math.max(1, Number(dia_vencimiento) || 10)),
+      generar_factura_este_mes: Boolean(generar_factura_este_mes),
+    };
+
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("suscripciones")
+      .insert([insert])
+      .select()
+      .single();
+
+    if (error) {
+      return NextResponse.json(errorResponse(error.message), { status: 400 });
+    }
+
+    emitEvent(EVENT_TYPES.suscripcion_creada, { suscripcion_id: data.id, cliente_id: data.cliente_id });
+
+    return NextResponse.json(successResponse(data));
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error";
+    return NextResponse.json(errorResponse(msg), { status: 500 });
+  }
+}
