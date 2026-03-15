@@ -384,6 +384,7 @@ function NuevoClienteForm() {
                   className={inputClass}
                 >
                   <option value="CONTADO">Contado</option>
+                  <option value="MENSUAL">Mensual</option>
                   <option value="15 DÍAS">15 días</option>
                   <option value="30 DÍAS">30 días</option>
                   <option value="60 DÍAS">60 días</option>

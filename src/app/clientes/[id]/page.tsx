@@ -525,7 +525,20 @@ export default function ClienteDetailPage() {
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className={labelClass}>Condición de pago</label>
-                    <input type="text" name="condicion_pago" value={form.condicion_pago} onChange={handleChange} className={`${inputClass} uppercase`} />
+                    <select
+                      name="condicion_pago"
+                      value={form.condicion_pago}
+                      onChange={handleChange}
+                      className={inputClass}
+                    >
+                      <option value="">—</option>
+                      <option value="CONTADO">Contado</option>
+                      <option value="MENSUAL">Mensual</option>
+                      <option value="15 DÍAS">15 días</option>
+                      <option value="30 DÍAS">30 días</option>
+                      <option value="60 DÍAS">60 días</option>
+                      <option value="90 DÍAS">90 días</option>
+                    </select>
                   </div>
                   <div>
                     <label className={labelClass}>Moneda preferida</label>
