@@ -107,7 +107,7 @@ function rowToCliente(row: SupabaseRow): Cliente {
 // ─── API pública ──────────────────────────────────────────────────────────────
 
 /** Lista clientes. RLS filtra por empresa. Excluye eliminados (soft delete). */
-export async function getClientes(opts?: { incluirEliminados?: boolean }): Promise<Cliente[]> {
+export async function getClientes(opts?: { incluirEliminados?: boolean; incluirPlanActivo?: boolean }): Promise<Cliente[]> {
   let q = supabase
     .from("clientes")
     .select("*")
@@ -121,7 +121,45 @@ export async function getClientes(opts?: { incluirEliminados?: boolean }): Promi
     console.error("[clientes] getClientes:", error.message);
     return [];
   }
-  return (data as SupabaseRow[]).map(rowToCliente);
+
+  const clientes = (data as SupabaseRow[]).map(rowToCliente);
+
+  if (opts?.incluirPlanActivo) {
+    const planMap = await getPlanActivoPorClienteMap(clientes.map((c) => c.id));
+    clientes.forEach((c) => {
+      (c as Cliente & { plan_activo?: string }).plan_activo = planMap.get(c.id) ?? null;
+    });
+  }
+
+  return clientes;
+}
+
+/** Obtiene mapa cliente_id -> nombre del plan activo (suscripción activa más reciente). Una sola query en batch. */
+async function getPlanActivoPorClienteMap(clienteIds: string[]): Promise<Map<string, string>> {
+  if (clienteIds.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("suscripciones")
+    .select("cliente_id, planes(nombre)")
+    .eq("estado", "activa")
+    .in("cliente_id", clienteIds)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[clientes] getPlanActivoPorClienteMap:", error.message);
+    return new Map();
+  }
+
+  const map = new Map<string, string>();
+  for (const row of data ?? []) {
+    const cid = (row as { cliente_id: string }).cliente_id;
+    if (!map.has(cid)) {
+      const planes = (row as { planes: { nombre: string } | null }).planes;
+      const nombre = planes?.nombre?.trim();
+      map.set(cid, nombre || "Suscripción");
+    }
+  }
+  return map;
 }
 
 /** Obtiene un cliente por ID. RLS filtra por empresa. Por defecto excluye eliminados. */

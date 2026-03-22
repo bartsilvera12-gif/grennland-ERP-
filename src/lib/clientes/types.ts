@@ -71,4 +71,7 @@ export interface Cliente {
 
   created_at:          string;          // ISO string
   updated_at:          string;          // ISO string
+
+  /** Nombre del plan activo (suscripción activa). Solo cuando se solicita en listado. */
+  plan_activo?:        string | null;
 }

@@ -58,7 +58,7 @@ export default function ClientesPage() {
   const [filtroTipoServicio, setFiltroTipoServicio] = useState<"" | Cliente["tipo_servicio_cliente"]>("");
 
   useEffect(() => {
-    getClientes().then((data) => {
+    getClientes({ incluirPlanActivo: true }).then((data) => {
       setClientes(data);
       setCargando(false);
     });
@@ -217,7 +217,7 @@ export default function ClientesPage() {
                 <th className="text-left text-xs font-semibold text-slate-600 px-5 py-3">Empresa / Nombre</th>
                 <th className="text-left text-xs font-semibold text-slate-600 px-5 py-3">Contacto</th>
                 <th className="text-left text-xs font-semibold text-slate-600 px-5 py-3">Teléfono</th>
-                <th className="text-left text-xs font-semibold text-slate-600 px-5 py-3">Email</th>
+                <th className="text-left text-xs font-semibold text-slate-600 px-5 py-3">Plan activo</th>
                 <th className="text-left text-xs font-semibold text-slate-600 px-5 py-3">Origen</th>
                 <th className="text-left text-xs font-semibold text-slate-600 px-5 py-3">Tipo servicio</th>
                 <th className="text-left text-xs font-semibold text-slate-600 px-5 py-3">Estado</th>
@@ -260,7 +260,15 @@ export default function ClientesPage() {
                     </p>
                   </td>
                   <td className="px-5 py-3.5 text-sm text-gray-600">{c.telefono ?? "—"}</td>
-                  <td className="px-5 py-3.5 text-sm text-gray-600">{c.email ?? "—"}</td>
+                  <td className="px-5 py-3.5">
+                    {c.plan_activo ? (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                        {c.plan_activo}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">Sin suscripción</span>
+                    )}
+                  </td>
                   <td className="px-5 py-3.5"><BadgeOrigen origen={c.origen} /></td>
                   <td className="px-5 py-3.5 text-xs text-gray-600">{c.tipo_servicio_cliente ? c.tipo_servicio_cliente.charAt(0).toUpperCase() + c.tipo_servicio_cliente.slice(1) : "—"}</td>
                   <td className="px-5 py-3.5"><BadgeEstado estado={c.estado} /></td>
