@@ -124,6 +124,22 @@ export async function saveSuscripcion(
     await generarFacturaDesdeSuscripcion(suscripcion, planNombre ?? "Servicio");
   }
 
+  // Si el plan es de marketing, marcar cliente como tipo_servicio_cliente = marketing
+  if (datos.plan_id) {
+    const { data: plan } = await supabase
+      .from("planes")
+      .select("es_plan_marketing")
+      .eq("id", datos.plan_id)
+      .single();
+    if (plan?.es_plan_marketing) {
+      await supabase
+        .from("clientes")
+        .update({ tipo_servicio_cliente: "marketing" })
+        .eq("id", datos.cliente_id)
+        .eq("empresa_id", usuario.empresa_id);
+    }
+  }
+
   return {
     id: suscripcion.id,
     cliente_id: suscripcion.cliente_id,

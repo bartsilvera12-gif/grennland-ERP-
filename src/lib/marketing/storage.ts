@@ -13,24 +13,30 @@ interface TaskRow {
   fecha_entrega: string;
   responsable_user_id: string | null;
   prioridad: string | null;
+  suscripcion_id: string | null;
+  plan_id: string | null;
+  generada_automaticamente: boolean | null;
   created_at: string;
   updated_at: string;
 }
 
 function rowToTask(r: TaskRow): MarketingTask {
   return {
-    id:                  r.id,
-    empresa_id:          r.empresa_id,
-    cliente_id:          r.cliente_id,
-    titulo:              r.titulo,
-    descripcion:         r.descripcion ?? undefined,
-    tipo_contenido:      r.tipo_contenido as MarketingTask["tipo_contenido"],
-    estado:              r.estado as MarketingTask["estado"],
-    fecha_entrega:       r.fecha_entrega,
-    responsable_user_id: r.responsable_user_id ?? undefined,
-    prioridad:           (r.prioridad as MarketingTask["prioridad"]) ?? undefined,
-    created_at:         r.created_at,
-    updated_at:          r.updated_at,
+    id:                       r.id,
+    empresa_id:               r.empresa_id,
+    cliente_id:               r.cliente_id,
+    titulo:                   r.titulo,
+    descripcion:              r.descripcion ?? undefined,
+    tipo_contenido:           r.tipo_contenido as MarketingTask["tipo_contenido"],
+    estado:                   r.estado as MarketingTask["estado"],
+    fecha_entrega:            r.fecha_entrega,
+    responsable_user_id:      r.responsable_user_id ?? undefined,
+    prioridad:                (r.prioridad as MarketingTask["prioridad"]) ?? undefined,
+    suscripcion_id:          r.suscripcion_id ?? undefined,
+    plan_id:                 r.plan_id ?? undefined,
+    generada_automaticamente: Boolean(r.generada_automaticamente),
+    created_at:              r.created_at,
+    updated_at:              r.updated_at,
   };
 }
 
@@ -59,6 +65,31 @@ export async function getMarketingTasks(clienteId: string): Promise<MarketingTas
 
   if (error) {
     console.error("[marketing] getMarketingTasks:", error.message);
+    return [];
+  }
+  return (data as TaskRow[]).map(rowToTask);
+}
+
+/** Lista tareas del mes. RLS filtra por empresa. */
+export async function getMarketingTasksDelMes(mes: string): Promise<MarketingTask[]> {
+  const usuario = await getCurrentUser();
+  if (!usuario?.empresa_id) return [];
+
+  const [ano, mesNum] = mes.split("-").map(Number);
+  const primerDia = `${mes}-01`;
+  const ultimoDia = new Date(ano, mesNum, 0).getDate();
+  const ultimoDiaStr = `${mes}-${String(ultimoDia).padStart(2, "0")}`;
+
+  const { data, error } = await supabase
+    .from("marketing_tasks")
+    .select("*")
+    .eq("empresa_id", usuario.empresa_id)
+    .gte("fecha_entrega", primerDia)
+    .lte("fecha_entrega", ultimoDiaStr)
+    .order("fecha_entrega", { ascending: true });
+
+  if (error) {
+    console.error("[marketing] getMarketingTasksDelMes:", error.message);
     return [];
   }
   return (data as TaskRow[]).map(rowToTask);
@@ -168,4 +199,34 @@ export async function updateTaskStatus(
   estado: MarketingTask["estado"]
 ): Promise<MarketingTask | null> {
   return updateMarketingTask(id, { estado });
+}
+
+export interface MetricasCumplimiento {
+  total: number;
+  completadas: number;
+  porcentaje: number;
+}
+
+/** Métricas de cumplimiento para un mes: total tareas, completadas (aprobado/publicado), porcentaje */
+export async function getMetricasCumplimiento(mes: string): Promise<MetricasCumplimiento> {
+  const usuario = await getCurrentUser();
+  if (!usuario?.empresa_id) return { total: 0, completadas: 0, porcentaje: 0 };
+
+  const [ano, mesNum] = mes.split("-").map(Number);
+  const primerDia = `${mes}-01`;
+  const ultimoDia = new Date(ano, mesNum, 0).getDate();
+  const ultimoDiaStr = `${mes}-${String(ultimoDia).padStart(2, "0")}`;
+
+  const { data: tasks } = await supabase
+    .from("marketing_tasks")
+    .select("estado")
+    .eq("empresa_id", usuario.empresa_id)
+    .gte("fecha_entrega", primerDia)
+    .lte("fecha_entrega", ultimoDiaStr);
+
+  const total = (tasks ?? []).length;
+  const completadas = (tasks ?? []).filter((t) => t.estado === "aprobado" || t.estado === "publicado").length;
+  const porcentaje = total > 0 ? Math.round((completadas / total) * 100) : 0;
+
+  return { total, completadas, porcentaje };
 }

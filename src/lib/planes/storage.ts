@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { getCurrentUser } from "@/lib/auth";
-import type { Plan, EstadoPlan } from "./types";
+import type { Plan, EstadoPlan, PlanMarketingPlantilla } from "./types";
 
 // ─── Tipos de fila Supabase ───────────────────────────────────────────────────
 
@@ -17,6 +17,8 @@ interface PlanRow {
   limite_clientes: number | null;
   limite_facturas: number | null;
   estado: string;
+  es_plan_marketing: boolean | null;
+  plantilla_operativa: unknown;
   created_at: string;
   updated_at: string;
 }
@@ -24,6 +26,7 @@ interface PlanRow {
 // ─── Mapeo fila → tipo ────────────────────────────────────────────────────────
 
 function rowToPlan(row: PlanRow): Plan {
+  const plantilla = row.plantilla_operativa;
   return {
     id: row.id,
     codigo_plan: row.codigo_plan,
@@ -36,6 +39,10 @@ function rowToPlan(row: PlanRow): Plan {
     limite_clientes: row.limite_clientes,
     limite_facturas: row.limite_facturas,
     estado: row.estado as EstadoPlan,
+    es_plan_marketing: Boolean(row.es_plan_marketing),
+    plantilla_operativa: Array.isArray((plantilla as { items?: unknown })?.items)
+      ? (plantilla as PlanMarketingPlantilla)
+      : undefined,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -96,7 +103,7 @@ export async function savePlan(datos: NuevoPlanData): Promise<Plan | null> {
 
   const codigoPlan = await generarCodigoPlan();
 
-  const insert = {
+  const insert: Record<string, unknown> = {
     empresa_id: usuario.empresa_id,
     codigo_plan: codigoPlan,
     nombre: datos.nombre,
@@ -109,6 +116,8 @@ export async function savePlan(datos: NuevoPlanData): Promise<Plan | null> {
     limite_facturas: datos.limite_facturas ?? null,
     estado: datos.estado,
   };
+  if (datos.es_plan_marketing !== undefined) insert.es_plan_marketing = datos.es_plan_marketing;
+  if (datos.plantilla_operativa !== undefined) insert.plantilla_operativa = datos.plantilla_operativa;
 
   const { data, error } = await supabase
     .from("planes")
@@ -138,6 +147,8 @@ export async function updatePlan(
   if (datos.limite_clientes !== undefined) patch.limite_clientes = datos.limite_clientes ?? null;
   if (datos.limite_facturas !== undefined) patch.limite_facturas = datos.limite_facturas ?? null;
   if (datos.estado !== undefined) patch.estado = datos.estado;
+  if (datos.es_plan_marketing !== undefined) patch.es_plan_marketing = datos.es_plan_marketing;
+  if (datos.plantilla_operativa !== undefined) patch.plantilla_operativa = datos.plantilla_operativa;
 
   const { data, error } = await supabase
     .from("planes")

@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import MontoInput from "@/components/ui/MontoInput";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { getPlan, updatePlan, toggleEstadoPlan, deletePlan } from "@/lib/planes/storage";
-import type { Plan } from "@/lib/planes/types";
+import type { Plan, PlanMarketingItem } from "@/lib/planes/types";
+import { TIPOS_CONTENIDO } from "@/lib/marketing/types";
 import { Suspense } from "react";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -91,6 +92,8 @@ function PlanDetailContent() {
     limite_clientes: "",
     limite_facturas: "",
     estado:          "activo" as "activo" | "inactivo",
+    es_plan_marketing: false,
+    plantilla_items: [] as PlanMarketingItem[],
   });
 
   useEffect(() => {
@@ -107,6 +110,8 @@ function PlanDetailContent() {
         limite_clientes: p.limite_clientes !== null ? String(p.limite_clientes) : "",
         limite_facturas: p.limite_facturas !== null ? String(p.limite_facturas) : "",
         estado:          p.estado,
+        es_plan_marketing: Boolean(p.es_plan_marketing),
+        plantilla_items: p.plantilla_operativa?.items ?? [],
       });
     });
   }, [id, router]);
@@ -139,6 +144,8 @@ function PlanDetailContent() {
       limite_clientes: form.limite_clientes ? parseInt(form.limite_clientes, 10) : null,
       limite_facturas: form.limite_facturas ? parseInt(form.limite_facturas, 10) : null,
       estado:          form.estado,
+      es_plan_marketing: form.es_plan_marketing,
+      plantilla_operativa: form.plantilla_items.length > 0 ? { items: form.plantilla_items } : undefined,
     });
 
     if (actualizado) router.push("/planes");
@@ -217,6 +224,25 @@ function PlanDetailContent() {
           </button>
         </div>
       </div>
+
+      {/* Plan marketing (vista) */}
+      {!editing && plan.es_plan_marketing && plan.plantilla_operativa?.items?.length && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+          <SectionTitle>Plan de marketing</SectionTitle>
+          <p className="text-sm text-slate-600 mb-3">Este plan genera tareas de contenido automáticamente.</p>
+          <ul className="space-y-2">
+            {plan.plantilla_operativa.items.map((item, i) => (
+              <li key={i} className="text-sm">
+                <span className="font-medium capitalize">{item.tipo_contenido}</span>
+                {" — "}
+                {item.periodicidad === "semanal"
+                  ? `${item.cantidad} por semana${item.dias_semana?.length ? ` (${(item.dias_semana ?? []).map((d) => ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"][d]).join(", ")})` : ""}`
+                  : `${item.cantidad} por mes (semana ${item.semana_del_mes ?? 1})`}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Resumen de límites (vista) */}
       {!editing && (
@@ -311,6 +337,123 @@ function PlanDetailContent() {
                   <option value="unico">Único</option>
                 </select>
               </div>
+            </div>
+          </section>
+
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <SectionTitle>Plan de marketing</SectionTitle>
+            <div className="space-y-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.es_plan_marketing}
+                  onChange={(e) => setForm((p) => ({ ...p, es_plan_marketing: e.target.checked }))}
+                  className="rounded border-slate-300"
+                />
+                <span className="text-sm font-medium">Es plan de marketing</span>
+              </label>
+              {form.es_plan_marketing && (
+                <div className="mt-4 space-y-3 border-t border-slate-100 pt-4">
+                  <p className="text-xs text-slate-500">Plantilla operativa (genera tareas automáticamente)</p>
+                  {form.plantilla_items.map((item, idx) => (
+                    <div key={idx} className="flex flex-wrap items-center gap-2 p-3 bg-slate-50 rounded-lg">
+                      <select
+                        value={item.tipo_contenido}
+                        onChange={(e) => {
+                          const items = [...form.plantilla_items];
+                          items[idx] = { ...item, tipo_contenido: e.target.value as PlanMarketingItem["tipo_contenido"] };
+                          setForm((p) => ({ ...p, plantilla_items: items }));
+                        }}
+                        className="text-sm border border-slate-200 rounded px-2 py-1"
+                      >
+                        {TIPOS_CONTENIDO.map((t) => (
+                          <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={item.periodicidad}
+                        onChange={(e) => {
+                          const items = [...form.plantilla_items];
+                          items[idx] = { ...item, periodicidad: e.target.value as "semanal" | "mensual" };
+                          setForm((p) => ({ ...p, plantilla_items: items }));
+                        }}
+                        className="text-sm border border-slate-200 rounded px-2 py-1"
+                      >
+                        <option value="semanal">Semanal</option>
+                        <option value="mensual">Mensual</option>
+                      </select>
+                      <input
+                        type="number"
+                        min={1}
+                        value={item.cantidad}
+                        onChange={(e) => {
+                          const items = [...form.plantilla_items];
+                          items[idx] = { ...item, cantidad: parseInt(e.target.value, 10) || 1 };
+                          setForm((p) => ({ ...p, plantilla_items: items }));
+                        }}
+                        className="w-14 text-sm border border-slate-200 rounded px-2 py-1"
+                        placeholder="Cant."
+                      />
+                      {item.periodicidad === "semanal" && (
+                        <span className="text-xs text-slate-500">Días: </span>
+                      )}
+                      {item.periodicidad === "semanal" && (
+                        [0, 1, 2, 3, 4, 5, 6].map((d) => (
+                          <label key={d} className="flex items-center gap-0.5 text-xs cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(item.dias_semana ?? []).includes(d)}
+                              onChange={(e) => {
+                                const items = [...form.plantilla_items];
+                                const ds = item.dias_semana ?? [];
+                                const next = e.target.checked ? [...ds, d].sort((a, b) => a - b) : ds.filter((x) => x !== d);
+                                items[idx] = { ...item, dias_semana: next };
+                                setForm((p) => ({ ...p, plantilla_items: items }));
+                              }}
+                            />
+                            <span>{["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"][d]}</span>
+                          </label>
+                        ))
+                      )}
+                      {item.periodicidad === "mensual" && (
+                        <>
+                          <span className="text-xs text-slate-500">Semana:</span>
+                          <select
+                            value={item.semana_del_mes ?? 1}
+                            onChange={(e) => {
+                              const items = [...form.plantilla_items];
+                              items[idx] = { ...item, semana_del_mes: parseInt(e.target.value, 10) };
+                              setForm((p) => ({ ...p, plantilla_items: items }));
+                            }}
+                            className="text-sm border border-slate-200 rounded px-2 py-1"
+                          >
+                            {[1, 2, 3, 4].map((s) => (
+                              <option key={s} value={s}>{s}ª del mes</option>
+                            ))}
+                          </select>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setForm((p) => ({ ...p, plantilla_items: form.plantilla_items.filter((_, i) => i !== idx) }))}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setForm((p) => ({
+                      ...p,
+                      plantilla_items: [...p.plantilla_items, { tipo_contenido: "post", periodicidad: "semanal", cantidad: 1, dias_semana: [1, 3, 5] }],
+                    }))}
+                    className="text-sm text-[#0EA5E9] hover:underline"
+                  >
+                    + Agregar item
+                  </button>
+                </div>
+              )}
             </div>
           </section>
 

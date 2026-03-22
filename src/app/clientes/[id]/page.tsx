@@ -1182,7 +1182,7 @@ export default function ClienteDetailPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-slate-50">
                       <tr>
-                        {["Título", "Tipo", "Estado", "Fecha entrega", "Responsable"].map((h) => (
+                        {["Título", "Tipo", "Estado", "Fecha entrega", "Responsable", "Origen"].map((h) => (
                           <th key={h} className="text-left text-xs font-semibold text-slate-600 px-4 py-3">{h}</th>
                         ))}
                       </tr>
@@ -1214,6 +1214,9 @@ export default function ClienteDetailPage() {
                               {t.responsable_user_id
                                 ? usuariosEmpresa.find((u) => u.id === t.responsable_user_id)?.nombre ?? "—"
                                 : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-xs text-slate-500">
+                              {t.generada_automaticamente ? "Plan" : "Manual"}
                             </td>
                           </tr>
                         );

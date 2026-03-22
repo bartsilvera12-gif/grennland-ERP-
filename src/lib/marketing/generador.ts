@@ -1,0 +1,409 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
+import { getCurrentUser } from "@/lib/auth";
+import type { PlanMarketingItem, PlanMarketingPlantilla } from "@/lib/planes/types";
+import { TIPOS_CONTENIDO } from "./types";
+
+const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+function slotKey(clienteId: string, fecha: string, tipo: string): string {
+  return `${clienteId}|${fecha}|${tipo}`;
+}
+
+/** Obtiene todas las fechas de un mes en formato YYYY-MM-DD */
+function fechasDelMes(ano: number, mes: number): string[] {
+  const fechas: string[] = [];
+  const ultimoDia = new Date(ano, mes, 0).getDate();
+  for (let d = 1; d <= ultimoDia; d++) {
+    fechas.push(`${String(ano).padStart(4, "0")}-${String(mes).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+  }
+  return fechas;
+}
+
+/** Obtiene el día de la semana (0=dom, 1=lun, ..., 6=sáb) para una fecha YYYY-MM-DD */
+function diaSemana(fecha: string): number {
+  const d = new Date(fecha + "T12:00:00Z");
+  return d.getUTCDay();
+}
+
+/** Obtiene la semana del mes (1-4 o 5) para una fecha. Semana 1 = días 1-7, etc. */
+function semanaDelMes(fecha: string): number {
+  const [, , dd] = fecha.split("-").map(Number);
+  return Math.ceil(dd / 7);
+}
+
+/** Genera fechas para item semanal: cada semana del mes, en los días indicados, hasta cantidad por semana */
+function fechasParaItemSemanal(
+  ano: number,
+  mes: number,
+  item: PlanMarketingItem
+): string[] {
+  const dias = item.dias_semana ?? [];
+  const cantidad = Math.max(1, item.cantidad ?? 1);
+  if (dias.length === 0) return [];
+
+  const fechas: string[] = [];
+  const diasUsar = dias.slice(0, cantidad).sort((a, b) => a - b);
+
+  const todasLasFechas = fechasDelMes(ano, mes);
+  for (const fecha of todasLasFechas) {
+    const dia = diaSemana(fecha);
+    if (diasUsar.includes(dia)) {
+      fechas.push(fecha);
+    }
+  }
+  return fechas;
+}
+
+/** Genera fechas para item mensual: semana_del_mes (1-4), cantidad tareas */
+function fechasParaItemMensual(
+  ano: number,
+  mes: number,
+  item: PlanMarketingItem
+): string[] {
+  const semana = item.semana_del_mes ?? 1;
+  const cantidad = Math.max(1, item.cantidad ?? 1);
+
+  const fechas: string[] = [];
+  const todasLasFechas = fechasDelMes(ano, mes);
+
+  // Días de la semana objetivo: días (inicio-1)*7+1 a inicio*7
+  const inicio = (semana - 1) * 7 + 1;
+  const fin = Math.min(semana * 7, todasLasFechas.length);
+
+  for (let i = inicio; i <= fin && fechas.length < cantidad; i++) {
+    if (i <= todasLasFechas.length) {
+      fechas.push(todasLasFechas[i - 1]);
+    }
+  }
+
+  return fechas;
+}
+
+export interface GenerarResultado {
+  generadas: number;
+  omitidas: number;
+  errores: string[];
+}
+
+export interface PreviewSync {
+  preview: true;
+  mes: string;
+  clientes_a_marcar: { id: string; nombre: string; razon: string }[];
+  tareas_a_generar: { cliente_id: string; cliente_nombre: string; fecha_entrega: string; tipo_contenido: string; plan_nombre: string }[];
+  resumen: { clientes_a_marcar_count: number; tareas_a_generar_count: number };
+}
+
+/** Preview de sincronización: qué clientes se marcarían y qué tareas se generarían (sin ejecutar). */
+export async function previewSyncMarketing(opts: {
+  empresa_id: string;
+  mes: string;
+  /** Cliente Supabase (ej. service role) para contexto servidor/API */
+  supabaseClient?: SupabaseClient;
+}): Promise<PreviewSync> {
+  const [anoStr, mesStr] = opts.mes.split("-").map(Number);
+  const ano = Number(anoStr);
+  const mes = Number(mesStr);
+  const primerDia = `${opts.mes}-01`;
+  const ultimoDia = new Date(ano, mes, 0);
+  const ultimoDiaStr = `${opts.mes}-${String(ultimoDia.getDate()).padStart(2, "0")}`;
+
+  const supabaseClient = opts.supabaseClient ?? supabase;
+
+  const { data: suscripciones } = await supabaseClient
+    .from("suscripciones")
+    .select("id, cliente_id, plan_id")
+    .eq("empresa_id", opts.empresa_id)
+    .eq("estado", "activa")
+    .not("plan_id", "is", null);
+
+  if (!suscripciones?.length) {
+    return { preview: true, mes: opts.mes, clientes_a_marcar: [], tareas_a_generar: [], resumen: { clientes_a_marcar_count: 0, tareas_a_generar_count: 0 } };
+  }
+
+  const planIds = [...new Set(suscripciones.map((s) => s.plan_id).filter(Boolean))] as string[];
+
+  const { data: planes } = await supabaseClient
+    .from("planes")
+    .select("id, nombre, es_plan_marketing, plantilla_operativa")
+    .in("id", planIds);
+
+  const planesMarketing = (planes ?? []).filter(
+    (p) => p.es_plan_marketing && (p.plantilla_operativa as { items?: unknown[] })?.items?.length
+  );
+  const planMap = new Map(planesMarketing.map((p) => [p.id, p]));
+
+  const clienteIds = [...new Set(suscripciones.map((s) => s.cliente_id))];
+
+  const { data: clientes } = await supabaseClient
+    .from("clientes")
+    .select("id, empresa, nombre_contacto, tipo_servicio_cliente")
+    .in("id", clienteIds)
+    .eq("estado", "activo")
+    .is("deleted_at", null);
+
+  const clienteMap = new Map((clientes ?? []).map((c) => [c.id, c]));
+  const clienteNombre = (cid: string) =>
+    clienteMap.get(cid)?.empresa ?? clienteMap.get(cid)?.nombre_contacto ?? "Cliente";
+
+  const { data: existentes } = await supabaseClient
+    .from("marketing_tasks")
+    .select("cliente_id, fecha_entrega, tipo_contenido")
+    .in("cliente_id", clienteIds)
+    .gte("fecha_entrega", primerDia)
+    .lte("fecha_entrega", ultimoDiaStr);
+
+  const ocupados = new Set(
+    (existentes ?? []).map((r) => slotKey(r.cliente_id, r.fecha_entrega, r.tipo_contenido))
+  );
+
+  const clientesAMarcar: { id: string; nombre: string; razon: string }[] = [];
+  const tareasAGenerar: { cliente_id: string; cliente_nombre: string; fecha_entrega: string; tipo_contenido: string; plan_nombre: string }[] = [];
+
+  for (const c of clientes ?? []) {
+    if (c.tipo_servicio_cliente !== "marketing") {
+      const tieneSuscMarketing = suscripciones.some((s) => s.cliente_id === c.id && planMap.has(s.plan_id as string));
+      if (tieneSuscMarketing) {
+        clientesAMarcar.push({
+          id: c.id,
+          nombre: clienteNombre(c.id),
+          razon: "Suscripción activa a plan de marketing",
+        });
+      }
+    }
+  }
+
+  for (const susc of suscripciones) {
+    const plan = planMap.get(susc.plan_id as string);
+    if (!plan) continue;
+
+    const plantilla = plan.plantilla_operativa as PlanMarketingPlantilla | undefined;
+    if (!plantilla?.items?.length) continue;
+
+    const clienteId = susc.cliente_id;
+    if (!clienteMap.has(clienteId)) continue;
+
+    const nombreCliente = clienteNombre(clienteId);
+
+    for (const item of plantilla.items) {
+      if (!TIPOS_CONTENIDO.includes(item.tipo_contenido as (typeof TIPOS_CONTENIDO)[number])) continue;
+
+      let fechas: string[];
+      if (item.periodicidad === "semanal") {
+        fechas = fechasParaItemSemanal(ano, mes, item);
+      } else {
+        fechas = fechasParaItemMensual(ano, mes, item);
+      }
+
+      for (const fecha of fechas) {
+        const key = slotKey(clienteId, fecha, item.tipo_contenido);
+        if (ocupados.has(key)) continue;
+
+        tareasAGenerar.push({
+          cliente_id: clienteId,
+          cliente_nombre: nombreCliente,
+          fecha_entrega: fecha,
+          tipo_contenido: item.tipo_contenido,
+          plan_nombre: plan.nombre ?? "",
+        });
+      }
+    }
+  }
+
+  return {
+    preview: true,
+    mes: opts.mes,
+    clientes_a_marcar: clientesAMarcar,
+    tareas_a_generar: tareasAGenerar,
+    resumen: { clientes_a_marcar_count: clientesAMarcar.length, tareas_a_generar_count: tareasAGenerar.length },
+  };
+}
+
+/** Marca clientes con suscripción activa a plan marketing como tipo_servicio_cliente = marketing */
+export async function sincronizarClientesMarketing(
+  empresa_id: string,
+  supabaseClient?: SupabaseClient
+): Promise<number> {
+  const client = supabaseClient ?? supabase;
+  const { data: suscripciones } = await client
+    .from("suscripciones")
+    .select("cliente_id, plan_id")
+    .eq("empresa_id", empresa_id)
+    .eq("estado", "activa")
+    .not("plan_id", "is", null);
+
+  if (!suscripciones?.length) return 0;
+
+  const planIds = [...new Set(suscripciones.map((s) => s.plan_id).filter(Boolean))] as string[];
+  const { data: planes } = await client
+    .from("planes")
+    .select("id, es_plan_marketing")
+    .in("id", planIds);
+
+  const planMarketingIds = new Set((planes ?? []).filter((p) => p.es_plan_marketing).map((p) => p.id));
+
+  const clienteIdsAMarcar = new Set<string>();
+  for (const s of suscripciones) {
+    if (planMarketingIds.has(s.plan_id as string)) {
+      clienteIdsAMarcar.add(s.cliente_id);
+    }
+  }
+
+  let actualizados = 0;
+  for (const cid of clienteIdsAMarcar) {
+    const { error } = await client
+      .from("clientes")
+      .update({ tipo_servicio_cliente: "marketing" })
+      .eq("id", cid)
+      .eq("empresa_id", empresa_id);
+
+    if (!error) actualizados++;
+  }
+  return actualizados;
+}
+
+/** Genera tareas de marketing para un mes calendario. Respeta slots ya ocupados (manual o auto). */
+export async function generarTareasMarketing(opts: {
+  empresa_id: string;
+  mes: string; // YYYY-MM
+  /** Si true, omite validación getCurrentUser (para llamadas desde API con auth ya verificado) */
+  skipAuthCheck?: boolean;
+  /** Cliente Supabase (ej. service role) para contexto servidor/API */
+  supabaseClient?: SupabaseClient;
+}): Promise<GenerarResultado> {
+  const client = opts.supabaseClient ?? supabase;
+
+  if (!opts.skipAuthCheck) {
+    const usuario = await getCurrentUser();
+    if (!usuario?.empresa_id || usuario.empresa_id !== opts.empresa_id) {
+      return { generadas: 0, omitidas: 0, errores: ["Usuario no autorizado"] };
+    }
+  }
+
+  const [anoStr, mesStr] = opts.mes.split("-").map(Number);
+  const ano = Number(anoStr);
+  const mes = Number(mesStr);
+  const primerDia = `${opts.mes}-01`;
+  const ultimoDia = new Date(ano, mes, 0);
+  const ultimoDiaStr = `${opts.mes}-${String(ultimoDia.getDate()).padStart(2, "0")}`;
+
+  // 1. Suscripciones activas con plan de marketing
+  const { data: suscripciones } = await client
+    .from("suscripciones")
+    .select("id, cliente_id, plan_id")
+    .eq("empresa_id", opts.empresa_id)
+    .eq("estado", "activa")
+    .not("plan_id", "is", null);
+
+  if (!suscripciones?.length) {
+    return { generadas: 0, omitidas: 0, errores: [] };
+  }
+
+  const planIds = [...new Set(suscripciones.map((s) => s.plan_id).filter(Boolean))] as string[];
+
+  const { data: planes } = await client
+    .from("planes")
+    .select("id, nombre, es_plan_marketing, plantilla_operativa")
+    .in("id", planIds);
+
+  const planesMarketing = (planes ?? []).filter(
+    (p) => p.es_plan_marketing && (p.plantilla_operativa as { items?: unknown[] })?.items?.length
+  );
+
+  if (planesMarketing.length === 0) {
+    return { generadas: 0, omitidas: 0, errores: [] };
+  }
+
+  const planMap = new Map(planesMarketing.map((p) => [p.id, p]));
+
+  // 2. Clientes activos (no eliminados)
+  const clienteIds = [...new Set(suscripciones.map((s) => s.cliente_id))];
+
+  const { data: clientes } = await client
+    .from("clientes")
+    .select("id, empresa, nombre_contacto")
+    .in("id", clienteIds)
+    .eq("estado", "activo")
+    .is("deleted_at", null);
+
+  const clienteMap = new Map((clientes ?? []).map((c) => [c.id, c]));
+  const clienteNombre = (cid: string) =>
+    clienteMap.get(cid)?.empresa ?? clienteMap.get(cid)?.nombre_contacto ?? "Cliente";
+
+  // 3. Tareas existentes del mes (batch para ocupados)
+  const { data: existentes } = await client
+    .from("marketing_tasks")
+    .select("cliente_id, fecha_entrega, tipo_contenido")
+    .in("cliente_id", clienteIds)
+    .gte("fecha_entrega", primerDia)
+    .lte("fecha_entrega", ultimoDiaStr);
+
+  const ocupados = new Set(
+    (existentes ?? []).map((r) => slotKey(r.cliente_id, r.fecha_entrega, r.tipo_contenido))
+  );
+
+  const errores: string[] = [];
+  let generadas = 0;
+  let omitidas = 0;
+
+  // 4. Generar tareas por suscripción
+  for (const susc of suscripciones) {
+    const plan = planMap.get(susc.plan_id as string);
+    if (!plan) continue;
+
+    const plantilla = plan.plantilla_operativa as PlanMarketingPlantilla | undefined;
+    if (!plantilla?.items?.length) continue;
+
+    const clienteId = susc.cliente_id;
+    if (!clienteMap.has(clienteId)) continue;
+
+    const nombreCliente = clienteNombre(clienteId);
+
+    for (const item of plantilla.items) {
+      if (!TIPOS_CONTENIDO.includes(item.tipo_contenido as (typeof TIPOS_CONTENIDO)[number])) continue;
+
+      let fechas: string[];
+      if (item.periodicidad === "semanal") {
+        fechas = fechasParaItemSemanal(ano, mes, item);
+      } else {
+        fechas = fechasParaItemMensual(ano, mes, item);
+      }
+
+      const tipoLabel = item.tipo_contenido.charAt(0).toUpperCase() + item.tipo_contenido.slice(1);
+
+      for (const fecha of fechas) {
+        const key = slotKey(clienteId, fecha, item.tipo_contenido);
+        if (ocupados.has(key)) {
+          omitidas++;
+          continue;
+        }
+
+        const [, , dd] = fecha.split("-");
+        const titulo = `${tipoLabel} - ${nombreCliente} - ${dd}/${String(mes).padStart(2, "0")}`;
+
+        const { error } = await client.from("marketing_tasks").insert({
+          empresa_id: opts.empresa_id,
+          cliente_id: clienteId,
+          suscripcion_id: susc.id,
+          plan_id: plan.id,
+          generada_automaticamente: true,
+          titulo,
+          tipo_contenido: item.tipo_contenido,
+          fecha_entrega: fecha,
+          estado: "pendiente",
+        });
+
+        if (error) {
+          errores.push(`${clienteId}-${fecha}-${item.tipo_contenido}: ${error.message}`);
+        } else {
+          ocupados.add(key);
+          generadas++;
+        }
+      }
+    }
+  }
+
+  return { generadas, omitidas, errores };
+}
+
+export { DIAS_SEMANA };

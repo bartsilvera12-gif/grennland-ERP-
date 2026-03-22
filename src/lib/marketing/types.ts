@@ -17,6 +17,12 @@ export interface MarketingTask {
   fecha_entrega:       string;  // YYYY-MM-DD
   responsable_user_id?: string | null;
   prioridad?:          PrioridadTask | null;
+  /** Origen: suscripción que generó la tarea (si automática) */
+  suscripcion_id?:     string | null;
+  /** Origen: plan de marketing (si automática) */
+  plan_id?:            string | null;
+  /** true = generada por plan, false = creada manualmente */
+  generada_automaticamente?: boolean;
   created_at:          string;
   updated_at:          string;
 }
