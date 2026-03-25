@@ -1,0 +1,87 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+export type ChatChannelRow = {
+  id: string;
+  empresa_id: string;
+  type: string;
+  meta_phone_number_id: string;
+  config: Record<string, unknown>;
+};
+
+export type ChatContactRow = {
+  id: string;
+  empresa_id: string;
+  phone_number: string;
+  name: string | null;
+  cliente_id: string | null;
+  crm_prospecto_id: string | null;
+};
+
+export type ChatConversationRow = {
+  id: string;
+  empresa_id: string;
+  channel_id: string;
+  contact_id: string;
+  status: "nuevo" | "interesado" | "pendiente" | "cerrado";
+  last_message_at: string | null;
+  last_message_preview: string | null;
+  unread_count: number;
+};
+
+export type ChatMessageRow = {
+  id: string;
+  empresa_id: string;
+  conversation_id: string;
+  wa_message_id: string | null;
+  from_me: boolean;
+  message_type: string;
+  content: string | null;
+  raw_payload: Record<string, unknown>;
+  created_at: string;
+};
+
+/** Payload Meta (solo lo que usamos) */
+export type MetaWebhookEntry = {
+  id?: string;
+  changes?: Array<{
+    field?: string;
+    value?: MetaWebhookValue;
+  }>;
+};
+
+export type MetaWebhookValue = {
+  messaging_product?: string;
+  metadata?: {
+    display_phone_number?: string;
+    phone_number_id?: string;
+  };
+  contacts?: Array<{
+    profile?: { name?: string };
+    wa_id?: string;
+  }>;
+  messages?: MetaInboundMessage[];
+};
+
+export type MetaInboundMessage = {
+  from?: string;
+  id?: string;
+  timestamp?: string;
+  type?: string;
+  text?: { body?: string };
+  image?: { caption?: string; id?: string };
+  document?: { caption?: string; filename?: string };
+  audio?: { id?: string };
+  video?: { caption?: string };
+  sticker?: { id?: string };
+  interactive?: unknown;
+  [key: string]: unknown;
+};
+
+export type ProcessWebhookResult = {
+  ok: boolean;
+  processed: number;
+  skipped: number;
+  errors: string[];
+};
+
+export type SupabaseAdmin = SupabaseClient;

@@ -1,0 +1,134 @@
+/** Estados de sorteo (tabla sorteos) */
+export type SorteoEstado = "activo" | "pausado" | "cerrado" | "finalizado";
+
+/** Estados de conversación de sorteo */
+export type SorteoConversacionEstado =
+  | "new_lead"
+  | "awaiting_ticket_selection"
+  | "awaiting_customer_data"
+  | "awaiting_payment"
+  | "awaiting_receipt"
+  | "receipt_under_review"
+  | "paid_confirmed"
+  | "human_handoff"
+  | "cancelled"
+  | "closed_no_response";
+
+export type SorteoEntradaEstadoPago = "pendiente" | "confirmado" | "rechazado";
+
+export interface Sorteo {
+  id: string;
+  empresa_id: string;
+  nombre: string;
+  descripcion: string | null;
+  precio_por_boleto: number;
+  max_boletos: number;
+  total_boletos_vendidos: number;
+  ultimo_numero_cupon: number;
+  fecha_sorteo: string | null;
+  estado: SorteoEstado;
+  datos_bancarios: Record<string, unknown>;
+  imagen_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SorteoConversacion {
+  id: string;
+  empresa_id: string;
+  sorteo_id: string;
+  whatsapp_numero: string;
+  cliente_id: string | null;
+  estado: SorteoConversacionEstado;
+  ultimo_mensaje: string | null;
+  cantidad_boletos: number | null;
+  datos_cliente: Record<string, unknown>;
+  recordatorio_24h: boolean | null;
+  recordatorio_48h: boolean | null;
+  recordatorio_72h: boolean | null;
+  ultimo_recordatorio_at: string | null;
+  human_handoff_at: string | null;
+  activa: boolean;
+  created_at: string;
+  updated_at: string;
+  /** Si viene de select con join */
+  sorteos?: { nombre: string } | null;
+}
+
+export interface SorteoEntrada {
+  id: string;
+  empresa_id: string;
+  sorteo_id: string;
+  conversacion_id: string | null;
+  cliente_id: string | null;
+  whatsapp_numero: string;
+  nombre_participante: string;
+  documento: string | null;
+  cantidad_boletos: number;
+  monto_total: number;
+  moneda: string;
+  estado_pago: SorteoEntradaEstadoPago;
+  fecha_pago: string | null;
+  monto_pagado: number | null;
+  banco_origen: string | null;
+  comprobante_url: string | null;
+  comprobante_ia_resultado: Record<string, unknown> | null;
+  comprobante_ia_confianza: number | null;
+  validado_por: string | null;
+  validado_por_user_id: string | null;
+  validado_at: string | null;
+  created_at: string;
+  updated_at: string;
+  sorteos?: { nombre: string } | null;
+}
+
+export interface SorteoCupon {
+  id: string;
+  empresa_id: string;
+  sorteo_id: string;
+  entrada_id: string;
+  numero_cupon: string;
+  ganador: boolean | null;
+  created_at: string;
+  sorteos?: { nombre: string } | null;
+  sorteo_entradas?: { nombre_participante: string } | null;
+}
+
+/** Body esperado por POST /api/raffles/entries/create (n8n) */
+export interface CreateRaffleEntryPayload {
+  empresa_id: string;
+  sorteo_id: string;
+  whatsapp_numero: string;
+  nombre_completo: string;
+  cedula: string;
+  celular: string;
+  ciudad: string;
+  cantidad_boletos: number;
+  fecha_pago: string;
+  monto_pago: number;
+  banco_origen: string;
+  comprobante_url: string | null;
+  ultimo_mensaje: string | null;
+}
+
+export interface CreateRaffleEntryResponseOk {
+  ok: true;
+  message: string;
+  cliente: { id: string; nombre: string };
+  conversacion: { id: string; estado: string };
+  entrada: {
+    id: string;
+    cantidad_boletos: number;
+    monto_total: number;
+    estado_pago: string;
+  };
+  cupones: { id: string; numero_cupon: string }[];
+}
+
+export interface CreateRaffleEntryResponseErr {
+  ok: false;
+  message: string;
+  detalle?: string;
+}
+
+export type CreateRaffleEntryResponse = CreateRaffleEntryResponseOk | CreateRaffleEntryResponseErr;

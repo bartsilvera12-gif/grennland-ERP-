@@ -23,6 +23,8 @@ import {
   Receipt,
   Banknote,
   Megaphone,
+  Ticket,
+  MessageCircle,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { getMisModulos, getTodosModulos } from "@/lib/empresas/actions";
@@ -40,6 +42,12 @@ type MenuItem = {
 
 const MENU_STRUCTURE: MenuItem[] = [
   { slug: "dashboard", label: "Dashboard", href: "/", icon: LayoutDashboard },
+  {
+    slug: "conversaciones",
+    label: "Conversaciones",
+    href: "/dashboard/conversaciones",
+    icon: MessageCircle,
+  },
   { slug: "ventas", label: "Ventas", href: "/ventas", icon: ShoppingCart },
   { slug: "inventario", label: "Inventario", href: "/inventario", icon: Package, children: [
     { label: "Productos", href: "/inventario" },
@@ -55,6 +63,18 @@ const MENU_STRUCTURE: MenuItem[] = [
   { slug: "gestion-clientes", label: "Gestión Clientes", href: "/gestion-clientes", icon: Users },
   { slug: "crm", label: "CRM Funnel", href: "/crm", icon: Sparkles },
   { slug: "marketing", label: "Marketing Ops", href: "/marketing", icon: Megaphone },
+  {
+    slug: "sorteos",
+    label: "Sorteos",
+    href: "/sorteos",
+    icon: Ticket,
+    children: [
+      { label: "Sorteos", href: "/sorteos" },
+      { label: "Conversaciones", href: "/sorteos/conversaciones" },
+      { label: "Entradas", href: "/sorteos/entradas" },
+      { label: "Cupones", href: "/sorteos/cupones" },
+    ],
+  },
 ];
 
 function NavItem({
@@ -172,7 +192,10 @@ export default function Sidebar() {
   const [modulos, setModulos] = useState<ModuloEmpresa[]>([]);
   const [favoritos, setFavoritos] = useState<string[]>([]);
   const [collapsed, setCollapsed] = useState(false);
-  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({ inventario: true });
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({
+    inventario: true,
+    sorteos: true,
+  });
   const [cargando, setCargando] = useState(true);
   const [esSuperAdmin, setEsSuperAdmin] = useState(false);
 
