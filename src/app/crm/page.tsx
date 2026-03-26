@@ -117,6 +117,11 @@ function ProspectoCard({
         <div className="min-w-0">
           <p className="font-semibold text-gray-800 text-xs leading-tight truncate">{prospecto.empresa}</p>
           <p className="text-[10px] text-gray-400 font-mono">{prospecto.numero_control}</p>
+          {prospecto.origen_creacion === "whatsapp" && (
+            <span className="text-[10px] bg-sky-50 text-[#0284C7] border border-sky-100 px-1 py-0.5 rounded inline-block mt-1">
+              WhatsApp
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-0.5 shrink-0">
           {prospecto.notas.length > 0 && (

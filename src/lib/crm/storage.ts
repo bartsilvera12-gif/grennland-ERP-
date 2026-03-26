@@ -1,6 +1,16 @@
+import { createClient } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUser } from "@/lib/auth";
 import type { Prospecto, Nota } from "./types";
+import { generarNumeroControlFromSupabase } from "@/lib/crm/numero-control";
+
+/** Cliente Supabase con service role (bypass RLS). Solo para uso en API routes. */
+function getServiceSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Supabase no configurado");
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+}
 
 // ─── Tipos de fila Supabase ───────────────────────────────────────────────────
 
@@ -57,7 +67,8 @@ function rowToProspecto(row: ProspectoRow, notas: Nota[]): Prospecto {
     proxima_accion: row.proxima_accion ?? undefined,
     fecha_proxima_accion: row.fecha_proxima_accion ?? undefined,
     creado_por: row.creado_por ?? undefined,
-    origen_creacion: (row.origen_creacion === "whatsapp" ? "whatsapp" : "manual") as "manual" | "whatsapp",
+    origen_creacion: (row.origen_creacion ?? "manual") as Prospecto["origen_creacion"],
+    origen_detalle: (row as { origen_detalle?: string | null }).origen_detalle ?? null,
     responsable: row.responsable ?? undefined,
     notas,
     fecha_creacion: row.fecha_creacion,
@@ -68,18 +79,7 @@ function rowToProspecto(row: ProspectoRow, notas: Nota[]): Prospecto {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function generarNumeroControl(): Promise<string> {
-  const { data } = await supabase
-    .from("crm_prospectos")
-    .select("numero_control")
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  const last = data?.[0] as { numero_control?: string } | undefined;
-  const match = last?.numero_control?.match(/CRM-(\d+)/);
-  const next = (parseInt(match?.[1] ?? "0") + 1);
-  return `CRM-${String(next).padStart(6, "0")}`;
-}
+// La numeración ahora se resuelve con `generarNumeroControlFromSupabase` para reutilizarla también desde webhooks.
 
 // ─── Prospectos ────────────────────────────────────────────────────────────────
 
@@ -156,7 +156,7 @@ export async function saveProspecto(
   const usuario = await getCurrentUser();
   if (!usuario?.empresa_id) throw new Error("Usuario no autenticado o sin empresa");
 
-  const numeroControl = await generarNumeroControl();
+  const numeroControl = await generarNumeroControlFromSupabase(supabase);
   const creadoPor = (usuario as { nombre?: string; email?: string }).nombre?.trim()
     || (usuario as { email?: string }).email
     || null;
@@ -175,6 +175,7 @@ export async function saveProspecto(
     fecha_proxima_accion: datos.fecha_proxima_accion ?? null,
     creado_por: creadoPor,
     origen_creacion: "manual",
+    origen_detalle: null,
     responsable: datos.responsable ?? null,
   };
 
@@ -190,6 +191,67 @@ export async function saveProspecto(
   }
 
   return rowToProspecto(data as ProspectoRow, []);
+}
+
+/** Crea prospecto desde webhook (WhatsApp, n8n, etc.). Usa service role para bypass RLS. */
+export async function saveProspectoFromWebhook(datos: {
+  empresa_id: string;
+  telefono: string;
+  mensaje?: string;
+  contacto?: string;
+  empresa_nombre?: string;
+  etapa?: string;
+  origen_creacion?: Prospecto["origen_creacion"];
+  origen_detalle?: string | null;
+  servicio?: string;
+}): Promise<Prospecto | null> {
+  const sb = getServiceSupabase();
+
+  const numeroControl = await generarNumeroControlFromSupabase(sb);
+
+  const contacto = datos.contacto?.trim() || "Contacto WhatsApp";
+  const empresaNombre = datos.empresa_nombre?.trim() || "Sin nombre";
+
+  const insert = {
+    empresa_id: datos.empresa_id,
+    numero_control: numeroControl,
+    empresa: empresaNombre,
+    contacto,
+    email: null,
+    telefono: datos.telefono.trim() || null,
+    servicio: (datos.servicio?.trim() || "Consulta por WhatsApp"),
+    valor_estimado: 0,
+    etapa: datos.etapa?.trim() || "LEAD",
+    proxima_accion: null,
+    fecha_proxima_accion: null,
+    creado_por: "WhatsApp",
+    origen_creacion: (datos.origen_creacion ?? "whatsapp") as string,
+    origen_detalle: datos.origen_detalle ?? null,
+    responsable: null,
+  };
+
+  const { data: prospectoData, error: errP } = await sb
+    .from("crm_prospectos")
+    .insert([insert])
+    .select()
+    .single();
+
+  if (errP) {
+    console.error("[crm] saveProspectoFromWebhook:", errP.message);
+    return null;
+  }
+
+  const prospecto = prospectoData as ProspectoRow;
+
+  if (datos.mensaje?.trim()) {
+    await sb.from("crm_notas").insert({
+      empresa_id: datos.empresa_id,
+      prospecto_id: prospecto.id,
+      texto: datos.mensaje.trim(),
+    });
+  }
+
+  return rowToProspecto(prospecto, []);
 }
 
 /** Actualiza prospecto. */

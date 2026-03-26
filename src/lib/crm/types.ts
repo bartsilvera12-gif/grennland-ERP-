@@ -25,7 +25,15 @@ export interface Prospecto {
   proxima_accion?:       string;       // descripción de la próxima acción
   fecha_proxima_accion?: string;       // YYYY-MM-DD
   creado_por?:           string;       // nombre del usuario que creó el prospecto
-  origen_creacion?:      "manual" | "whatsapp";  // manual=formulario, whatsapp=mensaje entrante (futuro)
+  origen_creacion?:
+    | "manual"
+    | "whatsapp"
+    | "formulario_web"
+    | "referido"
+    | "campaña_meta"
+    | "automatizacion"
+    | "otro";
+  origen_detalle?:      string | null;
   responsable?:          string;       // nombre del responsable de seguimiento
   notas:                 Nota[];
   fecha_creacion:        string;       // ISO string, automático

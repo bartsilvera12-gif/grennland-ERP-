@@ -10,6 +10,7 @@ import PlanSelector from "@/components/crm/PlanSelector";
 import type { EtapaCrm } from "@/lib/crm/etapas";
 import type { Nota, Prospecto } from "@/lib/crm/types";
 import type { Plan } from "@/lib/planes/types";
+import { supabase } from "@/lib/supabase";
 
 // ── Estilos ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,27 @@ function formatFecha(iso: string) {
     return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   } catch {
     return "";
+  }
+}
+
+function originLabel(origen?: Prospecto["origen_creacion"]): string {
+  switch (origen) {
+    case "manual":
+      return "Manual";
+    case "whatsapp":
+      return "WhatsApp";
+    case "formulario_web":
+      return "Formulario web";
+    case "referido":
+      return "Referido";
+    case "campaña_meta":
+      return "Campaña Meta";
+    case "automatizacion":
+      return "Automatización";
+    case "otro":
+      return "Otro";
+    default:
+      return "-";
   }
 }
 
@@ -68,6 +90,7 @@ export default function EditProspectoPage() {
   const [planes,            setPlanes]            = useState<Plan[]>([]);
   const [etapas,            setEtapas]            = useState<EtapaCrm[]>([]);
   const [cargandoPlanes,    setCargandoPlanes]    = useState(true);
+  const [conversationId,  setConversationId]   = useState<string | null>(null);
 
   useEffect(() => {
     getEtapas().then(setEtapas);
@@ -88,6 +111,50 @@ export default function EditProspectoPage() {
       .filter((id): id is string => Boolean(id));
     setForm((prev) => ({ ...prev, planIds: ids }));
   }, [prospecto?.id, prospecto?.servicio, planes]);
+
+  useEffect(() => {
+    async function loadConversationId() {
+      if (!prospecto) {
+        setConversationId(null);
+        return;
+      }
+      try {
+        const { data: chatContact, error: cErr } = await supabase
+          .from("chat_contacts")
+          .select("id")
+          .eq("crm_prospecto_id", prospecto.id)
+          .maybeSingle();
+        if (cErr) {
+          setConversationId(null);
+          return;
+        }
+
+        const contactId = (chatContact?.id as string | undefined) ?? undefined;
+        if (!contactId) {
+          setConversationId(null);
+          return;
+        }
+
+        const { data: conv, error: convErr } = await supabase
+          .from("chat_conversations")
+          .select("id")
+          .eq("contact_id", contactId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (convErr) {
+          setConversationId(null);
+          return;
+        }
+        setConversationId((conv?.id as string | undefined) ?? null);
+      } catch {
+        setConversationId(null);
+      }
+    }
+
+    void loadConversationId();
+  }, [prospecto?.id]);
 
   async function cargar() {
     const p = await getProspecto(id);
@@ -308,6 +375,21 @@ export default function EditProspectoPage() {
       {/* ── Sección: Datos del prospecto ─────────────────────────────────── */}
       <div className="bg-white rounded-xl shadow p-5">
         <SectionTitle>Datos del prospecto</SectionTitle>
+
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="text-sm text-gray-600">
+            <span className="font-semibold text-gray-700">Origen:</span>{" "}
+            <span className="text-gray-800">{originLabel(prospecto.origen_creacion)}</span>
+          </div>
+          {conversationId && (
+            <Link
+              href={`/dashboard/conversaciones?conversationId=${encodeURIComponent(conversationId)}`}
+              className="text-sm text-[#0EA5E9] hover:underline font-semibold shrink-0"
+            >
+              Abrir conversación →
+            </Link>
+          )}
+        </div>
 
         <form onSubmit={handleGuardar} className="space-y-4">
 
