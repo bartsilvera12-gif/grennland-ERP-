@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   fetchChatChannels,
   fetchChatConversations,
@@ -31,6 +31,16 @@ function formatTime(iso: string) {
   }
 }
 
+function mapRowToMessage(row: Record<string, unknown>): ChatMessage {
+  return {
+    id: row.id as string,
+    from_me: Boolean(row.from_me),
+    message_type: String(row.message_type ?? "text"),
+    content: (row.content as string | null) ?? null,
+    created_at: String(row.created_at),
+  };
+}
+
 export default function ConversacionesPage() {
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -42,9 +52,15 @@ export default function ConversacionesPage() {
   const [listError, setListError] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [hasActiveChannel, setHasActiveChannel] = useState<boolean | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const loadConversations = useCallback(async () => {
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  /** Si el usuario está cerca del final, los mensajes nuevos hacen scroll; si subió a leer historial, no. */
+  const stickBottomRef = useRef(true);
+  const lastMessageIdRef = useRef<string | null>(null);
+  const loadConversationsRef = useRef<(opts?: { silent?: boolean }) => Promise<void>>(async () => {});
+
+  const loadConversations = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
     try {
       const rows = await fetchChatConversations();
       setConversations(rows);
@@ -52,12 +68,13 @@ export default function ConversacionesPage() {
     } catch (e) {
       setListError(e instanceof Error ? e.message : "Error al cargar conversaciones");
     } finally {
-      setLoadingList(false);
+      if (!silent) setLoadingList(false);
     }
   }, []);
 
-  const loadMessages = useCallback(async (conversationId: string) => {
-    setLoadingMsg(true);
+  const loadMessages = useCallback(async (conversationId: string, opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+    if (!silent) setLoadingMsg(true);
     try {
       const { data, error: err } = await supabase
         .from("chat_messages")
@@ -70,9 +87,11 @@ export default function ConversacionesPage() {
     } catch (e) {
       setListError(e instanceof Error ? e.message : "Error al cargar mensajes");
     } finally {
-      setLoadingMsg(false);
+      if (!silent) setLoadingMsg(false);
     }
   }, []);
+
+  loadConversationsRef.current = loadConversations;
 
   useEffect(() => {
     loadConversations();
@@ -84,27 +103,83 @@ export default function ConversacionesPage() {
       .catch(() => setHasActiveChannel(null));
   }, []);
 
+  /** Lista: actualizar con Realtime (sin polling). */
   useEffect(() => {
-    if (!loadingList) {
-      fetchChatChannels()
-        .then((ch) => setHasActiveChannel(ch.some((c) => c.activo)))
-        .catch(() => {});
-    }
-  }, [loadingList]);
+    const channel = supabase
+      .channel("conversaciones-inbox-list")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "chat_conversations" },
+        () => {
+          void loadConversationsRef.current?.({ silent: true });
+        }
+      )
+      .subscribe();
 
-  useEffect(() => {
-    const t = setInterval(() => {
-      loadConversations();
-      if (selectedId) loadMessages(selectedId);
-    }, 5000);
-    return () => clearInterval(t);
-  }, [loadConversations, loadMessages, selectedId]);
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
 
+  /** Mensajes del hilo abierto: INSERT en tiempo real. */
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!selectedId) return;
+
+    const channel = supabase
+      .channel(`conversaciones-msg-${selectedId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "chat_messages",
+          filter: `conversation_id=eq.${selectedId}`,
+        },
+        (payload) => {
+          const row = payload.new as Record<string, unknown>;
+          if (!row?.id) return;
+          const msg = mapRowToMessage(row);
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === msg.id)) return prev;
+            return [...prev, msg].sort(
+              (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [selectedId]);
+
+  const onMessagesScroll = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const threshold = 100;
+    stickBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!selectedId || messages.length === 0) return;
+    const last = messages[messages.length - 1]?.id;
+    const prev = lastMessageIdRef.current;
+    lastMessageIdRef.current = last;
+
+    if (last === prev) return;
+
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    if (!stickBottomRef.current && prev !== null) return;
+
+    el.scrollTop = el.scrollHeight;
   }, [messages, selectedId]);
 
   async function handleSelect(id: string) {
+    stickBottomRef.current = true;
+    lastMessageIdRef.current = null;
     setSelectedId(id);
     await loadMessages(id);
     try {
@@ -122,6 +197,7 @@ export default function ConversacionesPage() {
     if (!selectedId || !input.trim() || sending) return;
     setSending(true);
     setSendError(null);
+    stickBottomRef.current = true;
     try {
       const res = await fetch("/api/chat/send", {
         method: "POST",
@@ -135,13 +211,17 @@ export default function ConversacionesPage() {
       };
       if (!res.ok) {
         const base =
-          typeof json.error === "string" ? json.error : res.status === 401 ? "Sesión expirada o no autenticado" : `Error al enviar (HTTP ${res.status})`;
+          typeof json.error === "string"
+            ? json.error
+            : res.status === 401
+              ? "Sesión expirada o no autenticado"
+              : `Error al enviar (HTTP ${res.status})`;
         throw new Error(base);
       }
       setInput("");
       setSendError(null);
-      await loadMessages(selectedId);
-      await loadConversations();
+      await loadMessages(selectedId, { silent: true });
+      await loadConversations({ silent: true });
     } catch (err) {
       setSendError(err instanceof Error ? err.message : "Error al enviar");
     } finally {
@@ -262,7 +342,11 @@ export default function ConversacionesPage() {
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50">
+              <div
+                ref={messagesScrollRef}
+                onScroll={onMessagesScroll}
+                className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 min-h-0"
+              >
                 {loadingMsg ? (
                   <div className="text-center text-slate-400 text-sm py-8">Cargando mensajes…</div>
                 ) : (
@@ -289,7 +373,6 @@ export default function ConversacionesPage() {
                     </div>
                   ))
                 )}
-                <div ref={bottomRef} />
               </div>
 
               <form
@@ -302,20 +385,20 @@ export default function ConversacionesPage() {
                   </div>
                 )}
                 <div className="flex gap-2">
-                <input
-                  className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0EA5E9]/30 focus:border-[#0EA5E9] outline-none"
-                  placeholder="Escribí un mensaje…"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  disabled={sending}
-                />
-                <button
-                  type="submit"
-                  disabled={sending || !input.trim()}
-                  className="bg-[#0EA5E9] hover:bg-[#0284C7] disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium"
-                >
-                  {sending ? "…" : "Enviar"}
-                </button>
+                  <input
+                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#0EA5E9]/30 focus:border-[#0EA5E9] outline-none"
+                    placeholder="Escribí un mensaje…"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    disabled={sending}
+                  />
+                  <button
+                    type="submit"
+                    disabled={sending || !input.trim()}
+                    className="bg-[#0EA5E9] hover:bg-[#0284C7] disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                  >
+                    {sending ? "…" : "Enviar"}
+                  </button>
                 </div>
               </form>
             </>
