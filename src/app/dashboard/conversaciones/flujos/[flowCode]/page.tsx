@@ -14,6 +14,15 @@ type FlowNodeOption = {
   sort_order: number;
 };
 
+type FlowNodeBlock = {
+  id: string;
+  node_id: string;
+  block_type: "text" | "image" | "buttons";
+  content_text: string | null;
+  media_url: string | null;
+  sort_order: number;
+};
+
 type FlowNode = {
   id: string;
   node_code: string;
@@ -25,6 +34,7 @@ type FlowNode = {
   crm_action_type: string | null;
   crm_action_config: Record<string, unknown>;
   options: FlowNodeOption[];
+  blocks: FlowNodeBlock[];
 };
 
 function prettifyCode(code: string): string {
@@ -250,6 +260,66 @@ export default function FlowEditorPage() {
     setSuccess(`Opción creada en ${prettifyCode(node.node_code)}.`);
   }
 
+  async function createBlock(node: FlowNode, blockType: FlowNodeBlock["block_type"]) {
+    const res = await fetch(
+      `/api/chat/flows/${encodeURIComponent(flowCode)}/nodes/${encodeURIComponent(node.node_code)}/blocks`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          block_type: blockType,
+          content_text: blockType === "text" ? "Nuevo texto" : blockType === "buttons" ? "Elegí una opción" : null,
+          media_url: null,
+          sort_order: node.blocks.length + 1,
+        }),
+      }
+    );
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || !json.ok) throw new Error(json.error ?? "No se pudo crear bloque");
+  }
+
+  async function saveBlock(node: FlowNode, block: FlowNodeBlock) {
+    const res = await fetch(
+      `/api/chat/flows/${encodeURIComponent(flowCode)}/nodes/${encodeURIComponent(node.node_code)}/blocks/${block.id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          block_type: block.block_type,
+          content_text: block.content_text,
+          media_url: block.media_url,
+          sort_order: block.sort_order,
+        }),
+      }
+    );
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || !json.ok) throw new Error(json.error ?? "No se pudo guardar bloque");
+  }
+
+  async function deleteBlock(node: FlowNode, blockId: string) {
+    const res = await fetch(
+      `/api/chat/flows/${encodeURIComponent(flowCode)}/nodes/${encodeURIComponent(node.node_code)}/blocks/${blockId}`,
+      { method: "DELETE", credentials: "same-origin" }
+    );
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || !json.ok) throw new Error(json.error ?? "No se pudo eliminar bloque");
+  }
+
+  async function uploadImage(file: File): Promise<string> {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/chat/flow-media/upload", {
+      method: "POST",
+      body: fd,
+      credentials: "same-origin",
+    });
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; media_url?: string };
+    if (!res.ok || !json.ok || !json.media_url) throw new Error(json.error ?? "No se pudo subir imagen");
+    return json.media_url;
+  }
+
   async function deleteOption(node: FlowNode, optionId: string) {
     const res = await fetch(
       `/api/chat/flows/${encodeURIComponent(flowCode)}/nodes/${encodeURIComponent(node.node_code)}/options/${optionId}`,
@@ -268,10 +338,10 @@ export default function FlowEditorPage() {
           <p className="text-sm text-slate-500">Nodos + opciones de botones + preparación CRM</p>
         </div>
         <Link
-          href="/dashboard/conversaciones/flujos"
+          href="/configuracion/conversaciones/flujos"
           className="text-sm font-medium text-[#0EA5E9] hover:underline px-3 py-2 rounded-lg border border-sky-200 bg-sky-50"
         >
-          Volver al listado
+          Volver a Configuración de Flujos
         </Link>
       </div>
 
@@ -342,8 +412,8 @@ export default function FlowEditorPage() {
               </div>
 
               <div>
-                <label className="block text-xs text-slate-500 mb-1">Mensaje al cliente</label>
-                <textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm min-h-[74px]" placeholder="Escribí el mensaje que verá el cliente" value={node.message_text ?? ""} onChange={(e) => setNodes((prev) => prev.map((n) => n.id === node.id ? { ...n, message_text: e.target.value } : n))} />
+                <label className="block text-xs text-slate-500 mb-1">Mensaje al cliente (compatibilidad)</label>
+                <textarea className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm min-h-[74px]" placeholder="Se usa solo en nodos sin bloques configurados" value={node.message_text ?? ""} onChange={(e) => setNodes((prev) => prev.map((n) => n.id === node.id ? { ...n, message_text: e.target.value } : n))} />
               </div>
 
               <div className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
@@ -363,6 +433,111 @@ export default function FlowEditorPage() {
                   </div>
                 </div>
               </details>
+
+              <div className="border border-slate-100 rounded-lg p-3 space-y-3 bg-slate-50/60">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-semibold text-slate-600 uppercase">Bloques del mensaje</div>
+                  <div className="flex gap-2">
+                    <button type="button" className="text-xs text-[#0EA5E9] hover:underline" onClick={async () => {
+                      try { await createBlock(node, "text"); await reload(); } catch (e) { setError(e instanceof Error ? e.message : "Error"); }
+                    }}>+ Texto</button>
+                    <button type="button" className="text-xs text-[#0EA5E9] hover:underline" onClick={async () => {
+                      try { await createBlock(node, "image"); await reload(); } catch (e) { setError(e instanceof Error ? e.message : "Error"); }
+                    }}>+ Imagen</button>
+                    <button type="button" className="text-xs text-[#0EA5E9] hover:underline" onClick={async () => {
+                      try { await createBlock(node, "buttons"); await reload(); } catch (e) { setError(e instanceof Error ? e.message : "Error"); }
+                    }}>+ Botones</button>
+                  </div>
+                </div>
+                {node.blocks.length === 0 && <div className="text-xs text-slate-500">Sin bloques. Se usará el mensaje de compatibilidad.</div>}
+                {node.blocks.map((block, bi) => (
+                  <div key={block.id} className="bg-white border border-slate-200 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs text-slate-500">Bloque #{bi + 1} ({block.block_type})</div>
+                      <div className="flex gap-2">
+                        <button type="button" className="text-xs text-slate-600 hover:underline" disabled={bi === 0} onClick={async () => {
+                          try {
+                            const prev = node.blocks[bi - 1];
+                            if (!prev) return;
+                            await saveBlock(node, { ...block, sort_order: prev.sort_order });
+                            await saveBlock(node, { ...prev, sort_order: block.sort_order });
+                            await reload();
+                          } catch (e) { setError(e instanceof Error ? e.message : "Error"); }
+                        }}>↑</button>
+                        <button type="button" className="text-xs text-slate-600 hover:underline" disabled={bi === node.blocks.length - 1} onClick={async () => {
+                          try {
+                            const next = node.blocks[bi + 1];
+                            if (!next) return;
+                            await saveBlock(node, { ...block, sort_order: next.sort_order });
+                            await saveBlock(node, { ...next, sort_order: block.sort_order });
+                            await reload();
+                          } catch (e) { setError(e instanceof Error ? e.message : "Error"); }
+                        }}>↓</button>
+                        <button type="button" className="text-xs text-red-600 hover:underline" onClick={async () => {
+                          try { await deleteBlock(node, block.id); await reload(); } catch (e) { setError(e instanceof Error ? e.message : "Error"); }
+                        }}>Eliminar</button>
+                      </div>
+                    </div>
+                    {block.block_type === "text" && (
+                      <textarea
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm min-h-[64px]"
+                        value={block.content_text ?? ""}
+                        placeholder="Texto del bloque"
+                        onChange={(e) => setNodes((prev) => prev.map((n) => n.id !== node.id ? n : ({ ...n, blocks: n.blocks.map((b) => b.id === block.id ? { ...b, content_text: e.target.value } : b) })))}
+                      />
+                    )}
+                    {block.block_type === "image" && (
+                      <div className="space-y-2">
+                        <input type="file" accept="image/*" onChange={async (e) => {
+                          try {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const mediaUrl = await uploadImage(file);
+                            setNodes((prev) => prev.map((n) => n.id !== node.id ? n : ({ ...n, blocks: n.blocks.map((b) => b.id === block.id ? { ...b, media_url: mediaUrl } : b) })));
+                          } catch (err) {
+                            setError(err instanceof Error ? err.message : "No se pudo subir imagen");
+                          } finally {
+                            e.target.value = "";
+                          }
+                        }} className="text-xs" />
+                        <input
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                          value={block.media_url ?? ""}
+                          placeholder="URL pública de imagen"
+                          onChange={(e) => setNodes((prev) => prev.map((n) => n.id !== node.id ? n : ({ ...n, blocks: n.blocks.map((b) => b.id === block.id ? { ...b, media_url: e.target.value } : b) })))}
+                        />
+                        <input
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                          value={block.content_text ?? ""}
+                          placeholder="Caption opcional"
+                          onChange={(e) => setNodes((prev) => prev.map((n) => n.id !== node.id ? n : ({ ...n, blocks: n.blocks.map((b) => b.id === block.id ? { ...b, content_text: e.target.value } : b) })))}
+                        />
+                        {block.media_url && <img src={block.media_url} alt="preview" className="max-h-40 rounded border border-slate-200" />}
+                      </div>
+                    )}
+                    {block.block_type === "buttons" && (
+                      <input
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+                        value={block.content_text ?? ""}
+                        placeholder="Texto arriba de los botones"
+                        onChange={(e) => setNodes((prev) => prev.map((n) => n.id !== node.id ? n : ({ ...n, blocks: n.blocks.map((b) => b.id === block.id ? { ...b, content_text: e.target.value } : b) })))}
+                      />
+                    )}
+                    <button type="button" className="text-xs text-[#0EA5E9] hover:underline" onClick={async () => {
+                      try {
+                        const latestNode = nodes.find((n) => n.id === node.id);
+                        const latestBlock = latestNode?.blocks.find((b) => b.id === block.id);
+                        if (!latestBlock) return;
+                        await saveBlock(node, latestBlock);
+                        setSuccess("Bloque guardado.");
+                        await reload();
+                      } catch (e) {
+                        setError(e instanceof Error ? e.message : "Error al guardar bloque");
+                      }
+                    }}>Guardar bloque</button>
+                  </div>
+                ))}
+              </div>
 
               <button
                 type="button"

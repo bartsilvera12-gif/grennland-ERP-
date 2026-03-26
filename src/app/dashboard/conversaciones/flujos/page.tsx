@@ -156,10 +156,10 @@ export default function FlowsListPage() {
           <p className="text-sm text-slate-500">Administración simple de flujos WhatsApp por empresa</p>
         </div>
         <Link
-          href="/dashboard/conversaciones"
+          href="/configuracion/conversaciones"
           className="text-sm font-medium text-[#0EA5E9] hover:underline px-3 py-2 rounded-lg border border-sky-200 bg-sky-50"
         >
-          Volver a conversaciones
+          Ir a Configuración de Conversaciones
         </Link>
       </div>
 
@@ -227,7 +227,7 @@ export default function FlowsListPage() {
                     <td className="px-4 py-2">{r.node_count}</td>
                     <td className="px-4 py-2">{fmt(r.updated_at)}</td>
                     <td className="px-4 py-2 flex gap-3">
-                      <Link href={`/dashboard/conversaciones/flujos/${encodeURIComponent(r.flow_code)}`} className="text-[#0EA5E9] hover:underline">
+                      <Link href={`/configuracion/conversaciones/flujos/${encodeURIComponent(r.flow_code)}`} className="text-[#0EA5E9] hover:underline">
                         Editar
                       </Link>
                       <button type="button" onClick={() => void toggleFlow(r.flow_code, r.activo)} className="text-slate-600 hover:underline" disabled={togglingCode === r.flow_code}>

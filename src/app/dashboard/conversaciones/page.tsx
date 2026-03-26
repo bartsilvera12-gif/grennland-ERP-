@@ -250,13 +250,13 @@ export default function ConversacionesPage() {
           <p className="text-sm text-slate-500">WhatsApp · bandeja de entrada</p>
         </div>
         <Link
-          href="/dashboard/conversaciones/configuracion"
+          href="/configuracion/conversaciones"
           className="shrink-0 text-sm font-medium text-[#0EA5E9] hover:underline px-3 py-2 rounded-lg border border-sky-200 bg-sky-50"
         >
           Configurar canal WhatsApp
         </Link>
         <Link
-          href="/dashboard/conversaciones/flujos"
+          href="/configuracion/conversaciones/flujos"
           className="shrink-0 text-sm font-medium text-[#0EA5E9] hover:underline px-3 py-2 rounded-lg border border-sky-200 bg-sky-50"
         >
           Gestionar flujos
@@ -266,7 +266,7 @@ export default function ConversacionesPage() {
       {hasActiveChannel === false && (
         <div className="bg-amber-50 border border-amber-200 text-amber-900 text-sm rounded-lg px-4 py-3 flex flex-wrap items-center justify-between gap-2">
           <span>No hay un canal WhatsApp activo para tu empresa. Los mensajes no se registrarán hasta configurarlo.</span>
-          <Link href="/dashboard/conversaciones/configuracion" className="font-semibold text-amber-800 hover:underline">
+          <Link href="/configuracion/conversaciones" className="font-semibold text-amber-800 hover:underline">
             Ir a configuración →
           </Link>
         </div>
@@ -291,7 +291,7 @@ export default function ConversacionesPage() {
               <div className="p-6 text-sm text-slate-500 text-center space-y-2">
                 <p>No hay conversaciones aún</p>
                 <Link
-                  href="/dashboard/conversaciones/configuracion"
+                  href="/configuracion/conversaciones"
                   className="inline-block text-[#0EA5E9] hover:underline text-xs"
                 >
                   Configurar número de WhatsApp

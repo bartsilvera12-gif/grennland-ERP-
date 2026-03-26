@@ -25,6 +25,15 @@ export type SendWhatsAppButtonsParams = {
   graphVersion?: string;
 };
 
+export type SendWhatsAppImageParams = {
+  toDigits: string;
+  phoneNumberId: string;
+  accessToken: string;
+  imageUrl: string;
+  caption?: string;
+  graphVersion?: string;
+};
+
 async function sendWhatsAppPayload(
   params: {
     phoneNumberId: string;
@@ -94,6 +103,20 @@ export async function sendWhatsAppInteractiveButtons(
       type: "button",
       body: { text: params.bodyText.slice(0, 1024) },
       action: { buttons },
+    },
+  });
+}
+
+export async function sendWhatsAppImage(
+  params: SendWhatsAppImageParams
+): Promise<SendWhatsAppTextResult> {
+  return sendWhatsAppPayload(params, {
+    messaging_product: "whatsapp",
+    to: params.toDigits,
+    type: "image",
+    image: {
+      link: params.imageUrl,
+      ...(params.caption ? { caption: params.caption.slice(0, 1024) } : {}),
     },
   });
 }

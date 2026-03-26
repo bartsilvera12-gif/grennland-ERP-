@@ -34,6 +34,7 @@ export async function GET(
 
     const ids = (nodes ?? []).map((n) => n.id as string);
     let options: Array<Record<string, unknown>> = [];
+    let blocks: Array<Record<string, unknown>> = [];
     if (ids.length) {
       const { data: opts } = await supabase
         .from("chat_flow_options")
@@ -41,6 +42,14 @@ export async function GET(
         .in("node_id", ids)
         .order("sort_order", { ascending: true });
       options = (opts ?? []) as Array<Record<string, unknown>>;
+      const { data: blks } = await supabase
+        .from("chat_flow_node_blocks")
+        .select("id, node_id, block_type, content_text, media_url, sort_order, created_at")
+        .eq("empresa_id", auth.empresa_id)
+        .in("node_id", ids)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: true });
+      blocks = (blks ?? []) as Array<Record<string, unknown>>;
     }
 
     const byNode = new Map<string, Array<Record<string, unknown>>>();
@@ -50,12 +59,20 @@ export async function GET(
       list.push(o);
       byNode.set(nodeId, list);
     }
+    const blocksByNode = new Map<string, Array<Record<string, unknown>>>();
+    for (const b of blocks) {
+      const nodeId = b.node_id as string;
+      const list = blocksByNode.get(nodeId) ?? [];
+      list.push(b);
+      blocksByNode.set(nodeId, list);
+    }
 
     return NextResponse.json({
       ok: true,
       items: (nodes ?? []).map((n) => ({
         ...n,
         options: byNode.get(n.id as string) ?? [],
+        blocks: blocksByNode.get(n.id as string) ?? [],
       })),
     });
   } catch (e) {

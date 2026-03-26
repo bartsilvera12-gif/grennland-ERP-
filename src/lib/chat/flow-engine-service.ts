@@ -1,5 +1,6 @@
 import {
   sendWhatsAppInteractiveButtons,
+  sendWhatsAppImage,
   sendWhatsAppText,
 } from "@/lib/chat/whatsapp-send-service";
 import type { SupabaseAdmin } from "@/lib/chat/types";
@@ -53,6 +54,15 @@ type FlowNode = {
   next_node_code: string | null;
   node_type: "buttons" | "list" | "text" | "image_input" | "human" | "end";
   is_active: boolean;
+};
+
+type FlowNodeBlock = {
+  id: string;
+  node_id: string;
+  block_type: "text" | "image" | "buttons";
+  content_text: string | null;
+  media_url: string | null;
+  sort_order: number;
 };
 
 export type ProcessTextReplyParams = {
@@ -285,6 +295,18 @@ export function createFlowEngine(ctx: FlowEngineContext) {
     return (data ?? []) as FlowOption[];
   }
 
+  async function getNodeBlocks(node: FlowNode): Promise<FlowNodeBlock[]> {
+    const { data, error } = await supabase
+      .from("chat_flow_node_blocks")
+      .select("id, node_id, block_type, content_text, media_url, sort_order")
+      .eq("empresa_id", node.empresa_id)
+      .eq("node_id", node.id)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data ?? []) as FlowNodeBlock[];
+  }
+
   async function advanceConversationToNode(
     params: AdvanceConversationParams
   ): Promise<{ ok: boolean; error?: string }> {
@@ -313,64 +335,157 @@ export function createFlowEngine(ctx: FlowEngineContext) {
     const node = await getNode(state.empresa_id, state.flow_code, state.flow_current_node);
     if (!node) return { ok: false, error: "Nodo actual no encontrado" };
 
-    const bodyText = node.message_text?.trim() || "Continuemos con el flujo.";
+    const fallbackText = node.message_text?.trim() || "Continuemos con el flujo.";
     const basePayload = {
       flow_code: state.flow_code,
       node_code: node.node_code,
       node_type: node.node_type,
     };
+    const blocks = await getNodeBlocks(node);
 
-    if (node.node_type === "buttons") {
-      const options = await getNodeOptions(node.id);
-      const send = await sendWhatsAppInteractiveButtons({
-        toDigits: ctxSend.toDigits,
-        phoneNumberId: ctxSend.phoneNumberId,
-        accessToken: ctxSend.token,
-        bodyText,
-        buttons: options.map((o) => ({
-          id: o.meta_button_id,
-          title: o.label,
-        })),
-      });
-      if (!send.ok) return { ok: false, error: send.error };
+    // Compatibilidad: si el nodo aún no tiene bloques, mantiene comportamiento legacy.
+    if (blocks.length === 0) {
+      const bodyText = fallbackText;
+      if (node.node_type === "buttons") {
+        const options = await getNodeOptions(node.id);
+        const send = await sendWhatsAppInteractiveButtons({
+          toDigits: ctxSend.toDigits,
+          phoneNumberId: ctxSend.phoneNumberId,
+          accessToken: ctxSend.token,
+          bodyText,
+          buttons: options.map((o) => ({
+            id: o.meta_button_id,
+            title: o.label,
+          })),
+        });
+        if (!send.ok) return { ok: false, error: send.error };
 
-      await persistOutgoingMessage({
-        conversation: state,
-        content: bodyText,
-        messageType: "interactive",
-        waMessageId: send.waMessageId,
-        raw: send.raw,
-        senderType: "system",
-        automationSource: "flow_engine",
-      });
+        await persistOutgoingMessage({
+          conversation: state,
+          content: bodyText,
+          messageType: "interactive",
+          waMessageId: send.waMessageId,
+          raw: send.raw,
+          senderType: "system",
+          automationSource: "flow_engine",
+        });
+      } else {
+        const send = await sendWhatsAppText({
+          toDigits: ctxSend.toDigits,
+          phoneNumberId: ctxSend.phoneNumberId,
+          accessToken: ctxSend.token,
+          text: bodyText,
+        });
+        if (!send.ok) return { ok: false, error: send.error };
+
+        await persistOutgoingMessage({
+          conversation: state,
+          content: bodyText,
+          messageType: "text",
+          waMessageId: send.waMessageId,
+          raw: send.raw,
+          senderType: "system",
+          automationSource: "flow_engine",
+        });
+      }
+
+      if (node.node_type === "human") {
+        console.info("[flow-engine] takeover activated", {
+          conversationId: state.id,
+          nodeCode: node.node_code,
+        });
+        await supabase
+          .from("chat_conversations")
+          .update({
+            flow_status: "human",
+            human_taken_over: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", state.id);
+      }
+
       await insertFlowEvent({
         empresaId: state.empresa_id,
         conversationId: state.id,
         flowCode: state.flow_code,
         nodeCode: node.node_code,
         eventType: "node_sent",
-        payload: basePayload,
+        payload: { ...basePayload, legacy: true },
       });
+
       return { ok: true, nodeCode: node.node_code };
     }
 
-    const send = await sendWhatsAppText({
-      toDigits: ctxSend.toDigits,
-      phoneNumberId: ctxSend.phoneNumberId,
-      accessToken: ctxSend.token,
-      text: bodyText,
-    });
-    if (!send.ok) return { ok: false, error: send.error };
-
-    await persistOutgoingMessage({
-      conversation: state,
-      content: bodyText,
-      messageType: "text",
-      waMessageId: send.waMessageId,
-      raw: send.raw,
-      senderType: "system",
-      automationSource: "flow_engine",
-    });
+    const options = await getNodeOptions(node.id);
+    for (const block of blocks) {
+      if (block.block_type === "text") {
+        const text = block.content_text?.trim();
+        if (!text) continue;
+        const send = await sendWhatsAppText({
+          toDigits: ctxSend.toDigits,
+          phoneNumberId: ctxSend.phoneNumberId,
+          accessToken: ctxSend.token,
+          text,
+        });
+        if (!send.ok) return { ok: false, error: send.error };
+        await persistOutgoingMessage({
+          conversation: state,
+          content: text,
+          messageType: "text",
+          waMessageId: send.waMessageId,
+          raw: send.raw,
+          senderType: "system",
+          automationSource: "flow_engine",
+        });
+        continue;
+      }
+      if (block.block_type === "image") {
+        const imageUrl = block.media_url?.trim();
+        if (!imageUrl) continue;
+        const caption = block.content_text?.trim() || undefined;
+        const send = await sendWhatsAppImage({
+          toDigits: ctxSend.toDigits,
+          phoneNumberId: ctxSend.phoneNumberId,
+          accessToken: ctxSend.token,
+          imageUrl,
+          caption,
+        });
+        if (!send.ok) return { ok: false, error: send.error };
+        await persistOutgoingMessage({
+          conversation: state,
+          content: caption ? `${caption}\n${imageUrl}` : imageUrl,
+          messageType: "image",
+          waMessageId: send.waMessageId,
+          raw: send.raw,
+          senderType: "system",
+          automationSource: "flow_engine",
+        });
+        continue;
+      }
+      if (block.block_type === "buttons") {
+        const bodyText = block.content_text?.trim() || fallbackText;
+        const send = await sendWhatsAppInteractiveButtons({
+          toDigits: ctxSend.toDigits,
+          phoneNumberId: ctxSend.phoneNumberId,
+          accessToken: ctxSend.token,
+          bodyText,
+          buttons: options.map((o) => ({
+            id: o.meta_button_id,
+            title: o.label,
+          })),
+        });
+        if (!send.ok) return { ok: false, error: send.error };
+        await persistOutgoingMessage({
+          conversation: state,
+          content: bodyText,
+          messageType: "interactive",
+          waMessageId: send.waMessageId,
+          raw: send.raw,
+          senderType: "system",
+          automationSource: "flow_engine",
+        });
+      }
+    }
 
     if (node.node_type === "human") {
       console.info("[flow-engine] takeover activated", {
@@ -393,7 +508,7 @@ export function createFlowEngine(ctx: FlowEngineContext) {
       flowCode: state.flow_code,
       nodeCode: node.node_code,
       eventType: "node_sent",
-      payload: basePayload,
+      payload: { ...basePayload, blocks: blocks.length },
     });
 
     return { ok: true, nodeCode: node.node_code };
