@@ -505,6 +505,53 @@ export function createFlowEngine(ctx: FlowEngineContext) {
     return { ok: true };
   }
 
+  /**
+   * Tras enviar un nodo saliente: si hay siguiente paso y el nodo no espera input del cliente,
+   * avanza la conversación y ejecuta sendCurrentFlowNode recursivamente (máx. __autoHop).
+   * Importante: la rama legacy (sin bloques) debe usar la misma lógica que la rama con bloques.
+   */
+  async function autoChainOutboundIfApplicable(
+    state: ConversationFlowState,
+    node: FlowNode,
+    currentHop: number
+  ): Promise<{ ok: boolean; nodeCode?: string; error?: string } | null> {
+    const canAutoAdvance =
+      Boolean(node.next_node_code) &&
+      !["buttons", "list", "image_input", "human", "end"].includes(node.node_type) &&
+      !(node.node_type === "text" && Boolean(node.save_as_field?.trim()));
+    if (!canAutoAdvance || !node.next_node_code || !state.flow_code) return null;
+
+    console.info("[flow-engine] auto_chain_after_outbound", {
+      conversationId: state.id,
+      fromNode: node.node_code,
+      nextNodeCode: node.next_node_code,
+      node_type: node.node_type,
+      save_as_field: node.save_as_field ?? null,
+    });
+
+    const adv = await advanceConversationToNode({
+      conversationId: state.id,
+      empresaId: state.empresa_id,
+      flowCode: state.flow_code,
+      nextNodeCode: node.next_node_code,
+    });
+    if (!adv.ok) return { ok: false, error: adv.error ?? "No se pudo auto-avanzar nodo" };
+
+    await insertFlowEvent({
+      empresaId: state.empresa_id,
+      conversationId: state.id,
+      flowCode: state.flow_code,
+      nodeCode: node.next_node_code,
+      eventType: "node_advanced",
+      payload: {
+        from_node: node.node_code,
+        next_node_code: node.next_node_code,
+        reason: "auto_chain_after_outbound",
+      },
+    });
+    return sendCurrentFlowNode({ conversationId: state.id, __autoHop: currentHop + 1 });
+  }
+
   async function sendCurrentFlowNode(
     params: SendCurrentNodeParams
   ): Promise<{ ok: boolean; nodeCode?: string; error?: string }> {
@@ -632,6 +679,8 @@ export function createFlowEngine(ctx: FlowEngineContext) {
         payload: { ...basePayload, legacy: true },
       });
 
+      const chainedLegacy = await autoChainOutboundIfApplicable(state, node, currentHop);
+      if (chainedLegacy) return chainedLegacy;
       return { ok: true, nodeCode: node.node_code };
     }
 
@@ -734,33 +783,8 @@ export function createFlowEngine(ctx: FlowEngineContext) {
       payload: { ...basePayload, blocks: blocks.length },
     });
 
-    const canAutoAdvance =
-      Boolean(node.next_node_code) &&
-      !["buttons", "list", "image_input", "human", "end"].includes(node.node_type) &&
-      !(node.node_type === "text" && Boolean(node.save_as_field?.trim()));
-    if (canAutoAdvance && node.next_node_code && state.flow_code) {
-      const adv = await advanceConversationToNode({
-        conversationId: state.id,
-        empresaId: state.empresa_id,
-        flowCode: state.flow_code,
-        nextNodeCode: node.next_node_code,
-      });
-      if (!adv.ok) return { ok: false, error: adv.error ?? "No se pudo auto-avanzar nodo" };
-      await insertFlowEvent({
-        empresaId: state.empresa_id,
-        conversationId: state.id,
-        flowCode: state.flow_code,
-        nodeCode: node.next_node_code,
-        eventType: "node_advanced",
-        payload: {
-          from_node: node.node_code,
-          next_node_code: node.next_node_code,
-          reason: "auto_chain_after_outbound",
-        },
-      });
-      return sendCurrentFlowNode({ conversationId: state.id, __autoHop: currentHop + 1 });
-    }
-
+    const chained = await autoChainOutboundIfApplicable(state, node, currentHop);
+    if (chained) return chained;
     return { ok: true, nodeCode: node.node_code };
   }
 
