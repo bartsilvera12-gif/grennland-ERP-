@@ -70,7 +70,15 @@ En n8n, accedé a los datos con:
 | `pago_registrado` | Al registrar un pago |
 | `suscripcion_creada` | Al crear una suscripción |
 
-## 6. Troubleshooting
+## 6. Webhook para crear leads desde WhatsApp
+
+Para crear leads automáticamente cuando llega un mensaje de WhatsApp, usá el endpoint `POST /api/crm/leads`. Ver [WHATSAPP_CRM_AUTOMATION.md](./WHATSAPP_CRM_AUTOMATION.md) para la guía completa.
+
+Variables adicionales en Vercel:
+- `WEBHOOK_SECRET` — clave para autenticar el webhook
+- `CRM_WEBHOOK_EMPRESA_ID` — (opcional) UUID de la empresa que recibe los leads
+
+## 7. Troubleshooting
 
 | Problema | Solución |
 |----------|----------|

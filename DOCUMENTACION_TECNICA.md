@@ -29,6 +29,8 @@
 | **Compras** | Órdenes de compra a proveedores |
 | **Clientes** | Base de clientes con datos comerciales |
 | **Gestión Clientes** | Facturas, tipificaciones, estado de cuenta |
+| **Gastos** | Registro de gastos operativos (fijos/variables, recurrentes) |
+| **Pagos** | Registro de pagos contra facturas pendientes |
 | **Planes** | Catálogo de planes de suscripción |
 | **Usuarios** | Gestión de personal y accesos |
 | **Configuración** | Parámetros globales del sistema |
@@ -186,11 +188,52 @@ empresas (id, nombre_empresa, plan, ruc, estado, created_at)
 | Columna | Tipo | Descripción |
 |---------|------|-------------|
 | cliente_id | uuid | FK → clientes |
+| suscripcion_id | uuid | FK → suscripciones (opcional) |
 | numero_factura | text | Número de factura |
 | fecha, fecha_vencimiento | date | Fechas |
 | monto, saldo | numeric | Montos |
 | estado | text | Pagado \| Pendiente \| Vencido \| Anulado |
 | tipo | text | contado \| credito \| suscripcion |
+
+#### suscripciones
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| cliente_id, plan_id | uuid | FK |
+| precio, moneda | numeric, text | Precio |
+| fecha_inicio | date | Inicio de suscripción |
+| duracion_meses | integer | Duración (default 12) |
+| dia_facturacion, dia_vencimiento | integer | Días del mes (1-28, 1-31) |
+| estado | text | activa \| pausada \| cancelada |
+
+#### factura_items
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| factura_id | uuid | FK → facturas |
+| descripcion | text | Descripción del ítem |
+| cantidad, precio_unitario | numeric | Datos de línea |
+| subtotal, iva, total | numeric | Totales de línea |
+
+#### pagos
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| factura_id | uuid | FK → facturas |
+| monto | numeric | Monto del pago |
+| fecha_pago | date | Fecha del pago |
+| metodo_pago | text | efectivo \| transferencia \| cheque \| tarjeta \| otro |
+| referencia | text | Nº comprobante o referencia |
+
+#### gastos
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| categoria, descripcion | text | Clasificación |
+| monto | numeric | Monto |
+| tipo | text | fijo \| variable |
+| recurrente, frecuencia | boolean, text | Si es recurrente |
+| fecha | date | Fecha del gasto |
 
 #### tipificaciones
 
@@ -220,7 +263,10 @@ Registros de gestión de clientes (Consulta, Reclamo, Seguimiento, Promesa de pa
 - **compras** → genera **movimientos_inventario** (ENTRADA) y actualiza **productos** (stock, costo_promedio).
 - **ventas** → genera **movimientos_inventario** (SALIDA) y actualiza **productos** (stock).
 - **crm_prospectos** (GANADO) → puede crear **clientes** (origen: CRM).
-- **clientes** → **facturas**, **tipificaciones**.
+- **clientes** → **facturas**, **tipificaciones**, **suscripciones**.
+- **suscripciones** → **facturas** (facturación recurrente).
+- **facturas** → **factura_items** (líneas), **pagos** (abonos).
+- **pagos** → actualiza **facturas** (saldo, estado).
 
 ---
 
@@ -276,6 +322,19 @@ Registros de gestión de clientes (Consulta, Reclamo, Seguimiento, Promesa de pa
 - **Nuevo prospecto:** Empresa, contacto, servicio, valor estimado.
 - **Ganado:** Crear cliente desde prospecto.
 - **Persistencia:** Supabase (crm_prospectos, crm_notas).
+
+### Gastos
+
+- **Listado:** Gastos con filtros por fecha, tipo (fijo/variable).
+- **Nuevo/Editar:** Categoría, descripción, monto, tipo, recurrente, frecuencia, fecha.
+- **Persistencia:** Supabase (`lib/gastos/actions.ts`).
+
+### Pagos
+
+- **Listado:** Facturas pendientes de cobro con saldo.
+- **Registrar pago:** Monto, fecha, método (efectivo, transferencia, cheque, tarjeta), referencia.
+- **Impacto:** Al registrar pago se actualiza saldo y estado de la factura vía API `/api/pagos`.
+- **Persistencia:** Supabase (API routes + `lib/api/client.ts`).
 
 ### Planes
 
@@ -394,9 +453,60 @@ AJUSTE MANUAL
     └── Entrada / Salida / Ajuste
 ```
 
+### Dependencias entre módulos
+
+| Módulo origen | Depende de | Relación |
+|---------------|------------|----------|
+| **CRM** | — | Crea prospectos; al ganar → Clientes |
+| **Clientes** | CRM (opcional) | Origen puede ser MANUAL, CRM, VENTA |
+| **Gestión Clientes** | Clientes | Facturas y tipificaciones por cliente |
+| **Pagos** | Gestión Clientes | Registra pagos contra facturas |
+| **Facturación proyectada** | Clientes, Suscripciones | Emite facturas desde suscripciones |
+| **Ventas** | Clientes, Inventario | Órdenes de venta con productos |
+| **Compras** | Proveedores, Inventario | Órdenes de compra |
+| **Inventario** | — | Productos y movimientos base |
+
 ---
 
-## 8. Diseño Visual
+## 8. API REST y flujo de datos
+
+### APIs REST
+
+La documentación detallada está en **`docs/API.md`**. Resumen de endpoints:
+
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `/api/clientes` | GET, POST | Listar y crear clientes |
+| `/api/facturas` | GET, POST | Listar y crear facturas |
+| `/api/pagos` | GET, POST | Listar y registrar pagos |
+| `/api/suscripciones` | GET, POST | Listar y crear suscripciones |
+| `/api/dashboard` | GET | Métricas financieras del mes |
+| `/api/clientes/:id/facturacion` | GET | Facturación proyectada del cliente |
+| `/api/clientes/:id/facturacion/emitir` | POST | Emitir factura desde suscripción |
+| `/api/crm/leads` | POST | Crear lead desde webhook (WhatsApp, n8n) |
+| `/api/webhook-test` | GET | Probar configuración de webhooks |
+
+### Flujo de datos: Supabase directo vs API
+
+| Acceso | Cuándo se usa | Ejemplo |
+|--------|---------------|---------|
+| **Supabase directo** | Lectura/escritura desde cliente con RLS | `lib/clientes/storage.ts`, `lib/gastos/actions.ts`, `lib/inventario/storage.ts` |
+| **API routes** | Creación con lógica de negocio, webhooks, validaciones | Clientes, facturas, pagos, suscripciones vía `lib/api/client.ts` |
+| **API + Supabase** | API usa service role para operaciones que requieren permisos elevados | `/api/admin/crear-empresa`, `/api/pagos` (actualiza factura) |
+
+El cliente `lib/api/client.ts` expone: `apiCreateCliente`, `apiCreateFactura`, `apiCreatePago`, `apiCreateSuscripcion`. Usa la sesión del usuario (cookies) para autenticación.
+
+### Integraciones y webhooks
+
+- **Eventos:** `lib/integrations/events.ts` — `emitEvent(eventName, payload)`.
+- **Webhooks:** `lib/integrations/webhooks.ts` — `sendWebhook(event, payload)` envía POST a `WEBHOOK_URL`.
+- **Variables de entorno:** `WEBHOOK_URL`, `WEBHOOK_SECRET`, `CRM_WEBHOOK_EMPRESA_ID`.
+- **Eventos emitidos:** `cliente_creado`, `factura_creada`, `pago_registrado`, `suscripcion_creada`.
+- **Documentación:** `docs/WEBHOOK_SETUP.md`, `docs/WHATSAPP_CRM_AUTOMATION.md`.
+
+---
+
+## 9. Diseño Visual
 
 ### Paleta de colores
 
@@ -443,7 +553,7 @@ AJUSTE MANUAL
 
 ---
 
-## 9. Estructura del Proyecto
+## 10. Estructura del Proyecto
 
 ```
 neura-erp/
@@ -453,18 +563,28 @@ neura-erp/
 │   │   │   ├── admin/
 │   │   │   │   ├── crear-empresa/route.ts
 │   │   │   │   ├── empresas/route.ts
-│   │   │   │   └── modulos/route.ts
+│   │   │   │   ├── modulos/route.ts
+│   │   │   │   └── usuarios/[id]/route.ts
+│   │   │   ├── clientes/route.ts
+│   │   │   │   └── [id]/facturacion/route.ts, emitir/route.ts
+│   │   │   ├── crm/leads/route.ts
 │   │   │   ├── create-user/route.ts
-│   │   │   └── empresas/mis-modulos/route.ts
-│   │   ├── admin/
-│   │   │   └── empresas/
+│   │   │   ├── dashboard/route.ts
+│   │   │   ├── empresas/mis-modulos/route.ts
+│   │   │   ├── facturas/route.ts
+│   │   │   ├── pagos/route.ts
+│   │   │   ├── suscripciones/route.ts
+│   │   │   └── webhook-test/route.ts
+│   │   ├── admin/empresas/
 │   │   ├── clientes/
 │   │   ├── compras/
 │   │   ├── configuracion/
 │   │   ├── crm/
+│   │   ├── gastos/
 │   │   ├── gestion-clientes/
 │   │   ├── inventario/
 │   │   ├── login/
+│   │   ├── pagos/
 │   │   ├── planes/
 │   │   ├── usuarios/
 │   │   ├── ventas/
@@ -480,6 +600,7 @@ neura-erp/
 │   │   ├── AuthGuard.tsx
 │   │   └── ThemeProvider.tsx
 │   └── lib/
+│       ├── api/ (client.ts, response.ts, errors.ts)
 │       ├── auth.ts
 │       ├── supabase.ts
 │       ├── db/empresa.ts
@@ -490,18 +611,28 @@ neura-erp/
 │       ├── dashboard/
 │       ├── empresas/
 │       ├── gestion-clientes/
+│       ├── gastos/
 │       ├── inventario/
+│       ├── integrations/ (events.ts, webhooks.ts)
 │       ├── planes/
 │       ├── proveedores/
 │       ├── usuarios/
 │       ├── ventas/
 │       └── favorites.ts
+├── docs/
+│   ├── API.md
+│   ├── WEBHOOK_SETUP.md
+│   └── WHATSAPP_CRM_AUTOMATION.md
 ├── supabase/
 │   └── migrations/
 │       ├── 20250312000000_rls_multiempresa.sql
 │       ├── 20250312000001_clientes_schema.sql
 │       ├── 20250312000002_empresas_plan.sql
-│       └── 20250312000003_erp_schema.sql
+│       ├── 20250312000003_erp_schema.sql
+│       ├── 20250312000005_gastos.sql
+│       ├── 20250312000006_modulo_gastos.sql
+│       ├── 20250312000009_suscripciones_facturas_pagos.sql
+│       └── 20250312000010_modulo_pagos.sql
 ├── scripts/
 │   ├── run-rls-migration.ts
 │   ├── verificar-rls.ts
@@ -523,7 +654,7 @@ neura-erp/
 
 ---
 
-## 10. Proceso de Despliegue
+## 11. Proceso de Despliegue
 
 ### Flujo
 
@@ -557,6 +688,9 @@ Producción (URL Vercel)
 | `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clave anónima (pública) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clave de servicio (solo API routes) |
+| `WEBHOOK_URL` | URL para enviar eventos (n8n, Zapier, etc.) |
+| `WEBHOOK_SECRET` | Clave para autenticar webhooks entrantes (ej. CRM leads) |
+| `CRM_WEBHOOK_EMPRESA_ID` | (Opcional) Empresa por defecto para leads vía webhook |
 
 ### Comandos útiles
 
@@ -593,6 +727,10 @@ npm run db:push-rls
 | Movimientos inventario | Supabase |
 | CRM (prospectos, notas) | Supabase |
 | Planes | Supabase |
+| Gastos | Supabase |
+| Pagos | Supabase (API) |
+| Facturas | Supabase |
+| Suscripciones | Supabase |
 | Ventas | localStorage |
 | Compras | localStorage |
 | Proveedores | localStorage |

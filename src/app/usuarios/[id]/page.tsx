@@ -41,6 +41,8 @@ function UsuarioDetailContent() {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [editing, setEditing] = useState(editMode);
   const [formError, setFormError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
   const [form, setForm] = useState({
@@ -53,10 +55,14 @@ function UsuarioDetailContent() {
 
   useEffect(() => {
     if (!id) return;
+    setLoadError(null);
     fetch(`/api/empresas/usuarios/${id}`, { cache: "no-store" })
-      .then((r) => r.json())
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error ?? `Error ${r.status}`);
+        return data;
+      })
       .then((data) => {
-        if (data.error) throw new Error(data.error);
         const u = data as Usuario;
         setUsuario(u);
         setForm({
@@ -67,8 +73,10 @@ function UsuarioDetailContent() {
           estado: (u.estado as "activo" | "inactivo") ?? "activo",
         });
       })
-      .catch(() => router.push("/usuarios"));
-  }, [id, router]);
+      .catch((err) => {
+        setLoadError(err instanceof Error ? err.message : "No se pudo cargar el usuario");
+      });
+  }, [id]);
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = e.target;
@@ -82,6 +90,7 @@ function UsuarioDetailContent() {
     e.preventDefault();
     if (!usuario) return;
     setFormError(null);
+    setSuccessMessage(null);
     if (!form.nombre.trim()) {
       setFormError("El nombre es obligatorio.");
       return;
@@ -104,9 +113,9 @@ function UsuarioDetailContent() {
           estado: form.estado,
         }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(json.error ?? "Error al guardar");
+        throw new Error(json.error ?? `Error al guardar (${res.status})`);
       }
       setUsuario({
         ...usuario,
@@ -117,11 +126,37 @@ function UsuarioDetailContent() {
         estado: form.estado,
       });
       setEditing(false);
+      setSuccessMessage("Cambios guardados correctamente en la base de datos.");
+      setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Error al guardar");
     } finally {
       setGuardando(false);
     }
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-6 max-w-2xl">
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <Link href="/usuarios" className="hover:text-gray-700 transition-colors">
+            Usuarios
+          </Link>
+          <span>/</span>
+          <span className="text-gray-700 font-medium">Error</span>
+        </div>
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-4">
+          <p className="font-medium">{loadError}</p>
+          <p className="text-xs text-red-600 mt-2">Los cambios no se guardaron. Verificá que tenés permiso para editar este usuario.</p>
+        </div>
+        <Link
+          href="/usuarios"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-800"
+        >
+          ← Volver a usuarios
+        </Link>
+      </div>
+    );
   }
 
   if (!usuario) {
@@ -147,6 +182,15 @@ function UsuarioDetailContent() {
         <span>/</span>
         <span className="text-gray-700 font-medium">{usuario.nombre ?? usuario.email}</span>
       </div>
+
+      {successMessage && (
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 text-sm rounded-xl px-4 py-3">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 shrink-0 text-green-600">
+            <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
+          </svg>
+          <span className="font-medium">{successMessage}</span>
+        </div>
+      )}
 
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-4">

@@ -11,6 +11,90 @@ function getSupabaseAdmin() {
 
 const VALID_NODE_TYPES = ["buttons", "list", "text", "media", "image_input", "human", "end"] as const;
 
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: Promise<{ flowCode: string; nodeCode: string }> }
+) {
+  try {
+    const auth = await getAuthWithRol();
+    if (!auth?.empresa_id) {
+      return NextResponse.json({ ok: false, error: "No autenticado" }, { status: 401 });
+    }
+    const params = await context.params;
+    const targetCode = params.nodeCode;
+    const supabase = getSupabaseAdmin();
+
+    const { data: targetNode, error: targetErr } = await supabase
+      .from("chat_flow_nodes")
+      .select("id, node_code")
+      .eq("empresa_id", auth.empresa_id)
+      .eq("flow_code", params.flowCode)
+      .eq("node_code", targetCode)
+      .maybeSingle();
+    if (targetErr) return NextResponse.json({ ok: false, error: targetErr.message }, { status: 400 });
+    if (!targetNode) return NextResponse.json({ ok: false, error: "Nodo no encontrado" }, { status: 404 });
+
+    const { data: refNodes, error: refNodesErr } = await supabase
+      .from("chat_flow_nodes")
+      .select("node_code")
+      .eq("empresa_id", auth.empresa_id)
+      .eq("flow_code", params.flowCode)
+      .eq("next_node_code", targetCode)
+      .neq("node_code", targetCode);
+    if (refNodesErr) return NextResponse.json({ ok: false, error: refNodesErr.message }, { status: 400 });
+
+    const { data: flowNodes, error: flowNodesErr } = await supabase
+      .from("chat_flow_nodes")
+      .select("id, node_code")
+      .eq("empresa_id", auth.empresa_id)
+      .eq("flow_code", params.flowCode);
+    if (flowNodesErr) return NextResponse.json({ ok: false, error: flowNodesErr.message }, { status: 400 });
+
+    const flowNodeIds = new Set((flowNodes ?? []).map((n) => n.id as string));
+    const idToCode = new Map((flowNodes ?? []).map((n) => [n.id as string, n.node_code as string]));
+
+    const { data: refOpts, error: refOptsErr } = await supabase
+      .from("chat_flow_options")
+      .select("id, label, node_id")
+      .eq("next_node_code", targetCode);
+    if (refOptsErr) return NextResponse.json({ ok: false, error: refOptsErr.message }, { status: 400 });
+
+    const fromOptions = (refOpts ?? [])
+      .filter((o) => flowNodeIds.has(o.node_id as string))
+      .map((o) => ({
+        parent_node_code: idToCode.get(o.node_id as string) ?? String(o.node_id),
+        label: String((o as { label?: string }).label ?? ""),
+      }));
+
+    const fromNodes = (refNodes ?? []).map((n) => ({ node_code: n.node_code as string }));
+
+    if (fromNodes.length > 0 || fromOptions.length > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "No se puede eliminar este paso: otros nodos u opciones de botón/lista apuntan a él. Cambiá esas referencias primero.",
+          references: { fromNodes, fromOptions },
+        },
+        { status: 409 }
+      );
+    }
+
+    const { error: delErr } = await supabase
+      .from("chat_flow_nodes")
+      .delete()
+      .eq("empresa_id", auth.empresa_id)
+      .eq("flow_code", params.flowCode)
+      .eq("node_code", targetCode);
+    if (delErr) return NextResponse.json({ ok: false, error: delErr.message }, { status: 400 });
+
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("[api/chat/flows/:flowCode/nodes/:nodeCode][DELETE]", e);
+    return NextResponse.json({ ok: false, error: "Error interno" }, { status: 500 });
+  }
+}
+
 function isValidHttpUrl(value: string): boolean {
   try {
     const u = new URL(value);
