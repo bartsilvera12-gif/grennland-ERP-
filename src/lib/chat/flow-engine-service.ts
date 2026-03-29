@@ -1348,29 +1348,43 @@ export function createFlowEngine(ctx: FlowEngineContext) {
       },
     });
 
+    const sorteoLinked = await getSorteoIdForChatFlow(
+      supabase,
+      state.empresa_id,
+      state.flow_code as string
+    );
+    /** Cierre de compra sorteo: no escribir en chat_flow_data ni re-ejecutar contrato comercial (evita pisar snapshots con el label del botón, ej. "Confirmado"). */
+    const isSorteoFinalizeClick =
+      Boolean(sorteoLinked) && optionPayloadFinalizesSorteoOrder(selected.option_payload);
+
     const optionPayload =
       selected.option_payload && typeof selected.option_payload === "object"
         ? selected.option_payload
         : {};
-    let payloadEntries: [string, string][] = Object.entries(optionPayload)
-      .filter(([key]) => key.trim().length > 0)
-      .map(([k, v]) => [
-        k,
-        typeof v === "string" || typeof v === "number" || typeof v === "boolean"
-          ? String(v)
-          : JSON.stringify(v ?? ""),
-      ]);
-    if (!payloadEntries.some(([k]) => k === "opcion_label")) {
-      payloadEntries.push(["opcion_label", selected.label]);
+    let payloadEntries: [string, string][] = [];
+
+    if (!isSorteoFinalizeClick) {
+      payloadEntries = Object.entries(optionPayload)
+        .filter(([key]) => key.trim().length > 0)
+        .map(([k, v]) => [
+          k,
+          typeof v === "string" || typeof v === "number" || typeof v === "boolean"
+            ? String(v)
+            : JSON.stringify(v ?? ""),
+        ]);
+      if (!payloadEntries.some(([k]) => k === "opcion_label")) {
+        payloadEntries.push(["opcion_label", selected.label]);
+      }
+      payloadEntries = augmentCantidadFromInteractiveOption(payloadEntries, selected);
+      payloadEntries = augmentSorteoPricingFromInteractiveOption(payloadEntries);
+      payloadEntries = dedupeChatFlowFieldEntries(payloadEntries);
+      payloadEntries = applySorteoInteractiveCommercialContract(payloadEntries, {
+        label: selected.label,
+        option_value: selected.option_value,
+        option_payload: selected.option_payload,
+      });
     }
-    payloadEntries = augmentCantidadFromInteractiveOption(payloadEntries, selected);
-    payloadEntries = augmentSorteoPricingFromInteractiveOption(payloadEntries);
-    payloadEntries = dedupeChatFlowFieldEntries(payloadEntries);
-    payloadEntries = applySorteoInteractiveCommercialContract(payloadEntries, {
-      label: selected.label,
-      option_value: selected.option_value,
-      option_payload: selected.option_payload,
-    });
+
     if (payloadEntries.length > 0 && state.flow_code) {
       const upserts = payloadEntries.map(([fieldName, fieldValue]) => ({
         empresa_id: state.empresa_id,
@@ -1401,13 +1415,7 @@ export function createFlowEngine(ctx: FlowEngineContext) {
     }
 
     let sorteoOrderMerge: Record<string, string> | undefined;
-    const sorteoLinked = await getSorteoIdForChatFlow(
-      supabase,
-      state.empresa_id,
-      state.flow_code as string
-    );
-    const wantsSorteoFinalize =
-      Boolean(sorteoLinked) && optionPayloadFinalizesSorteoOrder(selected.option_payload);
+    const wantsSorteoFinalize = isSorteoFinalizeClick;
 
     if (wantsSorteoFinalize) {
       const rawFd = await getConversationFlowDataMap({

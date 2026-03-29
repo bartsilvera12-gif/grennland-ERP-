@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { getSorteos } from "@/lib/sorteos/actions";
 import { parseMoneyPy } from "@/lib/sorteos/parse-money-py";
+import { optionPayloadFinalizesSorteoOrder } from "@/lib/sorteos/sorteo-order-from-chat";
 
 type FlowNodeOption = {
   id: string;
@@ -195,6 +196,14 @@ function toSimpleDraftFromPayload(option: FlowNodeOption): OptionSimpleDraft {
   };
 }
 
+function stripSorteoFinalizeKeys(p: Record<string, unknown>): Record<string, unknown> {
+  const o = { ...p };
+  delete o.confirmar_orden_sorteo;
+  delete o.finalize_sorteo_order;
+  delete o.cerrar_compra_sorteo;
+  return o;
+}
+
 function buildPayloadFromSimple(
   existingPayload: Record<string, unknown> | undefined,
   draft: OptionSimpleDraft,
@@ -262,6 +271,8 @@ export default function FlowEditorPage() {
   const [optionEditorMode, setOptionEditorMode] = useState<Record<string, "simple" | "advanced">>({});
   const [optionSimpleDrafts, setOptionSimpleDrafts] = useState<Record<string, OptionSimpleDraft>>({});
   const [optionSaveError, setOptionSaveError] = useState<Record<string, string>>({});
+  /** Botón que solo cierra la compra sorteo (no redefine oferta). */
+  const [optionFinalizeSorteo, setOptionFinalizeSorteo] = useState<Record<string, boolean>>({});
   const [sorteosOptions, setSorteosOptions] = useState<{ id: string; nombre: string }[]>([]);
   const [flowSorteoId, setFlowSorteoId] = useState<string | null>(null);
   const [flowSorteoNombre, setFlowSorteoNombre] = useState<string | null>(null);
@@ -370,6 +381,15 @@ export default function FlowEditorPage() {
         for (const node of items) {
           for (const option of node.options ?? []) {
             if (!next[option.id]) next[option.id] = "simple";
+          }
+        }
+        return next;
+      });
+      setOptionFinalizeSorteo((prev) => {
+        const next = { ...prev };
+        for (const node of items) {
+          for (const option of node.options ?? []) {
+            next[option.id] = optionPayloadFinalizesSorteoOrder(option.option_payload);
           }
         }
         return next;
@@ -575,6 +595,8 @@ export default function FlowEditorPage() {
       return next;
     });
     const mode = optionEditorMode[liveOpt.id] ?? "simple";
+    const finalizeOn = Boolean(flowSorteoId && optionFinalizeSorteo[liveOpt.id]);
+
     let payloadParsed: Record<string, unknown> = {};
     if (mode === "advanced") {
       const payloadDraft = optionPayloadDrafts[liveOpt.id] ?? stringifyOptionPayload(liveOpt.option_payload);
@@ -583,13 +605,19 @@ export default function FlowEditorPage() {
         if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
           throw new Error("El payload debe ser un objeto JSON");
         }
-        payloadParsed = parsed as Record<string, unknown>;
+        const base = stripSorteoFinalizeKeys(parsed as Record<string, unknown>);
+        payloadParsed = finalizeOn ? { ...base, confirmar_orden_sorteo: true } : base;
       } catch {
         throw new Error("Variables JSON inválidas para esta opción.");
       }
+    } else if (finalizeOn) {
+      payloadParsed = { confirmar_orden_sorteo: true };
+      setOptionPayloadDrafts((prev) => ({ ...prev, [liveOpt.id]: stringifyOptionPayload(payloadParsed) }));
     } else {
       const draft = optionSimpleDrafts[liveOpt.id] ?? toSimpleDraftFromPayload(liveOpt);
-      payloadParsed = buildPayloadFromSimple(liveOpt.option_payload, draft, liveOpt.label);
+      payloadParsed = stripSorteoFinalizeKeys(
+        buildPayloadFromSimple(liveOpt.option_payload, draft, liveOpt.label)
+      );
       setOptionPayloadDrafts((prev) => ({ ...prev, [liveOpt.id]: stringifyOptionPayload(payloadParsed) }));
     }
     const metaButtonId = resolveUniqueMetaButtonId(live, liveOpt.id, liveOpt.label);
@@ -1603,7 +1631,37 @@ export default function FlowEditorPage() {
                               : "Usar modo simple"}
                           </button>
                         </div>
+                        {flowSorteoId && (node.node_type === "buttons" || node.node_type === "list") && (
+                          <label className="flex items-start gap-2 mb-3 cursor-pointer rounded-lg border border-violet-200 bg-violet-50/80 px-3 py-2">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={optionFinalizeSorteo[opt.id] ?? false}
+                              onChange={(e) =>
+                                setOptionFinalizeSorteo((prev) => ({
+                                  ...prev,
+                                  [opt.id]: e.target.checked,
+                                }))
+                              }
+                            />
+                            <span className="text-xs text-slate-700 leading-snug">
+                              <span className="font-medium text-violet-900">Cerrar compra del sorteo</span>
+                              <span className="block text-slate-600 mt-0.5">
+                                Marcar en el botón final (después de comprobante y datos). No redefine la oferta: solo
+                                dispara la orden y cupones. Equivale a{" "}
+                                <code className="text-[10px] bg-white/80 px-1 rounded">confirmar_orden_sorteo</code> en
+                                el payload.
+                              </span>
+                            </span>
+                          </label>
+                        )}
                         {(optionEditorMode[opt.id] ?? "simple") === "simple" ? (
+                          optionFinalizeSorteo[opt.id] && flowSorteoId ? (
+                            <p className="text-xs text-slate-600 border border-slate-200 rounded-lg px-3 py-2 bg-slate-50">
+                              Modo cierre: no se guardan aquí cantidad ni monto; se usa solo la señal de confirmación. La
+                              oferta ya quedó al elegir la opción de compra.
+                            </p>
+                          ) : (
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                             <div>
                               <label className="block text-[11px] text-slate-500 mb-1">Cantidad</label>
@@ -1710,6 +1768,7 @@ export default function FlowEditorPage() {
                               />
                             </div>
                           </div>
+                          )
                         ) : (
                           <textarea
                             className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono w-full min-h-[82px]"
