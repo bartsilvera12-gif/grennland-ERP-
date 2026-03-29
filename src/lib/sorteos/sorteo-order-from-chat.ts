@@ -352,22 +352,50 @@ export function buildChatFlowDataUpsertsForSorteoOrder(
   empresaId: string,
   conversationId: string,
   flowCode: string,
+  flowSessionId: string,
   data: EnsureSorteoOrderCreatedData
 ): Array<{
   empresa_id: string;
   conversation_id: string;
   flow_code: string;
+  flow_session_id: string;
   field_name: string;
   field_value: string;
 }> {
   const fc = flowCode.trim();
+  const sid = flowSessionId.trim();
   return sorteoOrderContextPairs(data).map(([field_name, field_value]) => ({
     empresa_id: empresaId,
     conversation_id: conversationId,
     flow_code: fc,
+    flow_session_id: sid,
     field_name,
     field_value,
   }));
+}
+
+/** Texto por defecto si `chat_flows.sorteo_datos_incompletos_message` está vacío. */
+export const SORTEO_DATOS_INCOMPLETOS_DEFAULT_MESSAGE =
+  "No pudimos registrar la participación con los datos de esta compra. Tocá de nuevo la opción de tu compra y enviá el comprobante después, o escribí reiniciar y empezá de nuevo.";
+
+export async function getSorteoDatosIncompletosMessage(
+  supabase: SupabaseClient,
+  empresaId: string,
+  flowCode: string
+): Promise<string> {
+  const fc = flowCode.trim();
+  if (!fc) return SORTEO_DATOS_INCOMPLETOS_DEFAULT_MESSAGE;
+  const { data, error } = await supabase
+    .from("chat_flows")
+    .select("sorteo_datos_incompletos_message")
+    .eq("empresa_id", empresaId)
+    .eq("flow_code", fc)
+    .maybeSingle();
+  if (error || !data) return SORTEO_DATOS_INCOMPLETOS_DEFAULT_MESSAGE;
+  const raw = (data as { sorteo_datos_incompletos_message?: string | null })
+    .sorteo_datos_incompletos_message;
+  const t = typeof raw === "string" ? raw.trim() : "";
+  return t.length > 0 ? t : SORTEO_DATOS_INCOMPLETOS_DEFAULT_MESSAGE;
 }
 
 /**

@@ -22,7 +22,9 @@ export async function GET(
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from("chat_flows")
-      .select("flow_code, label, channel, activo, sorteo_id, updated_at, sorteos(nombre)")
+      .select(
+        "flow_code, label, channel, activo, sorteo_id, sorteo_datos_incompletos_message, updated_at, sorteos(nombre)"
+      )
       .eq("empresa_id", auth.empresa_id)
       .eq("flow_code", params.flowCode)
       .maybeSingle();
@@ -42,6 +44,9 @@ export async function GET(
         activo: data.activo !== false,
         sorteo_id: (data.sorteo_id as string | null) ?? null,
         sorteo_nombre: sorteoNombre ?? null,
+        sorteo_datos_incompletos_message:
+          (data as { sorteo_datos_incompletos_message?: string | null })
+            .sorteo_datos_incompletos_message ?? null,
         updated_at: data.updated_at,
       },
     });
@@ -95,12 +100,22 @@ export async function PATCH(
         patch.sorteo_id = sid;
       }
     }
+    if ("sorteo_datos_incompletos_message" in body) {
+      if (body.sorteo_datos_incompletos_message === null) {
+        patch.sorteo_datos_incompletos_message = null;
+      } else if (typeof body.sorteo_datos_incompletos_message === "string") {
+        const t = body.sorteo_datos_incompletos_message.trim();
+        patch.sorteo_datos_incompletos_message = t.length ? t.slice(0, 4000) : null;
+      }
+    }
     const { data, error } = await supabase
       .from("chat_flows")
       .update(patch)
       .eq("empresa_id", auth.empresa_id)
       .eq("flow_code", flowCode)
-      .select("flow_code, label, channel, activo, sorteo_id, updated_at, sorteos(nombre)")
+      .select(
+        "flow_code, label, channel, activo, sorteo_id, sorteo_datos_incompletos_message, updated_at, sorteos(nombre)"
+      )
       .maybeSingle();
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
     if (!data) return NextResponse.json({ ok: false, error: "Flow no encontrado" }, { status: 404 });
@@ -116,6 +131,9 @@ export async function PATCH(
         activo: data.activo !== false,
         sorteo_id: (data.sorteo_id as string | null) ?? null,
         sorteo_nombre: sorteoNombre ?? null,
+        sorteo_datos_incompletos_message:
+          (data as { sorteo_datos_incompletos_message?: string | null })
+            .sorteo_datos_incompletos_message ?? null,
         updated_at: data.updated_at,
       },
     });

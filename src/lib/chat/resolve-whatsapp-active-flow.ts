@@ -1,4 +1,8 @@
 import type { SupabaseAdmin } from "@/lib/chat/types";
+import {
+  insertActiveFlowSessionRow,
+  markConversationActiveSessionsEnded,
+} from "@/lib/chat/flow-session-service";
 
 const LOG = "[webhook/whatsapp][flow-resolve]" as const;
 export const CONV_LOG = "[webhook/whatsapp][conversation]" as const;
@@ -7,36 +11,16 @@ export const CONV_LOG = "[webhook/whatsapp][conversation]" as const;
 export const FLOW_POINTER_RESET_EVENT = "flow_pointer_reset" as const;
 
 /**
- * Borra variables capturadas del flujo para esa conversación.
- * Sin esto, un "hola"/reinicio deja puntero en inicio pero conserva nombre/cédula/monto
- * de la sesión anterior → riesgo grave de mezclar participantes en la misma conversación.
+ * @deprecated Los datos por sesión viven en `chat_flow_sessions` + `chat_flow_data.flow_session_id`;
+ * el reinicio crea sesión nueva en lugar de borrar filas.
  */
 export async function deleteChatFlowDataForConversationFlow(
-  supabase: SupabaseAdmin,
-  empresaId: string,
-  conversationId: string,
-  flowCode: string | null | undefined
+  _supabase: SupabaseAdmin,
+  _empresaId: string,
+  _conversationId: string,
+  _flowCode: string | null | undefined
 ): Promise<void> {
-  const fc = flowCode?.trim();
-  if (!fc) return;
-  const { error } = await supabase
-    .from("chat_flow_data")
-    .delete()
-    .eq("empresa_id", empresaId)
-    .eq("conversation_id", conversationId)
-    .eq("flow_code", fc);
-  if (error) {
-    console.error(CONV_LOG, "chat_flow_data_delete_failed", {
-      conversationId,
-      flowCode: fc,
-      message: error.message,
-    });
-  } else {
-    console.info(CONV_LOG, "chat_flow_data_cleared_for_flow", {
-      conversationId,
-      flowCode: fc,
-    });
-  }
+  /* no-op: histórico conservado por sesión */
 }
 
 export type ActiveFlowsCatalogResult =
@@ -176,11 +160,25 @@ export async function syncWhatsappConversationFlowFromCatalog(
     action: "assign_single_active_flow",
   });
 
+  await markConversationActiveSessionsEnded(
+    supabase,
+    empresaId,
+    conversationId,
+    "abandoned",
+    "catalog_flow_reassigned"
+  );
+  const newSid = await insertActiveFlowSessionRow(supabase, empresaId, conversationId, targetFlow);
+  if (!newSid) {
+    console.error(LOG, "session_create_on_catalog_assign_failed", { conversationId, targetFlow });
+    return { flow_code: currentFlow, flow_current_node: currentNode, changed: false };
+  }
+
   const { error: updErr } = await supabase
     .from("chat_conversations")
     .update({
       flow_code: targetFlow,
       flow_current_node: firstNode,
+      active_flow_session_id: newSid,
       updated_at: new Date().toISOString(),
     })
     .eq("id", conversationId)
@@ -195,12 +193,8 @@ export async function syncWhatsappConversationFlowFromCatalog(
     conversationId,
     flow_code: targetFlow,
     flow_current_node: firstNode,
+    active_flow_session_id: newSid,
   });
-
-  if (currentFlow && currentFlow !== targetFlow) {
-    await deleteChatFlowDataForConversationFlow(supabase, empresaId, conversationId, currentFlow);
-  }
-  await deleteChatFlowDataForConversationFlow(supabase, empresaId, conversationId, targetFlow);
 
   return { flow_code: targetFlow, flow_current_node: firstNode, changed: true };
 }
@@ -334,6 +328,29 @@ export async function restartWhatsappConversationToFlowStart(
 
   const firstNode = (await getFirstActiveNodeCodeForFlow(supabase, empresaId, targetFlow)) ?? "inicio";
 
+  await markConversationActiveSessionsEnded(
+    supabase,
+    empresaId,
+    conversationId,
+    "restarted",
+    opts.trigger
+  );
+  const newSessionId = await insertActiveFlowSessionRow(
+    supabase,
+    empresaId,
+    conversationId,
+    targetFlow
+  );
+  if (!newSessionId) {
+    console.error(CONV_LOG, "conversation_restarted", {
+      conversationId,
+      ok: false,
+      detail: "flow_session_insert_failed",
+      trigger: opts.trigger,
+    });
+    return { flow_code: null, flow_current_node: null, restarted: false, reason: "session_create_failed" };
+  }
+
   const { error: updErr } = await supabase
     .from("chat_conversations")
     .update({
@@ -341,6 +358,7 @@ export async function restartWhatsappConversationToFlowStart(
       flow_current_node: firstNode,
       flow_status: "bot",
       human_taken_over: false,
+      active_flow_session_id: newSessionId,
       updated_at: new Date().toISOString(),
     })
     .eq("id", conversationId)
@@ -356,15 +374,14 @@ export async function restartWhatsappConversationToFlowStart(
     return { flow_code: null, flow_current_node: null, restarted: false, reason: "update_failed" };
   }
 
-  await deleteChatFlowDataForConversationFlow(supabase, empresaId, conversationId, targetFlow);
-
   const { error: resetEvErr } = await supabase.from("chat_flow_events").insert({
     empresa_id: empresaId,
     conversation_id: conversationId,
     flow_code: targetFlow,
     node_code: firstNode,
     event_type: FLOW_POINTER_RESET_EVENT,
-    payload: { trigger: opts.trigger },
+    flow_session_id: newSessionId,
+    payload: { trigger: opts.trigger, flow_session_id: newSessionId },
   });
   if (resetEvErr) {
     console.error(CONV_LOG, "flow_pointer_reset_insert_failed", {

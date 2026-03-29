@@ -18,6 +18,7 @@ const MIGRATION_FILES = [
   "20260328120000_sorteo_entradas_order_chat_idempotency.sql",
   "20260328130100_sorteo_entradas_promo_pricing.sql",
   "20260329140000_chat_flow_data_unique_per_flow.sql",
+  "20260330180000_chat_flow_sessions.sql",
 ] as const;
 
 function getDbUrl(): string {

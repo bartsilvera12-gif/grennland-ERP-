@@ -6,10 +6,12 @@ import {
 import type { SupabaseAdmin } from "@/lib/chat/types";
 import { FLOW_POINTER_RESET_EVENT } from "@/lib/chat/resolve-whatsapp-active-flow";
 import { normalizeWaPhone } from "@/lib/chat/whatsapp-webhook-service";
+import { ensureActiveFlowSessionForConversation } from "@/lib/chat/flow-session-service";
 import {
   buildChatFlowDataUpsertsForSorteoOrder,
   buildSorteoOrderFlowVarOverrides,
   ensureSorteoOrderFromChat,
+  getSorteoDatosIncompletosMessage,
 } from "@/lib/sorteos/sorteo-order-from-chat";
 import { parseMoneyPy } from "@/lib/sorteos/parse-money-py";
 
@@ -22,6 +24,8 @@ type ConversationFlowState = {
   flow_current_node: string | null;
   flow_status: string;
   human_taken_over: boolean;
+  /** Run activo: lecturas/escrituras de `chat_flow_data` solo bajo este id. */
+  active_flow_session_id?: string | null;
 };
 
 export type ProcessInteractiveReplyParams = {
@@ -285,13 +289,23 @@ export function createFlowEngine(ctx: FlowEngineContext) {
     const { data, error } = await supabase
       .from("chat_conversations")
       .select(
-        "id, empresa_id, channel_id, contact_id, flow_code, flow_current_node, flow_status, human_taken_over"
+        "id, empresa_id, channel_id, contact_id, flow_code, flow_current_node, flow_status, human_taken_over, active_flow_session_id"
       )
       .eq("id", conversationId)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!data) return null;
-    return data as ConversationFlowState;
+    const state = data as ConversationFlowState;
+    if (state.flow_code?.trim()) {
+      const sid = await ensureActiveFlowSessionForConversation(
+        supabase,
+        state.empresa_id,
+        conversationId,
+        state.flow_code
+      );
+      if (sid) state.active_flow_session_id = sid;
+    }
+    return state;
   }
 
   async function insertFlowEvent(input: {
@@ -303,7 +317,17 @@ export function createFlowEngine(ctx: FlowEngineContext) {
     selectedOptionId?: string | null;
     metaButtonId?: string | null;
     payload?: Record<string, unknown>;
+    flowSessionId?: string | null;
   }) {
+    let sid = input.flowSessionId ?? null;
+    if (!sid && input.flowCode?.trim()) {
+      sid = await ensureActiveFlowSessionForConversation(
+        supabase,
+        input.empresaId,
+        input.conversationId,
+        input.flowCode
+      );
+    }
     const { error } = await supabase.from("chat_flow_events").insert({
       empresa_id: input.empresaId,
       conversation_id: input.conversationId,
@@ -313,6 +337,7 @@ export function createFlowEngine(ctx: FlowEngineContext) {
       selected_option_id: input.selectedOptionId ?? null,
       meta_button_id: input.metaButtonId ?? null,
       payload: input.payload ?? {},
+      flow_session_id: sid,
     });
     if (error) {
       console.error("[flow-engine] event insert:", error.message);
@@ -462,8 +487,27 @@ export function createFlowEngine(ctx: FlowEngineContext) {
   async function wasNodeSentForCurrentStep(
     conversationId: string,
     flowCode: string,
-    nodeCode: string
+    nodeCode: string,
+    flowSessionId: string | null | undefined
   ): Promise<boolean> {
+    const sid = flowSessionId?.trim();
+    if (sid) {
+      const { data, error } = await supabase
+        .from("chat_flow_events")
+        .select("id")
+        .eq("conversation_id", conversationId)
+        .eq("flow_code", flowCode)
+        .eq("flow_session_id", sid)
+        .eq("node_code", nodeCode)
+        .eq("event_type", "node_sent")
+        .limit(1)
+        .maybeSingle();
+      if (error) {
+        console.error("[flow-engine] wasNodeSentForCurrentStep:", error.message);
+        return false;
+      }
+      return Boolean((data as { id?: string } | null)?.id);
+    }
     const { data: resetRow, error: resetErr } = await supabase
       .from("chat_flow_events")
       .select("created_at")
@@ -566,7 +610,12 @@ export function createFlowEngine(ctx: FlowEngineContext) {
         };
       }
 
-      const already = await wasNodeSentForCurrentStep(state.id, flowCode, nodeCode);
+      const already = await wasNodeSentForCurrentStep(
+        state.id,
+        flowCode,
+        nodeCode,
+        state.active_flow_session_id
+      );
       if (already) {
         console.info(logPrefix, "skip: node_already_sent", {
           conversationId: state.id,
@@ -671,15 +720,18 @@ export function createFlowEngine(ctx: FlowEngineContext) {
     empresaId: string;
     conversationId: string;
     flowCode: string | null;
+    flowSessionId: string | null | undefined;
   }): Promise<Record<string, string>> {
     const fc = input.flowCode?.trim();
-    if (!fc) return {};
+    const sid = input.flowSessionId?.trim();
+    if (!fc || !sid) return {};
     const { data, error } = await supabase
       .from("chat_flow_data")
       .select("field_name, field_value")
       .eq("empresa_id", input.empresaId)
       .eq("conversation_id", input.conversationId)
-      .eq("flow_code", fc);
+      .eq("flow_code", fc)
+      .eq("flow_session_id", sid);
     if (error) throw new Error(error.message);
     const out: Record<string, string> = {};
     for (const row of data ?? []) {
@@ -716,33 +768,21 @@ export function createFlowEngine(ctx: FlowEngineContext) {
   async function hydrateFlowDataFromSessionEvents(
     conversationId: string,
     flowCode: string,
-    base: Record<string, string>
+    base: Record<string, string>,
+    flowSessionId: string | null | undefined
   ): Promise<Record<string, string>> {
     const fc = flowCode.trim();
-    if (!fc) return base;
-    const { data: resetRow, error: resetErr } = await supabase
-      .from("chat_flow_events")
-      .select("created_at")
-      .eq("conversation_id", conversationId)
-      .eq("flow_code", fc)
-      .eq("event_type", FLOW_POINTER_RESET_EVENT)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (resetErr) {
-      console.warn(FLOW_SORTEO_LOG, "hydrate_reset_query_failed", { message: resetErr.message });
-    }
-    const since = (resetRow as { created_at?: string } | null)?.created_at ?? null;
+    const sid = flowSessionId?.trim();
+    if (!fc || !sid) return base;
 
-    let q = supabase
+    const { data: rows, error } = await supabase
       .from("chat_flow_events")
       .select("event_type, payload, created_at")
       .eq("conversation_id", conversationId)
       .eq("flow_code", fc)
+      .eq("flow_session_id", sid)
       .in("event_type", ["text_captured", "button_selected"])
       .order("created_at", { ascending: true });
-    if (since) q = q.gt("created_at", since);
-    const { data: rows, error } = await q;
     if (error) {
       console.warn(FLOW_SORTEO_LOG, "hydrate_events_failed", { message: error.message });
       return base;
@@ -785,8 +825,8 @@ export function createFlowEngine(ctx: FlowEngineContext) {
       console.info(FLOW_SORTEO_LOG, "hydrate_flow_data_applied", {
         conversationId,
         flowCode: fc,
+        flowSessionId: sid,
         eventCount: rows?.length ?? 0,
-        sinceReset: Boolean(since),
         keysAfter: Object.keys(merged).length,
       });
     }
@@ -809,10 +849,12 @@ export function createFlowEngine(ctx: FlowEngineContext) {
     conversationId: string,
     reason: "expected_image_got_text" | "expected_image_got_non_image"
   ): Promise<string> {
+    const st = await getConversationFlowState(conversationId);
     const flowVars = await getConversationFlowDataMap({
       empresaId: node.empresa_id,
       conversationId,
       flowCode: node.flow_code,
+      flowSessionId: st?.active_flow_session_id ?? null,
     });
     const base = interpolateTemplate(node.message_text?.trim() || "", flowVars).trim();
     const tail =
@@ -924,6 +966,7 @@ export function createFlowEngine(ctx: FlowEngineContext) {
       empresaId: state.empresa_id,
       conversationId: state.id,
       flowCode: state.flow_code,
+      flowSessionId: state.active_flow_session_id,
     });
     const flowVars = { ...flowVarsBase, ...(params.mergeFlowVars ?? {}) };
     const fallbackText = interpolateTemplate(
@@ -1240,6 +1283,15 @@ export function createFlowEngine(ctx: FlowEngineContext) {
       },
     });
 
+    const flowSidInteractive = state.active_flow_session_id?.trim();
+    if (!flowSidInteractive) {
+      return {
+        ok: false,
+        status: "missing_flow_session",
+        error: "Sesión de flujo no inicializada; escribí hola para reiniciar.",
+      };
+    }
+
     const optionPayload =
       selected.option_payload && typeof selected.option_payload === "object"
         ? selected.option_payload
@@ -1263,6 +1315,7 @@ export function createFlowEngine(ctx: FlowEngineContext) {
         empresa_id: state.empresa_id,
         conversation_id: state.id,
         flow_code: state.flow_code as string,
+        flow_session_id: flowSidInteractive,
         field_name: fieldName.trim(),
         field_value:
           typeof fieldValue === "string" || typeof fieldValue === "number" || typeof fieldValue === "boolean"
@@ -1271,7 +1324,7 @@ export function createFlowEngine(ctx: FlowEngineContext) {
       }));
       const { error: payloadSaveErr } = await supabase
         .from("chat_flow_data")
-        .upsert(upserts, { onConflict: "conversation_id,flow_code,field_name" });
+        .upsert(upserts, { onConflict: "flow_session_id,field_name" });
       if (payloadSaveErr) {
         return { ok: false, status: "save_option_payload_failed", error: payloadSaveErr.message };
       }
@@ -1397,6 +1450,15 @@ export function createFlowEngine(ctx: FlowEngineContext) {
       return { ok: true, status: "ignored_not_text_node" };
     }
 
+    const textFlowSid = state.active_flow_session_id?.trim();
+    if (!textFlowSid) {
+      return {
+        ok: false,
+        status: "missing_flow_session",
+        error: "Sesión de flujo no inicializada; reiniciá el chat o escribí hola.",
+      };
+    }
+
     if (currentNode.save_as_field) {
       const { error: dataErr } = await supabase
         .from("chat_flow_data")
@@ -1405,10 +1467,11 @@ export function createFlowEngine(ctx: FlowEngineContext) {
             empresa_id: state.empresa_id,
             conversation_id: state.id,
             flow_code: state.flow_code,
+            flow_session_id: textFlowSid,
             field_name: currentNode.save_as_field,
             field_value: textValue,
           },
-          { onConflict: "conversation_id,flow_code,field_name" }
+          { onConflict: "flow_session_id,field_name" }
         );
       if (dataErr) {
         return { ok: false, status: "save_text_failed", error: dataErr.message };
@@ -1420,10 +1483,11 @@ export function createFlowEngine(ctx: FlowEngineContext) {
             empresa_id: state.empresa_id,
             conversation_id: state.id,
             flow_code: state.flow_code,
+            flow_session_id: textFlowSid,
             field_name: "nombre_completo",
             field_value: "",
           },
-          { onConflict: "conversation_id,flow_code,field_name" }
+          { onConflict: "flow_session_id,field_name" }
         );
         if (clrErr) {
           console.warn(FLOW_SORTEO_LOG, "clear_stale_nombre_completo_failed", {
@@ -1638,6 +1702,15 @@ export function createFlowEngine(ctx: FlowEngineContext) {
     }
     const publicUrl = supabase.storage.from(CHAT_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
 
+    const imgFlowSid = state.active_flow_session_id?.trim();
+    if (!imgFlowSid) {
+      return {
+        ok: false,
+        status: "missing_flow_session",
+        error: "Sesión de flujo no inicializada; escribí hola para reiniciar antes del comprobante.",
+      };
+    }
+
     if (currentNode.save_as_field) {
       const { error: upErr } = await supabase
         .from("chat_flow_data")
@@ -1646,10 +1719,11 @@ export function createFlowEngine(ctx: FlowEngineContext) {
             empresa_id: state.empresa_id,
             conversation_id: state.id,
             flow_code: state.flow_code,
+            flow_session_id: imgFlowSid,
             field_name: currentNode.save_as_field,
             field_value: publicUrl,
           },
-          { onConflict: "conversation_id,flow_code,field_name" }
+          { onConflict: "flow_session_id,field_name" }
         );
       if (upErr) {
         console.error(FLOW_SORTEO_LOG, "processImageReply_early_exit", {
@@ -1686,11 +1760,13 @@ export function createFlowEngine(ctx: FlowEngineContext) {
       empresaId: state.empresa_id,
       conversationId: state.id,
       flowCode: state.flow_code,
+      flowSessionId: imgFlowSid,
     });
     const flowDataForSorteo = await hydrateFlowDataFromSessionEvents(
       state.id,
       state.flow_code as string,
-      rawFlowData
+      rawFlowData,
+      imgFlowSid
     );
     const sorteoOrderResult = await ensureSorteoOrderFromChat(supabase, {
       empresaId: state.empresa_id,
@@ -1712,7 +1788,11 @@ export function createFlowEngine(ctx: FlowEngineContext) {
       const detail =
         sorteoOrderResult.reason === "flow_sin_sorteo_id"
           ? "No pudimos registrar la participación: el flujo no está vinculado a un sorteo. Contactá al equipo."
-          : "No pudimos registrar la participación: no encontramos nombre, cantidad ni la opción elegida en esta sesión. Tocá de nuevo el botón de tu compra (opción y monto) y enviá el comprobante después; o escribí reiniciar y recorré el flujo desde el inicio.";
+          : await getSorteoDatosIncompletosMessage(
+              supabase,
+              state.empresa_id,
+              state.flow_code as string
+            );
       const send = await sendWhatsAppText({
         toDigits: sendCtx.toDigits,
         phoneNumberId: sendCtx.phoneNumberId,
@@ -1742,11 +1822,12 @@ export function createFlowEngine(ctx: FlowEngineContext) {
       state.empresa_id,
       state.id,
       state.flow_code as string,
+      imgFlowSid,
       sorteoOrderResult
     );
     const { error: sorteoCtxErr } = await supabase
       .from("chat_flow_data")
-      .upsert(contextRows, { onConflict: "conversation_id,flow_code,field_name" });
+      .upsert(contextRows, { onConflict: "flow_session_id,field_name" });
     if (sorteoCtxErr) {
       console.error(FLOW_SORTEO_LOG, "sorteo_order_context_upsert_failed", {
         conversationId: state.id,

@@ -267,6 +267,8 @@ export default function FlowEditorPage() {
   const [flowSorteoNombre, setFlowSorteoNombre] = useState<string | null>(null);
   const [sorteoDraft, setSorteoDraft] = useState<string>("");
   const [savingSorteoLink, setSavingSorteoLink] = useState(false);
+  const [sorteoIncompleteMsgDraft, setSorteoIncompleteMsgDraft] = useState("");
+  const [savingSorteoIncompleteMsg, setSavingSorteoIncompleteMsg] = useState(false);
 
   const orderedNodes = useMemo(() => [...nodes].sort(compareFlowNodes), [nodes]);
 
@@ -396,12 +398,17 @@ export default function FlowEditorPage() {
         setSorteosOptions(sorteosRows.map((s) => ({ id: s.id, nombre: s.nombre })));
         const fj = flowRes as {
           ok?: boolean;
-          item?: { sorteo_id?: string | null; sorteo_nombre?: string | null };
+          item?: {
+            sorteo_id?: string | null;
+            sorteo_nombre?: string | null;
+            sorteo_datos_incompletos_message?: string | null;
+          };
         };
         if (fj.ok && fj.item) {
           setFlowSorteoId(fj.item.sorteo_id ?? null);
           setFlowSorteoNombre(fj.item.sorteo_nombre ?? null);
           setSorteoDraft(fj.item.sorteo_id ?? "");
+          setSorteoIncompleteMsgDraft(fj.item.sorteo_datos_incompletos_message ?? "");
         }
       } catch {
         setSorteosOptions([]);
@@ -436,6 +443,36 @@ export default function FlowEditorPage() {
       setError(e instanceof Error ? e.message : "Error al guardar sorteo");
     } finally {
       setSavingSorteoLink(false);
+    }
+  }
+
+  async function saveSorteoIncompleteMessage() {
+    setSavingSorteoIncompleteMsg(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await fetch(`/api/chat/flows/${encodeURIComponent(flowCode)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          sorteo_datos_incompletos_message: sorteoIncompleteMsgDraft.trim() || null,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        item?: { sorteo_datos_incompletos_message?: string | null };
+      };
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "No se pudo guardar el mensaje");
+      if (json.item?.sorteo_datos_incompletos_message != null) {
+        setSorteoIncompleteMsgDraft(json.item.sorteo_datos_incompletos_message);
+      }
+      setSuccess("Mensaje de datos incompletos guardado.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al guardar mensaje");
+    } finally {
+      setSavingSorteoIncompleteMsg(false);
     }
   }
 
@@ -831,6 +868,27 @@ export default function FlowEditorPage() {
             className="bg-slate-800 hover:bg-slate-900 disabled:opacity-60 text-white px-4 py-2 rounded-lg text-sm font-medium"
           >
             {savingSorteoLink ? "Guardando…" : "Guardar sorteo"}
+          </button>
+        </div>
+        <div className="mt-4 space-y-2">
+          <label className="block text-xs text-slate-500">
+            Mensaje si faltan datos para registrar el sorteo (WhatsApp). Vacío = texto por defecto del
+            sistema.
+          </label>
+          <textarea
+            className="w-full min-h-[88px] rounded-md border border-slate-200 px-3 py-2 text-sm"
+            value={sorteoIncompleteMsgDraft}
+            onChange={(e) => setSorteoIncompleteMsgDraft(e.target.value)}
+            placeholder="Ej.: No pudimos registrar esta compra. Tocá de nuevo tu opción y enviá el comprobante."
+            maxLength={4000}
+          />
+          <button
+            type="button"
+            className="rounded-md bg-slate-700 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+            disabled={savingSorteoIncompleteMsg}
+            onClick={() => void saveSorteoIncompleteMessage()}
+          >
+            {savingSorteoIncompleteMsg ? "Guardando…" : "Guardar mensaje"}
           </button>
         </div>
         {sorteosOptions.length === 0 && (
