@@ -125,6 +125,14 @@ export default function EditarSorteoPage() {
         <span className="text-slate-800 font-medium">Editar</span>
       </div>
       <h1 className="text-2xl font-bold text-gray-800">Editar sorteo</h1>
+      <p className="text-sm">
+        <Link
+          href={`/sorteos/${id}/revendedores`}
+          className="text-[#0EA5E9] hover:underline font-medium"
+        >
+          Revendedores y enlaces de referido
+        </Link>
+      </p>
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-800 text-sm rounded-lg px-4 py-2" role="alert">

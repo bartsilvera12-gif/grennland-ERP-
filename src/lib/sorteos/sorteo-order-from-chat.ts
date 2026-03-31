@@ -909,6 +909,22 @@ export async function ensureSorteoOrderFromChat(
     rpcPayload.precio_regular_referencia = pricing.precioRegularReferencia;
   }
 
+  const sidTrim = input.flowSessionId?.trim() ?? null;
+  if (sidTrim) {
+    const { data: sRef } = await supabase
+      .from("chat_flow_sessions")
+      .select("revendedor_id, codigo_referido_snapshot")
+      .eq("id", sidTrim)
+      .eq("empresa_id", input.empresaId)
+      .maybeSingle();
+    const rid = (sRef as { revendedor_id?: string | null } | null)?.revendedor_id?.trim();
+    const csnap = (sRef as { codigo_referido_snapshot?: string | null } | null)?.codigo_referido_snapshot?.trim();
+    if (rid) {
+      rpcPayload.revendedor_id = rid;
+      rpcPayload.codigo_referido = csnap ?? "";
+    }
+  }
+
   const { data, error } = await supabase.rpc("sorteos_ensure_order_from_chat", {
     p: rpcPayload,
   });

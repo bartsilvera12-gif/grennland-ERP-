@@ -28,6 +28,7 @@ import type {
   SupabaseAdmin,
 } from "@/lib/chat/types";
 import { normalizeWaPhone } from "@/lib/chat/wa-phone";
+import { applySorteoReferralToActiveSession } from "@/lib/sorteos/referral-attribution";
 
 export { normalizeWaPhone } from "@/lib/chat/wa-phone";
 
@@ -739,6 +740,24 @@ export async function processInboundWebhookValue(
         memory_active_flow_session_id:
           (existingConv as { active_flow_session_id?: string | null }).active_flow_session_id ?? null,
       });
+
+      try {
+        await applySorteoReferralToActiveSession({
+          supabase,
+          empresaId,
+          conversationId,
+          activeFlowSessionId: (existingConv as { active_flow_session_id?: string | null })
+            .active_flow_session_id,
+          flowCode: (existingConv as { flow_code?: string | null }).flow_code,
+          inboundText: content,
+          contactPhoneDigits: from,
+        });
+      } catch (e) {
+        console.warn(logW, "referral_attribution_failed", {
+          conversationId,
+          err: e instanceof Error ? e.message : String(e),
+        });
+      }
 
       if (keywordHandoffPendingConfirmation) {
         const sid =
