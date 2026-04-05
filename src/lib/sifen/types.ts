@@ -121,6 +121,8 @@ export interface SifenPayloadEmisor {
   timbrado_numero: string;
   establecimiento: string;
   punto_expedicion: string;
+  /** Código de seguridad del timbrado (SET); obligatorio para generar el DE oficial. */
+  csc: string | null;
 }
 
 export interface SifenPayloadDocumento {

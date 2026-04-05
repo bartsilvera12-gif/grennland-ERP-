@@ -56,6 +56,7 @@ export interface SifenBuildConfigRow {
   timbrado_numero: string;
   establecimiento: string;
   punto_expedicion: string;
+  csc: string | null;
   activo: boolean;
 }
 
@@ -112,9 +113,17 @@ function validateEmisor(config: SifenBuildConfigRow | null): { ok: true; emisor:
       error: `Faltan datos del emisor en configuración SIFEN: ${faltas.join(", ")}.`,
     };
   }
+  const cscRaw = config.csc == null ? "" : trimStr(config.csc);
   return {
     ok: true,
-    emisor: { ruc, razon_social, timbrado_numero, establecimiento, punto_expedicion },
+    emisor: {
+      ruc,
+      razon_social,
+      timbrado_numero,
+      establecimiento,
+      punto_expedicion,
+      csc: cscRaw === "" ? null : cscRaw,
+    },
   };
 }
 

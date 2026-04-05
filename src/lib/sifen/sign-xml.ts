@@ -1,22 +1,23 @@
 /**
- * Firma XML-DSig (RSA-SHA256, digest SHA-256, C14N exclusivo + enveloped) sobre el borrador Neura.
+ * Firma XML-DSig (RSA-SHA256, digest SHA-256, C14N exclusivo) sobre el nodo `DE` del rDE SIFEN.
  *
- * Limitaciones / notas para SET Paraguay (SIFEN):
- * - El SET puede exigir un perfil distinto (C14N, transforms, posición del nodo Signature, XAdES, etc.).
- * - Este módulo produce una firma estándar W3C XML Signature que sirve como base en Node/Vercel.
- * - Antes de producción, validar contra el manual técnico vigente y el validador oficial.
+ * El digest referencia el elemento `DE` (namespace e-kuatia). La firma se inserta como
+ * hermano posterior a `DE` bajo `rDE` (campos firmados del DE, sin incluir gCamFuFD).
+ * Tras firmar, se añade `gCamFuFD` con URL de consulta QR si aún no existe.
  *
- * Stack: node-forge (PKCS#12 en JS puro) + xml-crypto (compatible con despliegue serverless sin openssl CLI).
+ * Nota: el SET puede exigir ajustes de perfil (transforms, XAdES). Validar con XSD y ambiente de pruebas.
+ *
+ * Stack: node-forge (PKCS#12) + xml-crypto (serverless sin openssl CLI).
  */
 import * as forge from "node-forge";
 import { SignedXml } from "xml-crypto";
 import { createPrivateKey } from "node:crypto";
+import { escapeXml } from "./xml";
 
-const XPATH_ROOT = "//*[local-name(.)='DocumentoElectronico']";
-const TRANSFORMS = [
-  "http://www.w3.org/2000/09/xmldsig#enveloped-signature",
-  "http://www.w3.org/2001/10/xml-exc-c14n#",
-] as const;
+const XPATH_DE =
+  "/*[local-name(.)='rDE']/*[local-name(.)='DE']";
+/** C14N del fragmento firmado (sin enveloped: la firma no va dentro del DE). */
+const TRANSFORMS_DE = ["http://www.w3.org/2001/10/xml-exc-c14n#"] as const;
 const DIGEST = "http://www.w3.org/2001/04/xmlenc#sha256";
 const SIG_ALG = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256";
 
@@ -67,22 +68,28 @@ export function extractKeyAndCertFromP12(p12Buffer: Buffer, password: string): P
   };
 }
 
-/**
- * Inserta Id estable en el elemento raíz si falta (facilita referencias XML-DSig).
- */
-function ensureRootId(xml: string): string {
-  const trimmed = xml.trim();
-  if (/\bId\s*=\s*["']de-root["']/.test(trimmed)) {
-    return trimmed;
-  }
-  return trimmed.replace(/<DocumentoElectronico(\s)/, '<DocumentoElectronico Id="de-root"$1');
+function extraerCdcDeRde(xml: string): string | null {
+  const m = /\bId\s*=\s*"(\d{44})"/.exec(xml);
+  return m?.[1] ?? null;
+}
+
+function anexarCamFuFdSiFalta(xml: string): string {
+  if (/<gCamFuFD\b/i.test(xml)) return xml;
+  const cdc = extraerCdcDeRde(xml);
+  if (!cdc) return xml;
+  const url = `https://ekuatia.set.gov.py/consultas/qr?nVersion=150&id=${cdc}`;
+  const bloque = `<gCamFuFD><dCarQR>${escapeXml(url)}</dCarQR></gCamFuFD>`;
+  return xml.replace(/<\/rDE>\s*$/i, `${bloque}</rDE>`);
 }
 
 /**
- * Firma el XML y devuelve el documento con el nodo `Signature` insertado dentro del raíz.
+ * Firma el documento rDE: referencia el nodo `DE` y coloca `Signature` después de `DE`.
  */
 export function signSifenDocumentoXml(xmlUtf8: string, material: P12KeyMaterial): string {
-  const xmlWithId = ensureRootId(xmlUtf8);
+  const trimmed = xmlUtf8.trim();
+  if (!/<\s*DE\b/i.test(trimmed) || !/<\s*rDE\b/i.test(trimmed)) {
+    throw new Error("Se esperaba un XML con raíz rDE que contenga un elemento DE para firmar.");
+  }
 
   const privateKey = createPrivateKey({
     key: material.privateKeyPem,
@@ -97,17 +104,17 @@ export function signSifenDocumentoXml(xmlUtf8: string, material: P12KeyMaterial)
   });
 
   sig.addReference({
-    xpath: XPATH_ROOT,
-    transforms: [...TRANSFORMS],
+    xpath: XPATH_DE,
+    transforms: [...TRANSFORMS_DE],
     digestAlgorithm: DIGEST,
   });
 
-  sig.computeSignature(xmlWithId, {
+  sig.computeSignature(trimmed, {
     location: {
-      reference: XPATH_ROOT,
-      action: "append",
+      reference: XPATH_DE,
+      action: "after",
     },
   });
 
-  return sig.getSignedXml();
+  return anexarCamFuFdSiFalta(sig.getSignedXml());
 }

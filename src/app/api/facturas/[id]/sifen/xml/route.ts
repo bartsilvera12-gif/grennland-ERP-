@@ -4,8 +4,7 @@ import { getUserAndEmpresa } from "@/lib/middleware/auth";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
 import { loadValidatedSifenPayload } from "@/lib/sifen/load-factura-payload";
-import { mapPayloadBaseToSifenDocumento } from "@/lib/sifen/map-to-sifen";
-import { buildSifenDraftXml } from "@/lib/sifen/xml";
+import { buildOfficialRdeFacturaElectronicaXml } from "@/lib/sifen/rde-xml";
 import {
   buildSifenXmlObjectPath,
   ensureSifenStorageBucket,
@@ -30,7 +29,7 @@ const ESTADOS_BLOQUEADOS_XML = new Set<string>(["aprobado", "enviado", "firmado"
 
 /**
  * POST /api/facturas/[id]/sifen/xml
- * Genera XML borrador, lo sube a Storage y actualiza factura_electronica (sin firma ni SET).
+ * Genera XML rDE oficial (SIFEN v150, factura electrónica), lo sube a Storage y actualiza factura_electronica (sin firma ni SET).
  */
 export async function POST(
   request: NextRequest,
@@ -93,10 +92,26 @@ export async function POST(
       });
     }
 
-    const documentoPreparado = mapPayloadBaseToSifenDocumento(loaded.payload);
-    documentoPreparado.identificacion.estado_sifen = "generado";
+    const fecha = loaded.payload.documento.fecha.trim();
+    const yAnio = /^(\d{4})/.exec(fecha)?.[1] ?? String(new Date().getFullYear());
+    let xmlString: string;
+    try {
+      xmlString = buildOfficialRdeFacturaElectronicaXml(loaded.payload, {
+        timbradoFechaInicio: `${yAnio}-01-01`,
+        timbradoFechaFin: `${yAnio}-12-31`,
+        emisorTelefono: "021000000",
+        emisorEmail: "facturacion@configurar-empresa.com.py",
+        emisorDireccion:
+          loaded.payload.emisor.razon_social.trim() || "Domicilio fiscal a completar en configuración",
+        emisorNumCasa: 0,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Error al generar XML SIFEN";
+      return NextResponse.json(errorResponse(msg), { status: 400 });
+    }
 
-    const xmlString = buildSifenDraftXml(documentoPreparado);
+    const cdcMatch = /\bId="(\d{44})"/.exec(xmlString);
+    const cdc = cdcMatch?.[1] ?? null;
     const objectPath = buildSifenXmlObjectPath(auth.empresa_id, fid);
 
     const bucketOk = await ensureSifenStorageBucket(supabase);
@@ -123,6 +138,7 @@ export async function POST(
       .update({
         xml_path: objectPath,
         estado_sifen: "generado",
+        ...(cdc ? { cdc } : {}),
       })
       .eq("id", feSnapshot.id)
       .eq("empresa_id", auth.empresa_id)
