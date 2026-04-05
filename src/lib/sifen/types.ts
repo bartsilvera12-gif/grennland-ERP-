@@ -14,6 +14,8 @@ export interface EmpresaSifenConfigDTO {
   ambiente: AmbienteSifen;
   ruc: string;
   razon_social: string;
+  /** Calle/domicilio fiscal del emisor (SIFEN dDirEmi); no es la razón social. */
+  direccion_fiscal: string | null;
   timbrado_numero: string;
   establecimiento: string;
   punto_expedicion: string;
@@ -30,6 +32,7 @@ export interface EmpresaSifenConfigDTO {
 export interface EmpresaSifenConfigCreateBody {
   ruc: string;
   razon_social: string;
+  direccion_fiscal?: string | null;
   timbrado_numero: string;
   establecimiento: string;
   punto_expedicion: string;
@@ -45,6 +48,7 @@ export interface EmpresaSifenConfigCreateBody {
 export interface EmpresaSifenConfigPatchBody {
   ruc?: string;
   razon_social?: string;
+  direccion_fiscal?: string | null;
   timbrado_numero?: string;
   establecimiento?: string;
   punto_expedicion?: string;
@@ -147,6 +151,8 @@ export interface SifenApiXmlGeneracionDetalle {
 export interface SifenPayloadEmisor {
   ruc: string;
   razon_social: string;
+  /** Domicilio/calle para gEmis.dDirEmi (desde empresa_sifen_config.direccion_fiscal). */
+  direccion_fiscal: string;
   timbrado_numero: string;
   establecimiento: string;
   punto_expedicion: string;

@@ -13,6 +13,11 @@ function trimStr(v: unknown): string {
   return String(v).trim();
 }
 
+/** Normaliza para comparar dirección vs nombre/razón social (evitar dDirRec = nombre). */
+function normKey(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 function num(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -53,6 +58,7 @@ export interface SifenBuildClienteRow {
 export interface SifenBuildConfigRow {
   ruc: string;
   razon_social: string;
+  direccion_fiscal: string | null;
   timbrado_numero: string;
   establecimiento: string;
   punto_expedicion: string;
@@ -101,9 +107,11 @@ function validateEmisor(config: SifenBuildConfigRow | null): { ok: true; emisor:
   const timbrado_numero = trimStr(config.timbrado_numero);
   const establecimiento = trimStr(config.establecimiento);
   const punto_expedicion = trimStr(config.punto_expedicion);
+  const direccion_fiscal = trimStr(config.direccion_fiscal);
   const faltas: string[] = [];
   if (!ruc) faltas.push("empresa_sifen_config.ruc");
   if (!razon_social) faltas.push("empresa_sifen_config.razon_social");
+  if (!direccion_fiscal) faltas.push("empresa_sifen_config.direccion_fiscal");
   if (!timbrado_numero) faltas.push("empresa_sifen_config.timbrado_numero");
   if (!establecimiento) faltas.push("empresa_sifen_config.establecimiento");
   if (!punto_expedicion) faltas.push("empresa_sifen_config.punto_expedicion");
@@ -113,12 +121,20 @@ function validateEmisor(config: SifenBuildConfigRow | null): { ok: true; emisor:
       error: `Faltan datos del emisor en configuración SIFEN: ${faltas.join(", ")}.`,
     };
   }
+  if (normKey(direccion_fiscal) === normKey(razon_social)) {
+    return {
+      ok: false,
+      error:
+        "direccion_fiscal no puede ser igual a la razón social: indique la calle o domicilio fiscal del emisor en configuración SIFEN (campo dirección fiscal).",
+    };
+  }
   const cscRaw = config.csc == null ? "" : trimStr(config.csc);
   return {
     ok: true,
     emisor: {
       ruc,
       razon_social,
+      direccion_fiscal,
       timbrado_numero,
       establecimiento,
       punto_expedicion,
@@ -157,12 +173,27 @@ function validateReceptor(
         "Falta identificación del receptor: complete en el cliente al menos ruc o documento.",
     };
   }
+  const dirRaw = trimStr(cliente.direccion);
+  let direccion: string | null = dirRaw || null;
+  if (direccion) {
+    const hints = [
+      trimStr(cliente.empresa),
+      trimStr(cliente.nombre_contacto),
+      trimStr(cliente.nombre),
+      nombre,
+    ].filter((h) => h.length > 0);
+    const nDir = normKey(direccion);
+    if (hints.some((h) => normKey(h) === nDir)) {
+      direccion = null;
+    }
+  }
+
   const receptor: SifenPayloadReceptor = {
     cliente_id: cliente.id,
     nombre,
     documento,
     ruc,
-    direccion: trimStr(cliente.direccion) || null,
+    direccion,
     telefono: trimStr(cliente.telefono) || null,
     email: trimStr(cliente.email) || null,
   };

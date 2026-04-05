@@ -8,6 +8,7 @@ const base: SifenFacturaPayloadBase = {
   emisor: {
     ruc: "80000001-1",
     razon_social: "EMPRESA DEMO S.A.",
+    direccion_fiscal: "Calle Principal 123",
     timbrado_numero: "12345678",
     establecimiento: "001",
     punto_expedicion: "001",

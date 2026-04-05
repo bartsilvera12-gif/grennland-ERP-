@@ -102,8 +102,7 @@ export async function POST(
         timbradoFechaFin: `${yAnio}-12-31`,
         emisorTelefono: "021000000",
         emisorEmail: "facturacion@configurar-empresa.com.py",
-        emisorDireccion:
-          loaded.payload.emisor.razon_social.trim() || "Domicilio fiscal a completar en configuración",
+        emisorDireccion: loaded.payload.emisor.direccion_fiscal.trim(),
         emisorNumCasa: 0,
       });
     } catch (e) {

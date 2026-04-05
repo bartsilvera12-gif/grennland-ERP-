@@ -22,6 +22,10 @@ export function toEmpresaSifenConfigPublicDto(
     ambiente: row.ambiente as AmbienteSifen,
     ruc: String(row.ruc ?? ""),
     razon_social: String(row.razon_social ?? ""),
+    direccion_fiscal:
+      row.direccion_fiscal == null || String(row.direccion_fiscal).trim() === ""
+        ? null
+        : String(row.direccion_fiscal).trim(),
     timbrado_numero: String(row.timbrado_numero ?? ""),
     establecimiento: String(row.establecimiento ?? ""),
     punto_expedicion: String(row.punto_expedicion ?? ""),

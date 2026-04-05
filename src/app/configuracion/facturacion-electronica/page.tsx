@@ -33,6 +33,7 @@ function isSifenConfigCompleta(c: EmpresaSifenConfigDTO): boolean {
   const datos =
     Boolean(c.ruc?.trim()) &&
     Boolean(c.razon_social?.trim()) &&
+    Boolean(c.direccion_fiscal?.trim()) &&
     Boolean(c.timbrado_numero?.trim()) &&
     Boolean(c.establecimiento?.trim()) &&
     Boolean(c.punto_expedicion?.trim());
@@ -55,6 +56,7 @@ export default function FacturacionElectronicaSifenPage() {
   const [ambiente, setAmbiente] = useState<AmbienteSifen>("test");
   const [ruc, setRuc] = useState("");
   const [razonSocial, setRazonSocial] = useState("");
+  const [direccionFiscal, setDireccionFiscal] = useState("");
   const [timbradoNumero, setTimbradoNumero] = useState("");
   const [establecimiento, setEstablecimiento] = useState("");
   const [puntoExpedicion, setPuntoExpedicion] = useState("");
@@ -87,6 +89,7 @@ export default function FacturacionElectronicaSifenPage() {
         setAmbiente(d.ambiente);
         setRuc(d.ruc);
         setRazonSocial(d.razon_social);
+        setDireccionFiscal(d.direccion_fiscal ?? "");
         setTimbradoNumero(d.timbrado_numero);
         setEstablecimiento(d.establecimiento);
         setPuntoExpedicion(d.punto_expedicion);
@@ -154,6 +157,7 @@ export default function FacturacionElectronicaSifenPage() {
           ambiente,
           ruc: ruc.trim(),
           razon_social: razonSocial.trim(),
+          direccion_fiscal: direccionFiscal.trim() || null,
           timbrado_numero: timbradoNumero.trim(),
           establecimiento: establecimiento.trim(),
           punto_expedicion: puntoExpedicion.trim(),
@@ -182,6 +186,7 @@ export default function FacturacionElectronicaSifenPage() {
           ambiente,
           ruc: ruc.trim(),
           razon_social: razonSocial.trim(),
+          direccion_fiscal: direccionFiscal.trim() || null,
           timbrado_numero: timbradoNumero.trim(),
           establecimiento: establecimiento.trim(),
           punto_expedicion: puntoExpedicion.trim(),
@@ -256,6 +261,7 @@ export default function FacturacionElectronicaSifenPage() {
   const datosMinimosOk =
     Boolean(ruc.trim()) &&
     Boolean(razonSocial.trim()) &&
+    Boolean(direccionFiscal.trim()) &&
     Boolean(timbradoNumero.trim()) &&
     Boolean(establecimiento.trim()) &&
     Boolean(puntoExpedicion.trim());
@@ -319,6 +325,10 @@ export default function FacturacionElectronicaSifenPage() {
               </li>
               <li>
                 <span className="text-slate-500">Razón social:</span> <span className="font-medium">{cfg.razon_social}</span>
+              </li>
+              <li>
+                <span className="text-slate-500">Dirección fiscal (SIFEN):</span>{" "}
+                <span className="font-medium">{cfg.direccion_fiscal ?? "—"}</span>
               </li>
               <li>
                 <span className="text-slate-500">Certificado .p12:</span>{" "}
@@ -418,6 +428,19 @@ export default function FacturacionElectronicaSifenPage() {
             <div>
               <label className={fLabel}>Razón social</label>
               <input className={fInput} value={razonSocial} onChange={(e) => setRazonSocial(e.target.value)} required />
+            </div>
+            <div className="sm:col-span-2">
+              <label className={fLabel}>Dirección fiscal (calle / domicilio)</label>
+              <input
+                className={fInput}
+                value={direccionFiscal}
+                onChange={(e) => setDireccionFiscal(e.target.value)}
+                placeholder="Ej: Av. España 1234, piso 2"
+                required
+              />
+              <p className="text-xs text-slate-500 mt-1.5">
+                Va al XML SIFEN como <span className="font-mono">dDirEmi</span>. No uses la razón social aquí.
+              </p>
             </div>
             <div>
               <label className={fLabel}>Timbrado (número)</label>
@@ -548,6 +571,7 @@ export default function FacturacionElectronicaSifenPage() {
                   setAmbiente(cfg.ambiente);
                   setRuc(cfg.ruc);
                   setRazonSocial(cfg.razon_social);
+                  setDireccionFiscal(cfg.direccion_fiscal ?? "");
                   setTimbradoNumero(cfg.timbrado_numero);
                   setEstablecimiento(cfg.establecimiento);
                   setPuntoExpedicion(cfg.punto_expedicion);

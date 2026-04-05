@@ -84,6 +84,7 @@ export function validateCreateBody(raw: unknown): EmpresaSifenConfigCreateResult
   const data: EmpresaSifenConfigCreateBody = {
     ruc,
     razon_social,
+    direccion_fiscal: optionalNullableString(b.direccion_fiscal),
     timbrado_numero,
     establecimiento,
     punto_expedicion,
@@ -132,6 +133,9 @@ export function buildPatchUpdate(raw: unknown): EmpresaSifenConfigPatchResult {
     const v = trimStr(b.razon_social);
     if (!v) return { ok: false, error: "razon_social no puede quedar vacía" };
     patch.razon_social = v;
+  }
+  if ("direccion_fiscal" in b) {
+    patch.direccion_fiscal = b.direccion_fiscal === null ? null : trimStr(b.direccion_fiscal) || null;
   }
   if ("timbrado_numero" in b) {
     const v = trimStr(b.timbrado_numero);
@@ -199,6 +203,9 @@ export function rowFromCreateBody(empresaId: string, body: EmpresaSifenConfigCre
   };
   if (body.certificado_vencimiento != null) {
     row.certificado_vencimiento = body.certificado_vencimiento;
+  }
+  if (body.direccion_fiscal !== undefined) {
+    row.direccion_fiscal = body.direccion_fiscal;
   }
   return row;
 }
