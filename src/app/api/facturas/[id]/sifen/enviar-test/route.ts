@@ -300,6 +300,7 @@ export async function POST(
     };
     if (debugSoap) {
       data.cuerpo_soap = resp.cuerpoSoapCrudo;
+      data.solicitud_https = resp.solicitudHttps;
     }
 
     return NextResponse.json(successResponse(data));

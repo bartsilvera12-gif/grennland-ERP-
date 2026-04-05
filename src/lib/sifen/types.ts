@@ -340,6 +340,13 @@ export interface SifenEnviarTestResponseData {
   };
   /** Solo con ?debug=1 */
   cuerpo_soap?: string;
+  /** Solo con ?debug=1: eco de la petición HTTPS/SOAP enviada a recibe-lote. */
+  solicitud_https?: {
+    url: string;
+    method: string;
+    contentType: string;
+    soapBodyUtf8: string;
+  };
 }
 
 /** Detalle del evento POST consulta-lote-test. */
