@@ -53,6 +53,7 @@ export async function GET(
         .from("suscripciones")
         .select("id, precio, moneda")
         .eq("cliente_id", clienteId)
+        .eq("empresa_id", auth.empresa_id)
         .eq("estado", "activa"),
       supabase
         .from("facturas")
@@ -114,6 +115,7 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const motivo = typeof body.motivo === "string" ? body.motivo.trim() : "";
     const anularFacturaPendiente = Boolean(body.anular_factura_pendiente);
+    const cancelarSuscripciones = body.cancelar_suscripciones !== false;
 
     if (!motivo) {
       return NextResponse.json(errorResponse("El motivo es obligatorio"), { status: 400 });
@@ -137,6 +139,22 @@ export async function POST(
       return NextResponse.json(errorResponse("El cliente ya está dado de baja"), { status: 400 });
     }
 
+    const { count: nSuscActivas } = await supabase
+      .from("suscripciones")
+      .select("id", { count: "exact", head: true })
+      .eq("cliente_id", clienteId)
+      .eq("empresa_id", auth.empresa_id)
+      .eq("estado", "activa");
+
+    if ((nSuscActivas ?? 0) > 0 && !cancelarSuscripciones) {
+      return NextResponse.json(
+        errorResponse(
+          "Hay suscripciones activas. Confirme cancelarlas (cancelar_suscripciones: true) para dar de baja o gestione las suscripciones antes."
+        ),
+        { status: 400 }
+      );
+    }
+
     const now = new Date().toISOString();
 
     if (anularFacturaPendiente) {
@@ -157,14 +175,17 @@ export async function POST(
       }
     }
 
-    const { error: errSusc } = await supabase
-      .from("suscripciones")
-      .update({ estado: "cancelada" })
-      .eq("cliente_id", clienteId)
-      .eq("estado", "activa");
+    if (cancelarSuscripciones) {
+      const { error: errSusc } = await supabase
+        .from("suscripciones")
+        .update({ estado: "cancelada" })
+        .eq("cliente_id", clienteId)
+        .eq("empresa_id", auth.empresa_id)
+        .eq("estado", "activa");
 
-    if (errSusc) {
-      return NextResponse.json(errorResponse("Error al cancelar suscripciones: " + errSusc.message), { status: 500 });
+      if (errSusc) {
+        return NextResponse.json(errorResponse("Error al cancelar suscripciones: " + errSusc.message), { status: 500 });
+      }
     }
 
     const { error: errCliente } = await supabase
@@ -186,7 +207,7 @@ export async function POST(
 
     return NextResponse.json(successResponse({
       baja: true,
-      suscripciones_canceladas: true,
+      suscripciones_canceladas: cancelarSuscripciones,
       factura_anulada: anularFacturaPendiente,
     }));
   } catch (err) {

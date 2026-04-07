@@ -55,12 +55,17 @@ export async function apiGetBajaOperativaPreview(clienteId: string): Promise<Baj
 export async function apiBajaOperativaCliente(
   clienteId: string,
   motivo: string,
-  anularFacturaPendiente: boolean
+  anularFacturaPendiente: boolean,
+  cancelarSuscripciones = true
 ): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch(`/api/clientes/${clienteId}/baja-operativa`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ motivo: motivo.trim(), anular_factura_pendiente: anularFacturaPendiente }),
+    body: JSON.stringify({
+      motivo: motivo.trim(),
+      anular_factura_pendiente: anularFacturaPendiente,
+      cancelar_suscripciones: cancelarSuscripciones,
+    }),
   });
   const json = await res.json();
   if (!res.ok) {
@@ -69,12 +74,37 @@ export async function apiBajaOperativaCliente(
   return { ok: true };
 }
 
-/** Eliminación lógica del cliente. Solo admin. Requiere motivo. */
-export async function apiDeleteCliente(id: string, deletionReason: string): Promise<{ ok: boolean; error?: string }> {
+export type EliminarClientePreview = {
+  suscripciones_activas: number;
+  suscripciones: { id: string; precio: number; moneda: string }[];
+  facturas_pendientes_count: number;
+  factura_ejemplo: { id: string; numero_factura: string; monto: number } | null;
+  puede_eliminar: boolean;
+  bloqueos: string[];
+};
+
+/** Vista previa antes de eliminar (suscripciones activas, facturas con saldo, bloqueos). Solo admin. */
+export async function apiGetEliminarClientePreview(clienteId: string): Promise<EliminarClientePreview | null> {
+  const res = await fetch(`/api/clientes/${clienteId}/eliminar-preview`);
+  const json = await res.json();
+  if (!res.ok) return null;
+  return json?.data ?? null;
+}
+
+/** Eliminación lógica del cliente. Solo admin. Requiere motivo y flags si aplica (ver eliminar-preview). */
+export async function apiDeleteCliente(
+  id: string,
+  deletionReason: string,
+  opts?: { cancelar_suscripciones?: boolean; anular_facturas_pendientes?: boolean }
+): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch(`/api/clientes/${id}`, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ deletion_reason: deletionReason }),
+    body: JSON.stringify({
+      deletion_reason: deletionReason,
+      cancelar_suscripciones: opts?.cancelar_suscripciones ?? false,
+      anular_facturas_pendientes: opts?.anular_facturas_pendientes ?? false,
+    }),
   });
   const json = await res.json();
   if (!res.ok) {

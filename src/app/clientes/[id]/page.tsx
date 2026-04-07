@@ -15,7 +15,9 @@ import {
   apiDeleteCliente,
   apiGetBajaOperativaPreview,
   apiBajaOperativaCliente,
+  apiGetEliminarClientePreview,
   type BajaOperativaPreview,
+  type EliminarClientePreview,
 } from "@/lib/api/client";
 import { getFacturas, getSuscripciones } from "@/lib/facturacion/storage";
 import { getMarketingTasks, createMarketingTask, updateTaskStatus } from "@/lib/marketing/storage";
@@ -110,9 +112,14 @@ export default function ClienteDetailPage() {
   const [deletionReason, setDeletionReason] = useState("");
   const [eliminando, setEliminando] = useState(false);
   const [errorEliminar, setErrorEliminar] = useState<string | null>(null);
+  const [eliminarPreview, setEliminarPreview] = useState<EliminarClientePreview | null>(null);
+  const [eliminarCargandoPreview, setEliminarCargandoPreview] = useState(false);
+  const [eliminarCancelarSusc, setEliminarCancelarSusc] = useState(true);
+  const [eliminarAnularFacturas, setEliminarAnularFacturas] = useState(false);
   const [modalBajaOperativa, setModalBajaOperativa] = useState(false);
   const [bajaMotivo, setBajaMotivo] = useState("");
   const [bajaAnularFactura, setBajaAnularFactura] = useState(false);
+  const [bajaCancelarSuscripciones, setBajaCancelarSuscripciones] = useState(true);
   const [bajaPreview, setBajaPreview] = useState<BajaOperativaPreview | null>(null);
   const [bajaProcesando, setBajaProcesando] = useState(false);
   const [errorBaja, setErrorBaja] = useState<string | null>(null);
@@ -380,8 +387,25 @@ export default function ClienteDetailPage() {
     setModalBajaOperativa(true);
     setBajaMotivo("");
     setBajaAnularFactura(false);
+    setBajaCancelarSuscripciones(true);
     setErrorBaja(null);
     setBajaPreview(await apiGetBajaOperativaPreview(id));
+  }
+
+  async function abrirModalEliminar() {
+    setConfirmarEliminar(true);
+    setDeletionReason("");
+    setErrorEliminar(null);
+    setEliminarPreview(null);
+    setEliminarCancelarSusc(true);
+    setEliminarAnularFacturas(false);
+    setEliminarCargandoPreview(true);
+    const preview = await apiGetEliminarClientePreview(id);
+    setEliminarCargandoPreview(false);
+    setEliminarPreview(preview);
+    if (!preview) {
+      setErrorEliminar("No se pudo cargar la vista previa. Verifique permisos de administrador.");
+    }
   }
 
   async function handleBajaOperativa() {
@@ -389,9 +413,13 @@ export default function ClienteDetailPage() {
       setErrorBaja("El motivo es obligatorio");
       return;
     }
+    if (bajaPreview && bajaPreview.suscripciones_activas > 0 && !bajaCancelarSuscripciones) {
+      setErrorBaja("Debe confirmar cancelar las suscripciones activas para dar de baja.");
+      return;
+    }
     setBajaProcesando(true);
     setErrorBaja(null);
-    const res = await apiBajaOperativaCliente(id, bajaMotivo.trim(), bajaAnularFactura);
+    const res = await apiBajaOperativaCliente(id, bajaMotivo.trim(), bajaAnularFactura, bajaCancelarSuscripciones);
     setBajaProcesando(false);
     if (!res.ok) {
       setErrorBaja(res.error ?? "Error al dar de baja");
@@ -406,9 +434,28 @@ export default function ClienteDetailPage() {
       setErrorEliminar("El motivo es obligatorio");
       return;
     }
+    if (eliminarPreview) {
+      if (!eliminarPreview.puede_eliminar) {
+        setErrorEliminar("No se puede eliminar: el cliente tiene ventas o tipificaciones asociadas.");
+        return;
+      }
+      if (eliminarPreview.suscripciones_activas > 0 && !eliminarCancelarSusc) {
+        setErrorEliminar("Debe confirmar la cancelación de las suscripciones activas para continuar.");
+        return;
+      }
+      if (eliminarPreview.facturas_pendientes_count > 0 && !eliminarAnularFacturas) {
+        setErrorEliminar(
+          "Debe confirmar la anulación de las facturas pendientes (o cobrarlas antes) para no ensuciar reportería."
+        );
+        return;
+      }
+    }
     setEliminando(true);
     setErrorEliminar(null);
-    const res = await apiDeleteCliente(id, deletionReason.trim());
+    const res = await apiDeleteCliente(id, deletionReason.trim(), {
+      cancelar_suscripciones: eliminarCancelarSusc,
+      anular_facturas_pendientes: eliminarAnularFacturas,
+    });
     setEliminando(false);
     if (!res.ok) {
       setErrorEliminar(res.error ?? "Error al eliminar");
@@ -416,6 +463,7 @@ export default function ClienteDetailPage() {
     }
     setConfirmarEliminar(false);
     setDeletionReason("");
+    setEliminarPreview(null);
     router.push("/clientes");
   }
 
@@ -549,7 +597,8 @@ export default function ClienteDetailPage() {
               )}
               {esAdmin && (
                 <button
-                  onClick={() => setConfirmarEliminar(true)}
+                  type="button"
+                  onClick={() => void abrirModalEliminar()}
                   className="text-red-300 hover:text-red-200 hover:bg-red-900/30 p-1.5 rounded-lg transition-colors"
                   title="Eliminar cliente (administrativo)"
                 >
@@ -584,8 +633,36 @@ export default function ClienteDetailPage() {
       {modalBajaOperativa && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
           <p className="text-sm text-amber-800 font-medium">
-            Dar de baja operativa: el cliente pasará a inactivo, se cancelarán suscripciones activas y no se generarán facturas futuras.
+            Dar de baja operativa: el cliente pasará a inactivo y no se generarán facturas futuras. Confirme abajo si cancela suscripciones activas y si anula facturas con saldo pendiente.
           </p>
+          {bajaPreview != null && bajaPreview.suscripciones_activas > 0 && (
+            <div className="bg-amber-100/50 border border-amber-200 rounded-lg p-3">
+              <p className="text-sm text-amber-900 font-medium mb-2">
+                Este cliente tiene {bajaPreview.suscripciones_activas} suscripción
+                {bajaPreview.suscripciones_activas === 1 ? "" : "es"} activa
+                {bajaPreview.suscripciones_activas === 1 ? "" : "s"}.
+              </p>
+              <p className="text-xs text-amber-800 mb-2">
+                ¿Desea cancelarlas al dar de baja? (quedarán en estado cancelada)
+              </p>
+              <div className="flex gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setBajaCancelarSuscripciones(true)}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-medium ${bajaCancelarSuscripciones ? "bg-amber-600 text-white" : "bg-white border border-amber-300 text-amber-800 hover:bg-amber-100"}`}
+                >
+                  Sí, cancelar suscripciones activas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBajaCancelarSuscripciones(false)}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-medium ${!bajaCancelarSuscripciones ? "bg-amber-600 text-white" : "bg-white border border-amber-300 text-amber-800 hover:bg-amber-100"}`}
+                >
+                  No, conservar suscripciones activas
+                </button>
+              </div>
+            </div>
+          )}
           {bajaPreview?.factura_pendiente_mes && (
             <div className="bg-amber-100/50 border border-amber-200 rounded-lg p-3">
               <p className="text-sm text-amber-900 font-medium mb-2">
@@ -647,7 +724,74 @@ export default function ClienteDetailPage() {
       {/* Confirmación de eliminación (baja administrativa) */}
       {confirmarEliminar && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3">
-          <p className="text-sm text-red-700 font-medium">Eliminación administrativa (baja lógica). El cliente no aparecerá en listados pero se conserva el registro.</p>
+          <p className="text-sm text-red-700 font-medium">
+            Eliminación administrativa (baja lógica). El cliente no aparecerá en listados pero se conserva el registro.
+          </p>
+          {eliminarCargandoPreview && (
+            <p className="text-xs text-red-800">Cargando vista previa…</p>
+          )}
+          {eliminarPreview && !eliminarPreview.puede_eliminar && (
+            <div className="bg-red-100/60 border border-red-300 rounded-lg p-3 text-sm text-red-900">
+              <p className="font-medium mb-1">No se puede eliminar este cliente</p>
+              <p className="text-xs">
+                Tiene {eliminarPreview.bloqueos.join(" y ")} asociados. Resuelva esas relaciones antes de eliminar.
+              </p>
+            </div>
+          )}
+          {eliminarPreview?.puede_eliminar && eliminarPreview.suscripciones_activas > 0 && (
+            <div className="bg-red-100/40 border border-red-200 rounded-lg p-3">
+              <p className="text-sm text-red-900 font-medium mb-2">
+                Hay {eliminarPreview.suscripciones_activas} suscripción
+                {eliminarPreview.suscripciones_activas === 1 ? "" : "es"} activa
+                {eliminarPreview.suscripciones_activas === 1 ? "" : "s"}.
+              </p>
+              <p className="text-xs text-red-800 mb-2">¿Cancelarlas al eliminar el cliente?</p>
+              <div className="flex gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setEliminarCancelarSusc(true)}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-medium ${eliminarCancelarSusc ? "bg-red-600 text-white" : "bg-white border border-red-300 text-red-800 hover:bg-red-50"}`}
+                >
+                  Sí, cancelar suscripciones
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEliminarCancelarSusc(false)}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-medium ${!eliminarCancelarSusc ? "bg-red-600 text-white" : "bg-white border border-red-300 text-red-800 hover:bg-red-50"}`}
+                >
+                  No
+                </button>
+              </div>
+            </div>
+          )}
+          {eliminarPreview?.puede_eliminar && eliminarPreview.facturas_pendientes_count > 0 && (
+            <div className="bg-red-100/40 border border-red-200 rounded-lg p-3">
+              <p className="text-sm text-red-900 font-medium mb-2">
+                {eliminarPreview.facturas_pendientes_count === 1 && eliminarPreview.factura_ejemplo
+                  ? `Factura con saldo pendiente (${eliminarPreview.factura_ejemplo.numero_factura} — Gs. ${eliminarPreview.factura_ejemplo.monto?.toLocaleString("es-PY")}).`
+                  : `Hay ${eliminarPreview.facturas_pendientes_count} facturas con saldo pendiente${eliminarPreview.factura_ejemplo ? ` (ej.: ${eliminarPreview.factura_ejemplo.numero_factura})` : ""}.`}
+              </p>
+              <p className="text-xs text-red-800 mb-2">
+                ¿Anularlas al eliminar? (estado Anulado, saldo 0 — no sumarán en cobranzas ni reportería de pendientes)
+              </p>
+              <div className="flex gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setEliminarAnularFacturas(true)}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-medium ${eliminarAnularFacturas ? "bg-red-600 text-white" : "bg-white border border-red-300 text-red-800 hover:bg-red-50"}`}
+                >
+                  Sí, anular facturas pendientes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEliminarAnularFacturas(false)}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-medium ${!eliminarAnularFacturas ? "bg-red-600 text-white" : "bg-white border border-red-300 text-red-800 hover:bg-red-50"}`}
+                >
+                  No, conservar facturas
+                </button>
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-red-800 mb-1">Motivo obligatorio</label>
             <textarea
@@ -661,14 +805,26 @@ export default function ClienteDetailPage() {
           </div>
           <div className="flex gap-2 shrink-0">
             <button
-              onClick={handleEliminar}
-              disabled={eliminando}
+              type="button"
+              onClick={() => void handleEliminar()}
+              disabled={
+                eliminando ||
+                eliminarCargandoPreview ||
+                !eliminarPreview ||
+                !eliminarPreview.puede_eliminar
+              }
               className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-700 disabled:opacity-50"
             >
-              {eliminando ? "Eliminando…" : "Confirmar baja"}
+              {eliminando ? "Eliminando…" : "Confirmar eliminación"}
             </button>
             <button
-              onClick={() => { setConfirmarEliminar(false); setDeletionReason(""); setErrorEliminar(null); }}
+              type="button"
+              onClick={() => {
+                setConfirmarEliminar(false);
+                setDeletionReason("");
+                setErrorEliminar(null);
+                setEliminarPreview(null);
+              }}
               disabled={eliminando}
               className="border border-red-200 text-red-600 px-3 py-1.5 rounded-lg text-xs hover:bg-red-100 disabled:opacity-50"
             >
