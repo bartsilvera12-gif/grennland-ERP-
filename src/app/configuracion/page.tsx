@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import MontoInput from "@/components/ui/MontoInput";
 import { getConfig, saveConfig, resetConfig } from "@/lib/config/storage";
@@ -8,12 +9,10 @@ import { getCurrentUser } from "@/lib/auth";
 import { getEtapasParaConfig, createEtapa, updateEtapa, deleteEtapa, getEtapaClasses, type EtapaCrm } from "@/lib/crm/etapas";
 import { getMisModulos } from "@/lib/empresas/actions";
 import type { ConfigGlobal, FormatoFecha, IdiomaDefault, MonedaBase, Timezone } from "@/lib/config/types";
-import ConfiguracionCanalesPage from "@/app/dashboard/conversaciones/configuracion/page";
-import FlowsListPage from "@/app/dashboard/conversaciones/flujos/page";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
-type Tab = "facturacion" | "politicas" | "preferencias" | "metricas" | "crm" | "conversaciones";
+type Tab = "facturacion" | "politicas" | "preferencias" | "metricas" | "crm";
 
 // ── Helpers UI ────────────────────────────────────────────────────────────────
 
@@ -41,6 +40,12 @@ function HelpText({ children }: { children: React.ReactNode }) {
   return <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">{children}</p>;
 }
 
+function tabLinkClass(active: boolean) {
+  return `flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
+    active ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+  }`;
+}
+
 function MetricCard({
   label, value, sub,
 }: { label: string; value: string | number; sub?: string }) {
@@ -56,6 +61,7 @@ function MetricCard({
 // ── Página ────────────────────────────────────────────────────────────────────
 
 export default function ConfiguracionPage() {
+  const pathname = usePathname() ?? "";
   const [tab,       setTab]       = useState<Tab>("facturacion");
   const [config,    setConfig]    = useState<ConfigGlobal | null>(null);
   const [success,   setSuccess]   = useState(false);
@@ -178,9 +184,6 @@ export default function ConfiguracionPage() {
     { id: "preferencias", label: "Preferencias",           icon: "⚙️" },
     { id: "metricas",     label: "Métricas",               icon: "🎯" },
     { id: "crm",          label: "Configuración CRM",      icon: "📊" },
-    ...(hasConversacionesModulo
-      ? [{ id: "conversaciones" as const, label: "Conversaciones / WhatsApp", icon: "💬" }]
-      : []),
   ];
 
   const facturaPreview = `${form.prefijo_factura}${String(form.numeracion_inicial).padStart(6, "0")}`;
@@ -219,8 +222,8 @@ export default function ConfiguracionPage() {
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+      {/* Tabs + accesos omnicanal (rutas dedicadas) */}
+      <div className="flex flex-wrap gap-1 bg-gray-100 rounded-xl p-1 w-fit max-w-full">
         {TABS.map((t) => (
           <button key={t.id} type="button" onClick={() => setTab(t.id)}
             className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-all whitespace-nowrap ${
@@ -232,6 +235,24 @@ export default function ConfiguracionPage() {
             {t.label}
           </button>
         ))}
+        {hasConversacionesModulo && (
+          <>
+            <Link
+              href="/configuracion/canales"
+              className={tabLinkClass(pathname.startsWith("/configuracion/canales"))}
+            >
+              <span>💬</span>
+              Canales y comunicación
+            </Link>
+            <Link
+              href="/configuracion/conversaciones/flujos"
+              className={tabLinkClass(pathname.startsWith("/configuracion/conversaciones/flujos"))}
+            >
+              <span>🔀</span>
+              Flujos conversacionales
+            </Link>
+          </>
+        )}
       </div>
 
       {/* ── Formulario ──────────────────────────────────────────────── */}
@@ -734,43 +755,16 @@ export default function ConfiguracionPage() {
           </>
         )}
 
-        {tab === "conversaciones" && hasConversacionesModulo && (
-          <div className="space-y-5">
-            <Card>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 -mt-1 mb-4">
-                <p className="text-sm text-gray-600">
-                  <span className="font-medium text-gray-800">Canales omnicanal: </span>
-                  usá la nueva vista en cards para conectar y editar canales.
-                </p>
-                <Link
-                  href="/configuracion/canales"
-                  className="shrink-0 inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-semibold bg-[#0EA5E9] text-white hover:bg-[#0284C7]"
-                >
-                  Abrir Canales y comunicación
-                </Link>
-              </div>
-              <SectionTitle>Configuración del canal WhatsApp</SectionTitle>
-              <ConfiguracionCanalesPage />
-            </Card>
-            <Card>
-              <SectionTitle>Configuración de flujos conversacionales</SectionTitle>
-              <FlowsListPage />
-            </Card>
-          </div>
-        )}
-
         {/* ── Botón guardar (siempre visible) ─────────────────────── */}
-        {tab !== "conversaciones" && (
-          <div className="flex items-center gap-4 pt-2">
-            <button type="button" onClick={handleGuardar}
-              className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition-colors shadow-sm active:scale-95">
-              Guardar configuración
-            </button>
-            <p className="text-xs text-gray-400">
-              Los cambios se aplican de inmediato en todo el sistema.
-            </p>
-          </div>
-        )}
+        <div className="flex items-center gap-4 pt-2">
+          <button type="button" onClick={handleGuardar}
+            className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition-colors shadow-sm active:scale-95">
+            Guardar configuración
+          </button>
+          <p className="text-xs text-gray-400">
+            Los cambios se aplican de inmediato en todo el sistema.
+          </p>
+        </div>
 
       </div>
     </div>

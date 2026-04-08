@@ -158,10 +158,10 @@ export default function FlowsListPage() {
           <p className="text-sm text-slate-500">Administración simple de flujos WhatsApp por empresa</p>
         </div>
         <Link
-          href="/configuracion/conversaciones"
+          href="/configuracion/canales"
           className="text-sm font-medium text-[#0EA5E9] hover:underline px-3 py-2 rounded-lg border border-sky-200 bg-sky-50"
         >
-          Ir a Configuración de Conversaciones
+          Ir a Canales y comunicación
         </Link>
       </div>
 

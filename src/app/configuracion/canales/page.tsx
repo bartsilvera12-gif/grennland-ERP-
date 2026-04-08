@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { ConectarCanalModal } from "@/components/chat/ConectarCanalModal";
 import { ChannelBadge, channelTypeLabel } from "@/components/chat/ChannelBadge";
 import { fetchChatChannels, type ChatChannelRow } from "@/lib/chat/actions";
 import { getMisModulos } from "@/lib/empresas/actions";
@@ -15,6 +16,7 @@ export default function ConfiguracionCanalesHubPage() {
   const [rows, setRows] = useState<ChatChannelRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [connectOpen, setConnectOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,12 +106,13 @@ export default function ConfiguracionCanalesHubPage() {
           <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto">
             Conectá WhatsApp con tu Phone number ID de Meta para empezar a recibir y enviar mensajes desde el inbox.
           </p>
-          <Link
-            href="/configuracion/canales/nuevo"
+          <button
+            type="button"
+            onClick={() => setConnectOpen(true)}
             className="mt-6 inline-flex items-center justify-center rounded-xl bg-[#0EA5E9] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#0284C7]"
           >
             Conectar canal
-          </Link>
+          </button>
         </div>
       ) : (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 list-none p-0 m-0">
