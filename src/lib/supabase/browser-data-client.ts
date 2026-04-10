@@ -1,5 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
-import { supabaseDbSchemaOption } from "@/lib/supabase/schema";
+import { supabaseDbSchemaOption, type AppSupabaseClient } from "@/lib/supabase/schema";
 
 const SCHEMA_KEY = "neura_erp_data_schema_v1";
 const SCHEMA_TS_KEY = "neura_erp_data_schema_ts_v1";
@@ -12,7 +12,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholde
  * Cliente browser para tablas de negocio (respeta `empresas.data_schema` vía API).
  * El catálogo (usuarios, módulos) sigue en `zentra_erp` con el cliente de `@/lib/supabase`.
  */
-export async function getBrowserSupabaseForEmpresaData() {
+export async function getBrowserSupabaseForEmpresaData(): Promise<AppSupabaseClient> {
   if (typeof window === "undefined") {
     throw new Error("getBrowserSupabaseForEmpresaData solo está disponible en el cliente");
   }
@@ -24,7 +24,7 @@ export async function getBrowserSupabaseForEmpresaData() {
     return createBrowserClient(supabaseUrl, supabaseAnonKey, {
       ...supabaseDbSchemaOption,
       db: { schema: cached },
-    });
+    }) as AppSupabaseClient;
   }
 
   const res = await fetch("/api/empresas/data-schema", { credentials: "include", cache: "no-store" });
@@ -40,7 +40,7 @@ export async function getBrowserSupabaseForEmpresaData() {
   return createBrowserClient(supabaseUrl, supabaseAnonKey, {
     ...supabaseDbSchemaOption,
     db: { schema },
-  });
+  }) as AppSupabaseClient;
 }
 
 export function clearBrowserEmpresaDataSchemaCache(): void {
