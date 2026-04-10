@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
-import { getSession } from "@/lib/auth";
+import { getCurrentUser, getSession } from "@/lib/auth";
 import { pathRequiresModuleSlug } from "@/lib/modulos/route-slug-map";
 
 const PUBLIC_ROUTES = ["/login"];
@@ -44,15 +44,28 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         cache: "no-store",
       });
       if (cancelled) return;
-      if (!res.ok) {
-        setAccess({ superAdmin: false, slugs: new Set() });
-        setLoading(false);
-        return;
+
+      let superAdmin = false;
+      let slugs: string[] = [];
+
+      if (res.ok) {
+        const data = (await res.json()) as { superAdmin?: boolean; slugs?: string[] };
+        superAdmin = !!data.superAdmin;
+        slugs = Array.isArray(data.slugs) ? data.slugs : [];
       }
-      const data = (await res.json()) as { superAdmin?: boolean; slugs?: string[] };
+
+      if (!superAdmin) {
+        try {
+          const cu = await getCurrentUser();
+          if ((cu?.rol ?? "").trim() === "super_admin") superAdmin = true;
+        } catch {
+          /* sin fila usuarios en cliente */
+        }
+      }
+
       setAccess({
-        superAdmin: !!data.superAdmin,
-        slugs: new Set(Array.isArray(data.slugs) ? data.slugs : []),
+        superAdmin,
+        slugs: new Set(slugs),
       });
       setLoading(false);
     }

@@ -28,7 +28,9 @@ import {
   History,
   Headphones,
 } from "lucide-react";
+import type { Session } from "@supabase/supabase-js";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { getCurrentUser } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import type { ModuloEmpresa } from "@/lib/empresas/actions";
 import { getFavoritos, toggleFavorito } from "@/lib/favorites";
@@ -89,6 +91,14 @@ const MENU_STRUCTURE: MenuItem[] = [
   { key: "marketing", slug: "marketing", label: "Marketing Ops", href: "/marketing", icon: Megaphone },
   { key: "sorteos", slug: "sorteos", label: "Sorteos", href: "/sorteos", icon: Ticket },
 ];
+
+function modulosSyntheticFromMenu(): ModuloEmpresa[] {
+  return MENU_STRUCTURE.map((item) => ({
+    id: item.slug,
+    nombre: item.label,
+    slug: item.slug,
+  }));
+}
 
 function NavItem({
   item,
@@ -230,32 +240,63 @@ export default function Sidebar() {
 
   useEffect(() => {
     let cancelled = false;
-    async function cargarMenu() {
+
+    async function cargarMenuDesdeSesion(session: Session | null) {
       try {
         setCargando(true);
-        const { data: { session } } = await supabase.auth.getSession();
-        if (cancelled || !session?.user) {
-          if (!cancelled) {
-            setModulos([]);
-            setEsSuperAdmin(false);
-          }
-          return;
-        }
-        const res = await fetchWithSupabaseSession("/api/empresas/module-access", {
-          cache: "no-store",
-        });
         if (cancelled) return;
-        if (!res.ok) {
+        if (!session?.user) {
           setModulos([]);
           setEsSuperAdmin(false);
           return;
         }
-        const body = (await res.json()) as {
-          superAdmin?: boolean;
-          modulos?: ModuloEmpresa[];
-        };
-        setEsSuperAdmin(!!body.superAdmin);
-        setModulos(Array.isArray(body.modulos) ? body.modulos : []);
+
+        const res = await fetchWithSupabaseSession("/api/empresas/module-access", {
+          cache: "no-store",
+        });
+        if (cancelled) return;
+
+        let superA = false;
+        let modList: ModuloEmpresa[] = [];
+
+        if (res.ok) {
+          const body = (await res.json()) as {
+            superAdmin?: boolean;
+            modulos?: ModuloEmpresa[];
+          };
+          superA = !!body.superAdmin;
+          modList = Array.isArray(body.modulos) ? body.modulos : [];
+        }
+
+        if (!superA) {
+          try {
+            const cu = await getCurrentUser();
+            if ((cu?.rol ?? "").trim() === "super_admin") {
+              superA = true;
+              const mr = await fetchWithSupabaseSession("/api/admin/modulos", { cache: "no-store" });
+              if (mr.ok) {
+                const raw = (await mr.json()) as { id?: string; nombre?: string; slug?: string }[];
+                if (Array.isArray(raw) && raw.length > 0) {
+                  modList = raw.map((m) => ({
+                    id: m.id ?? "",
+                    nombre: m.nombre ?? "",
+                    slug: m.slug ?? "",
+                  }));
+                }
+              }
+            }
+          } catch {
+            /* getCurrentUser puede fallar si RLS; el servidor ya intentó */
+          }
+        }
+
+        if (superA && modList.length === 0) {
+          modList = modulosSyntheticFromMenu();
+        }
+
+        if (cancelled) return;
+        setEsSuperAdmin(superA);
+        setModulos(modList);
       } catch {
         if (!cancelled) {
           setModulos([]);
@@ -265,15 +306,20 @@ export default function Sidebar() {
         if (!cancelled) setCargando(false);
       }
     }
-    cargarMenu();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) cargarMenu();
-      else {
-        setModulos([]);
-        setEsSuperAdmin(false);
-      }
+
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!cancelled) void cargarMenuDesdeSesion(session);
     });
-    return () => { cancelled = true; subscription.unsubscribe(); };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
+      void cargarMenuDesdeSesion(session);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleToggleFavorito = (id: string) => {
