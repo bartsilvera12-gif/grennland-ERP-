@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { User } from "@supabase/supabase-js";
 import { usuarioEmailLookupVariants } from "@/lib/auth/usuario-email-variants";
 import { supabaseDbSchemaOption, type AppSupabaseClient } from "@/lib/supabase/schema";
+import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 
 export type ApiAuthFailureCode =
   | "missing_public_env"
@@ -62,9 +63,10 @@ export type ResolveApiAuthOptions = {
 };
 
 /**
- * Auth (getUser): solo `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`, sin `db.schema`
- * (misma configuración que GoTrue del proyecto; evita desalineación con el JWT del cliente).
- * PostgREST (`zentra_erp`): segundo cliente con el mismo URL/key + `Authorization` + schema.
+ * Auth: `getUser` con anon + URL públicos (sin db.schema en el cliente de Auth).
+ * Catálogo `zentra_erp.usuarios`: con `SUPABASE_SERVICE_ROLE_KEY` se lee por service role
+ * (misma idea que module-access); sin service key, fallback anon+JWT+RLS.
+ * PostgREST usuario: `userScopedSupabase` (anon + JWT + schema) para rutas que consultan con RLS.
  */
 export async function resolveApiAuthContext(
   request?: Request | null,
@@ -134,30 +136,60 @@ export async function resolveApiAuthContext(
   let row: UsuarioRow | undefined;
   let lastUsuarioErr: string | null = null;
 
-  if (user.id) {
-    const { data: byId, error: e1 } = await userScopedSupabase
-      .from("usuarios")
-      .select("empresa_id, rol, nombre")
-      .eq("auth_user_id", user.id)
-      .limit(1);
-    if (e1) lastUsuarioErr = e1.message;
-    else if (byId?.[0]) row = byId[0] as UsuarioRow;
-  }
-
-  if (!row && user.email) {
-    for (const em of usuarioEmailLookupVariants(user.email)) {
-      const { data: rows, error: uErr } = await userScopedSupabase
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (serviceKey) {
+    const sr = createServiceRoleClient();
+    if (user.id) {
+      const { data: byId, error: e1 } = await sr
         .from("usuarios")
         .select("empresa_id, rol, nombre")
-        .ilike("email", em)
+        .eq("auth_user_id", user.id)
         .limit(1);
-      if (uErr) {
-        lastUsuarioErr = uErr.message;
-        break;
+      if (e1) lastUsuarioErr = e1.message;
+      else if (byId?.[0]) row = byId[0] as UsuarioRow;
+    }
+    if (!row && user.email) {
+      for (const em of usuarioEmailLookupVariants(user.email)) {
+        const { data: rows, error: uErr } = await sr
+          .from("usuarios")
+          .select("empresa_id, rol, nombre")
+          .ilike("email", em)
+          .limit(1);
+        if (uErr) {
+          lastUsuarioErr = uErr.message;
+          break;
+        }
+        if (rows?.[0]) {
+          row = rows[0] as UsuarioRow;
+          break;
+        }
       }
-      if (rows?.[0]) {
-        row = rows[0] as UsuarioRow;
-        break;
+    }
+  } else {
+    if (user.id) {
+      const { data: byId, error: e1 } = await userScopedSupabase
+        .from("usuarios")
+        .select("empresa_id, rol, nombre")
+        .eq("auth_user_id", user.id)
+        .limit(1);
+      if (e1) lastUsuarioErr = e1.message;
+      else if (byId?.[0]) row = byId[0] as UsuarioRow;
+    }
+    if (!row && user.email) {
+      for (const em of usuarioEmailLookupVariants(user.email)) {
+        const { data: rows, error: uErr } = await userScopedSupabase
+          .from("usuarios")
+          .select("empresa_id, rol, nombre")
+          .ilike("email", em)
+          .limit(1);
+        if (uErr) {
+          lastUsuarioErr = uErr.message;
+          break;
+        }
+        if (rows?.[0]) {
+          row = rows[0] as UsuarioRow;
+          break;
+        }
       }
     }
   }
