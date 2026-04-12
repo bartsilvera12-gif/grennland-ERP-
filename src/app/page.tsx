@@ -879,6 +879,60 @@ function DashComercial({
 
 // ── Dashboard Financiero ──────────────────────────────────────────────────────
 
+/** Monto en una sola línea "Gs. N"; tipografía responsiva antes de partir texto. */
+function FinMontoGs({
+  monto,
+  className = "text-slate-900",
+  negativo,
+  dense,
+}: {
+  monto: number;
+  className?: string;
+  /** Si true, muestra signo menos y valor absoluto. */
+  negativo?: boolean;
+  /** Menos margen superior (bloques secundarios). */
+  dense?: boolean;
+}) {
+  const texto =
+    negativo && monto < 0
+      ? `− Gs. ${formatGs(Math.abs(monto))}`
+      : `Gs. ${formatGs(monto)}`;
+  return (
+    <p
+      className={`${dense ? "mt-1" : "mt-3"} max-w-full overflow-hidden text-ellipsis font-bold tabular-nums tracking-tight whitespace-nowrap text-[clamp(0.8rem,2.4vw,1.65rem)] sm:text-[clamp(0.85rem,2.2vw,1.75rem)] ${className}`}
+      title={texto}
+    >
+      {texto}
+    </p>
+  );
+}
+
+/**
+ * Partición de la facturación emitida en el período (misma base que "A cobrar"):
+ * - Contado: `tipo` factura = contado
+ * - Mensual / suscripción: resto (p. ej. crédito / cuotas vinculadas a suscripción en el producto)
+ * Cada factura del período entra en exactamente un bucket (sin doble conteo).
+ */
+function composicionFacturacionPorModalidad(facturasPeriodo: FacturaRaw[]) {
+  let contado = 0;
+  let mensual = 0;
+  for (const f of facturasPeriodo) {
+    const m = Number(f.monto);
+    if (!Number.isFinite(m)) continue;
+    const t = (f.tipo ?? "").trim().toLowerCase();
+    if (t === "contado") contado += m;
+    else mensual += m;
+  }
+  const total = contado + mensual;
+  return {
+    contado,
+    mensual,
+    total,
+    pctContado: total > 0 ? (contado / total) * 100 : 0,
+    pctMensual: total > 0 ? (mensual / total) * 100 : 0,
+  };
+}
+
 function DashFinanciero({
   facturas, pagos, clientes, ventas, periodo, config,
 }: {
@@ -980,6 +1034,11 @@ function DashFinanciero({
     });
   }, [pagosPeriodo, desde, hasta]);
 
+  const composicionModalidad = useMemo(
+    () => composicionFacturacionPorModalidad(facturasPeriodo),
+    [facturasPeriodo]
+  );
+
   /** Prioridad: tipo de servicio → condición de pago → origen */
   const { dimCliente, segmentosClientes } = useMemo(() => {
     const list = clientes;
@@ -1017,41 +1076,28 @@ function DashFinanciero({
 
   return (
     <div className="space-y-6 rounded-2xl border border-slate-200/80 bg-gradient-to-b from-slate-50 to-white p-4 sm:space-y-8 sm:p-6 md:p-8">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5 xl:gap-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-5">
         <motion.div whileHover={{ y: -2 }} className={finCard}>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">A cobrar del período</p>
-          <p className="mt-3 break-words text-xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-2xl">
-            Gs. {formatGs(aCobrarPeriodo)}
-          </p>
+          <FinMontoGs monto={aCobrarPeriodo} />
         </motion.div>
         <motion.div whileHover={{ y: -2 }} className={finCard}>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Cobrado del período</p>
-          <p
-            className="mt-3 break-words text-xl font-bold tabular-nums tracking-tight sm:text-2xl"
-            style={{ color: finAccent }}
-          >
-            Gs. {formatGs(cobradoRegistradoPeriodo)}
-          </p>
-        </motion.div>
-        <motion.div whileHover={{ y: -2 }} className={finCard}>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Ventas al contado (implícito)</p>
-          <p className="mt-3 break-words text-xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-2xl">
-            Gs. {formatGs(cobroImplicitoContadoPeriodo)}
-          </p>
+          <FinMontoGs monto={cobradoRegistradoPeriodo} className="text-[#2563EB]" />
         </motion.div>
         <motion.div whileHover={{ y: -2 }} className={finCard}>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Pendiente del período</p>
-          <p
-            className={`mt-3 break-words text-xl font-bold tabular-nums tracking-tight sm:text-2xl ${
+          <FinMontoGs
+            monto={pendientePeriodo}
+            negativo={pendientePeriodo < 0}
+            className={
               pendientePeriodo > 0
                 ? "text-amber-600"
                 : pendientePeriodo < 0
                   ? "text-emerald-600"
                   : "text-slate-900"
-            }`}
-          >
-            {pendientePeriodo < 0 ? "− " : ""}Gs. {formatGs(Math.abs(pendientePeriodo))}
-          </p>
+            }
+          />
         </motion.div>
         <motion.div whileHover={{ y: -2 }} className={finCard}>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">% de cobranza</p>
@@ -1067,11 +1113,9 @@ function DashFinanciero({
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Cobrado por día</h3>
             <p className="mt-1 text-[11px] text-slate-400">Pagos registrados por fecha de pago</p>
           </div>
-          <div className="text-left sm:text-right">
+          <div className="flex min-w-0 flex-col gap-0.5 sm:items-end sm:text-right">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Total cobrado</p>
-            <p className="mt-0.5 text-lg font-bold tabular-nums sm:text-xl" style={{ color: finAccent }}>
-              Gs. {formatGs(cobradoRegistradoPeriodo)}
-            </p>
+            <FinMontoGs monto={cobradoRegistradoPeriodo} dense className="text-[#2563EB]" />
           </div>
         </div>
         {cobradoPorDiaSerie.length === 0 ? (
@@ -1133,6 +1177,52 @@ function DashFinanciero({
             </ResponsiveContainer>
           </div>
         )}
+      </div>
+
+      <div className={finCard}>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Composición del período</h3>
+        <p className="mt-1 text-[11px] text-slate-400">Facturación emitida por tipo de factura</p>
+        <div className="mt-5 flex h-4 w-full overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200/70">
+          {composicionModalidad.total > 0 ? (
+            <>
+              <div
+                className="h-full bg-[#2563EB] transition-[width] duration-300"
+                style={{ width: `${composicionModalidad.pctContado}%`, minWidth: composicionModalidad.contado > 0 ? 4 : 0 }}
+                title={`Contado ${composicionModalidad.pctContado.toFixed(1)}%`}
+              />
+              <div
+                className="h-full bg-slate-500 transition-[width] duration-300"
+                style={{ width: `${composicionModalidad.pctMensual}%`, minWidth: composicionModalidad.mensual > 0 ? 4 : 0 }}
+                title={`Mensual / suscripción ${composicionModalidad.pctMensual.toFixed(1)}%`}
+              />
+            </>
+          ) : null}
+        </div>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/90 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Contado</p>
+            <FinMontoGs monto={composicionModalidad.contado} dense className="text-slate-900" />
+            <p className="mt-1 text-sm font-semibold tabular-nums text-slate-500">
+              {composicionModalidad.total > 0 ? `${composicionModalidad.pctContado.toFixed(1)}%` : "—"}
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50/90 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Mensual / suscripción</p>
+            <FinMontoGs monto={composicionModalidad.mensual} dense className="text-slate-900" />
+            <p className="mt-1 text-sm font-semibold tabular-nums text-slate-500">
+              {composicionModalidad.total > 0 ? `${composicionModalidad.pctMensual.toFixed(1)}%` : "—"}
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 flex flex-col gap-1 border-t border-slate-100 pt-4 sm:flex-row sm:items-baseline sm:justify-between">
+          <span className="text-xs font-semibold text-slate-500">Total emitido</span>
+          <div className="min-w-0 sm:text-right">
+            <FinMontoGs monto={composicionModalidad.total} dense className="text-slate-900" />
+          </div>
+        </div>
+        <p className="mt-3 text-[10px] leading-snug text-slate-400">
+          Emisión en el período, sin anuladas · contado vs resto por tipo · sin pagos ni doble conteo.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5 lg:gap-8">
