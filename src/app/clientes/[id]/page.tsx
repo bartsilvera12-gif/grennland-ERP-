@@ -23,7 +23,7 @@ import { getMarketingTasks, createMarketingTask, updateTaskStatus } from "@/lib/
 import { getUsuariosActivosEmpresa } from "@/lib/usuarios/empresa";
 import { apiCreateFactura, apiCreatePago, apiCreateSuscripcion } from "@/lib/api/client";
 import { getConfig, saveConfig } from "@/lib/config/storage";
-import { getCurrentUser } from "@/lib/auth";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { SifenEstadoBadge } from "@/components/sifen/SifenEstadoBadge";
 import { useFacturaSifenEstados } from "@/hooks/useFacturaSifenEstados";
 import MontoInput from "@/components/ui/MontoInput";
@@ -314,10 +314,25 @@ export default function ClienteDetailPage() {
   }, [id, cargar]);
 
   useEffect(() => {
-    getCurrentUser().then((u) => {
-      const rol = ((u as { rol?: string })?.rol ?? "").trim().toLowerCase();
-      setEsAdmin(rol === "admin" || rol === "administrador" || rol === "super_admin");
-    });
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetchWithSupabaseSession("/api/auth/empresa-context", { cache: "no-store" });
+        const json = (await res.json()) as { success?: boolean; data?: { es_admin?: boolean } };
+        if (cancelled) return;
+        if (res.ok && json.success && json.data?.es_admin != null) {
+          setEsAdmin(Boolean(json.data.es_admin));
+          return;
+        }
+      } catch {
+        /* fallback abajo */
+      }
+      if (cancelled) return;
+      setEsAdmin(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
