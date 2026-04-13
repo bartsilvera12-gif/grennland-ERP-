@@ -31,6 +31,11 @@ import { getPlanes } from "@/lib/planes/storage";
 import type { Cliente, NotaCliente, TipoServicioCliente } from "@/lib/clientes/types";
 import { TIPOS_SERVICIO_CLIENTE } from "@/lib/clientes/types";
 import type { Factura } from "@/lib/gestion-clientes/types";
+import {
+  clasesBadgeEstadoFacturaUi,
+  estadoFacturaParaUi,
+  textoBadgeEstadoFacturaUi,
+} from "@/lib/gestion-clientes/estado-factura-ui";
 import type { Suscripcion } from "@/lib/facturacion/types";
 import type { Plan } from "@/lib/planes/types";
 import type { MarketingTask } from "@/lib/marketing/types";
@@ -229,6 +234,11 @@ export default function ClienteDetailPage() {
     () => suscripciones.find((s) => s.estado === "activa") ?? null,
     [suscripciones]
   );
+
+  const hoyYmdFactura = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, []);
 
   const cargar = useCallback(async () => {
     setCargandoCliente(true);
@@ -1596,10 +1606,16 @@ export default function ClienteDetailPage() {
                           <td className="px-4 py-3 text-slate-600">{formatFecha(f.fecha_vencimiento)}</td>
                           <td className="px-4 py-3 font-semibold text-slate-800">Gs. {f.monto.toLocaleString("es-PY")}</td>
                           <td className="px-4 py-3">
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                              f.estado === "Pagado" ? "bg-green-100 text-green-700" :
-                              f.estado === "Vencido" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
-                            }`}>{f.estado}</span>
+                            {(() => {
+                              const estUi = estadoFacturaParaUi(f, hoyYmdFactura);
+                              return (
+                                <span
+                                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${clasesBadgeEstadoFacturaUi(estUi)}`}
+                                >
+                                  {textoBadgeEstadoFacturaUi(estUi)}
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="px-4 py-3 align-top">
                             <SifenEstadoBadge estadoSifen={sifenPorFactura[f.id]?.estado_sifen ?? null} />

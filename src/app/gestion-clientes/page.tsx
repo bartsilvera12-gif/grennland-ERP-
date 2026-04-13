@@ -9,6 +9,7 @@ import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session"
 import { getClientes, clienteNombre } from "@/lib/clientes/storage";
 import { toCalendarDateStr } from "@/lib/fechas/calendario";
 import { getFacturas } from "@/lib/gestion-clientes/storage";
+import { estadoFacturaParaUi } from "@/lib/gestion-clientes/estado-factura-ui";
 import type { Cliente } from "@/lib/clientes/types";
 import type { EstadoFactura, Factura } from "@/lib/gestion-clientes/types";
 
@@ -735,14 +736,14 @@ export default function GestionClientesPage() {
       })
       .map((f) => {
         const fv = toCalendarDateStr(f.fecha_vencimiento) || String(f.fecha_vencimiento).slice(0, 10);
-        const estaVencida = f.saldo > 0 && fv.length >= 10 && fv < hoyStr;
-        const estadoEfectivo: EstadoFactura = estaVencida ? "Vencido" : f.estado;
-        const diasMora = estaVencida
-          ? Math.floor(
-              (new Date().getTime() - new Date(`${fv}T00:00:00`).getTime()) /
-              86_400_000
-            )
-          : 0;
+        const estadoEfectivo = estadoFacturaParaUi(f, hoyStr) as EstadoFactura;
+        const diasMora =
+          estadoEfectivo === "Vencido" && fv.length >= 10
+            ? Math.floor(
+                (new Date().getTime() - new Date(`${fv}T00:00:00`).getTime()) /
+                  86_400_000
+              )
+            : 0;
         return { ...f, _estadoEfectivo: estadoEfectivo, _diasMora: diasMora };
       });
   }, [facturasFiltradas, hoyStr]);
@@ -754,7 +755,7 @@ export default function GestionClientesPage() {
   const cntVencidas     = facturasOrdenadas.filter((f) => f._estadoEfectivo === "Vencido").length;
   const cntPendientes   = facturasOrdenadas.filter((f) => f._estadoEfectivo === "Pendiente").length;
   const cntPagadas      = facturasOrdenadas.filter((f) => f._estadoEfectivo === "Pagado").length;
-  const cntCorregidaNc  = facturasOrdenadas.filter((f) => f.estado === "Corregida NC").length;
+  const cntCorregidaNc  = facturasOrdenadas.filter((f) => f._estadoEfectivo === "Corregida NC").length;
 
   const sifenPorFactura = useFacturaSifenEstados(facturasOrdenadas.map((f) => f.id));
 
