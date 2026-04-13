@@ -131,13 +131,13 @@ function FacturaDetalleInner() {
 
   if (loadingF) {
     return (
-      <div className="max-w-4xl mx-auto py-20 text-center text-sm text-slate-400">Cargando factura…</div>
+      <div className="max-w-6xl mx-auto py-20 text-center text-sm text-slate-400">Cargando factura…</div>
     );
   }
 
   if (notFound) {
     return (
-      <div className="max-w-4xl mx-auto py-20 text-center space-y-3">
+      <div className="max-w-6xl mx-auto py-20 text-center space-y-3">
         <p className="text-slate-600">Factura no encontrada.</p>
         <Link href="/gestion-clientes" className="text-[#0EA5E9] text-sm font-medium hover:underline">
           Volver a gestión de clientes
@@ -148,7 +148,7 @@ function FacturaDetalleInner() {
 
   if (loadErr || !factura) {
     return (
-      <div className="max-w-4xl mx-auto py-20 text-center space-y-3">
+      <div className="max-w-6xl mx-auto py-20 text-center space-y-3">
         <p className="text-red-600 text-sm">{loadErr ?? "Error"}</p>
         <Link href="/gestion-clientes" className="text-[#0EA5E9] text-sm font-medium hover:underline">
           Volver
@@ -160,7 +160,7 @@ function FacturaDetalleInner() {
   const monedaLabel = factura.moneda === "USD" ? "USD" : "Gs.";
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 py-6 px-4 print:px-0">
+    <div className="max-w-6xl mx-auto space-y-6 py-6 px-4 sm:px-6 print:px-0 w-full">
       <div className="flex flex-wrap items-start justify-between gap-4 print:hidden">
         <div>
           <Link href="/gestion-clientes" className="text-xs font-medium text-[#0EA5E9] hover:underline">
@@ -244,7 +244,7 @@ export default function FacturaDetallePage() {
   return (
     <Suspense
       fallback={
-        <div className="max-w-4xl mx-auto py-20 text-center text-sm text-slate-400">Cargando factura…</div>
+        <div className="max-w-6xl mx-auto py-20 text-center text-sm text-slate-400">Cargando factura…</div>
       }
     >
       <FacturaDetalleInner />

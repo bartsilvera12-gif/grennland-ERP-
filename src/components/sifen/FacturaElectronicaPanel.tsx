@@ -134,11 +134,13 @@ function resolverEstadoEmisionVisual(resumen: Resumen): {
           aprobacion: "rechazado",
         },
       };
-    case "error_envio":
+    case "error_envio": {
+      const ambSet =
+        resumen.sifen_ambiente === "produccion" ? "SET producción" : "SET (ambiente de pruebas)";
       return {
         mensaje: fe.error?.trim()
-          ? `El envío a SET (TEST) no se completó: ${fe.error.trim()}`
-          : "El envío del lote a SET (TEST) no se completó. Revisá el mensaje técnico abajo o reintentá.",
+          ? `El envío a ${ambSet} no se completó: ${fe.error.trim()}`
+          : `El envío del lote a ${ambSet} no se completó. Revisá el mensaje técnico abajo o reintentá.`,
         pasos: {
           ...soloComercial,
           borrador: "listo",
@@ -147,6 +149,7 @@ function resolverEstadoEmisionVisual(resumen: Resumen): {
           set: "rechazado",
         },
       };
+    }
     default:
       return {
         mensaje:
@@ -230,11 +233,11 @@ function mensajeConsultaSinFilasPorCdc(uc: SifenConsultaLoteUltimaPersistida): s
   const loteCancelado =
     codSinCeros === "365" || /\b0365\b/.test(rawCod) || msg.includes("cancelad");
   if (loteCancelado) {
-    return (
-      "SET respondió que el lote está cancelado y no incluyó filas por CDC. " +
+  return (
+    "SET respondió que el lote está cancelado y no incluyó filas por CDC. " +
       "Eso es habitual cuando recibe-lote devolvió 0301 (todos los DE rechazados): el motivo del rechazo no se repite aquí por documento. " +
-      "Revisá en TEST duplicidad de timbrado + establecimiento + punto de expedición + número de documento, el XML frente al XSD y el certificado usado al firmar."
-    );
+      "Revisá duplicidad de timbrado + establecimiento + punto de expedición + número de documento, el XML frente al XSD y el certificado usado al firmar."
+  );
   }
   return (
     "Sin detalle por CDC en esta respuesta. Si el envío fue hace poco, el lote podría seguir en proceso: reintentá la consulta en unos minutos."
@@ -526,21 +529,24 @@ export function FacturaElectronicaPanel({
   const deAprobado = Boolean(fe && String(estado) === "aprobado");
 
   return (
-    <div className="space-y-4">
-      <FacturaCorreccionFiscalNC
-        facturaId={facturaId}
-        clienteId={clienteId}
-        clienteDisplay={facturaComercial.cliente_display}
-        monto={facturaComercial.monto}
-        saldo={facturaComercial.saldo}
-        estado={facturaComercial.estado}
-        moneda={facturaComercial.moneda}
-        puedeCancelarDe={Boolean(resumen?.cancelacion?.puede_cancelar)}
-        deAprobado={deAprobado}
-        onAfterNcMutation={onComercialUpdated}
-      />
+    <div className="space-y-6 w-full min-w-0">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        <div className="xl:col-span-5 min-w-0">
+          <FacturaCorreccionFiscalNC
+            facturaId={facturaId}
+            clienteId={clienteId}
+            clienteDisplay={facturaComercial.cliente_display}
+            monto={facturaComercial.monto}
+            saldo={facturaComercial.saldo}
+            estado={facturaComercial.estado}
+            moneda={facturaComercial.moneda}
+            puedeCancelarDe={Boolean(resumen?.cancelacion?.puede_cancelar)}
+            deAprobado={deAprobado}
+            onAfterNcMutation={onComercialUpdated}
+          />
+        </div>
 
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5 space-y-4">
+        <div className="xl:col-span-7 rounded-xl border border-slate-200 bg-white shadow-sm p-5 sm:p-6 space-y-4 min-w-0">
       <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide border-b border-slate-100 pb-2">
         Facturación electrónica (SIFEN)
       </h3>
@@ -554,9 +560,10 @@ export function FacturaElectronicaPanel({
       {!loadingResumen && resumen && (
         <>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pt-1">
-            Detalle técnico y acciones
+            Detalle y acciones
           </p>
-          <div className="grid gap-2 text-sm">
+          <div className="grid gap-4 lg:grid-cols-2 lg:gap-6 text-sm">
+            <div className="space-y-3 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-slate-500">Estado SIFEN:</span>
               <SifenEstadoBadge estadoSifen={fe ? estado : null} mostrarPistaEnvioSet={false} />
@@ -625,8 +632,8 @@ export function FacturaElectronicaPanel({
                   </>
                 ) : (
                   <p className="text-xs text-slate-500">
-                    La cancelación del DE no está disponible. Usá el bloque «Corrección fiscal» arriba para la nota de
-                    crédito cuando corresponda.
+                    La cancelación del DE no está disponible. Usá el bloque «Corrección fiscal» para la nota de crédito
+                    cuando corresponda.
                   </p>
                 )}
               </div>
@@ -635,32 +642,40 @@ export function FacturaElectronicaPanel({
               <>
                 <p className="text-slate-600">
                   <span className="text-slate-400">ID documento electrónico:</span>{" "}
-                  <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">{fe.id}</code>
-                </p>
-                <p className="text-slate-600 break-all">
-                  <span className="text-slate-400">xml_path:</span>{" "}
-                  <code className="text-xs">{fe.xml_path ?? "—"}</code>
-                </p>
-                <p className="text-slate-600 break-all">
-                  <span className="text-slate-400">xml_firmado_path:</span>{" "}
-                  <code className="text-xs">{fe.xml_firmado_path ?? "—"}</code>
+                  <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded break-all">{fe.id}</code>
                 </p>
                 {fe.cdc && (
                   <p className="text-slate-600 break-all">
-                    <span className="text-slate-400">CDC:</span> <code className="text-xs">{fe.cdc}</code>
+                    <span className="text-slate-400">CDC:</span> <code className="text-xs break-all">{fe.cdc}</code>
                   </p>
                 )}
                 {fe.sifen_d_prot_cons_lote?.trim() && (
                   <p className="text-slate-600 break-all">
                     <span className="text-slate-400">dProtConsLote (SET):</span>{" "}
-                    <code className="text-xs">{fe.sifen_d_prot_cons_lote}</code>
+                    <code className="text-xs break-all">{fe.sifen_d_prot_cons_lote}</code>
                   </p>
                 )}
-                {ultimaConsulta && (
-                  <div className="rounded-lg border border-sky-100 bg-sky-50/60 px-3 py-2 text-xs space-y-1.5">
-                    <p className="font-semibold text-sky-900">
-                      Última consulta lote ({etiquetaAmbienteSet})
+                <details className="rounded-lg border border-slate-200 bg-slate-50/50 text-xs">
+                  <summary className="cursor-pointer px-3 py-2 font-semibold text-slate-600 select-none">
+                    Rutas de almacenamiento (XML)
+                  </summary>
+                  <div className="px-3 pb-3 pt-0 space-y-2 text-slate-600">
+                    <p className="break-all">
+                      <span className="text-slate-400">xml_path:</span>{" "}
+                      <code className="text-[11px]">{fe.xml_path ?? "—"}</code>
                     </p>
+                    <p className="break-all">
+                      <span className="text-slate-400">xml_firmado_path:</span>{" "}
+                      <code className="text-[11px]">{fe.xml_firmado_path ?? "—"}</code>
+                    </p>
+                  </div>
+                </details>
+                {ultimaConsulta && (
+                  <details className="rounded-lg border border-sky-200 bg-sky-50/50 text-xs open:shadow-sm">
+                    <summary className="cursor-pointer px-3 py-2 font-semibold text-sky-950 select-none">
+                      Respuesta consulta lote ({etiquetaAmbienteSet})
+                    </summary>
+                    <div className="px-3 pb-3 pt-0 space-y-2 max-h-[min(420px,55vh)] overflow-y-auto">
                     <p className="text-slate-700">
                       <span className="text-slate-500">dCodResLot:</span>{" "}
                       <code className="bg-white/80 px-1 rounded">
@@ -704,17 +719,20 @@ export function FacturaElectronicaPanel({
                     {ultimaConsulta.soapFault && ultimaConsulta.faultString && (
                       <p className="text-red-700">Fault: {ultimaConsulta.faultString}</p>
                     )}
-                  </div>
+                    </div>
+                  </details>
                 )}
                 {mostrarErrorPersistido && (
-                  <div className="rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm px-3 py-2 whitespace-pre-wrap">
+                  <div className="rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm px-3 py-2 whitespace-pre-wrap break-words">
                     <span className="font-semibold">Error: </span>
                     {decodeXmlNumericEntities(fe.error ?? "")}
                   </div>
                 )}
               </>
             )}
-          </div>
+            </div>
+
+            <div className="space-y-3 min-w-0 lg:border-l lg:border-slate-100 lg:pl-6">
 
           {flash && (
             <div
@@ -817,6 +835,8 @@ export function FacturaElectronicaPanel({
               </p>
             </div>
           )}
+            </div>
+          </div>
         </>
       )}
 
@@ -873,7 +893,8 @@ export function FacturaElectronicaPanel({
         </div>
       )}
 
-    </div>
+        </div>
+      </div>
     </div>
   );
 }
