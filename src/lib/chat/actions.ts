@@ -164,6 +164,7 @@ export async function fetchChatConversations(
 
   if (error) throw new Error(error.message);
   let list = convs ?? [];
+  const totalAfterQuery = list.length;
 
   const sessionIds = [
     ...new Set(
@@ -195,11 +196,33 @@ export async function fetchChatConversations(
   const isActivelyBot = (row: Record<string, unknown>) =>
     isActivelyBotHandledConversation(row, activeFlowCodeSet, flowSessionById);
 
+  let classifiedAsActivelyBot = 0;
   if (vista === "inbox") {
-    list = list.filter((row) => !isActivelyBot(row as Record<string, unknown>));
+    list = list.filter((row) => {
+      const b = isActivelyBot(row as Record<string, unknown>);
+      if (b) classifiedAsActivelyBot += 1;
+      return !b;
+    });
   } else if (vista === "bot") {
-    list = list.filter((row) => isActivelyBot(row as Record<string, unknown>));
+    list = list.filter((row) => {
+      const b = isActivelyBot(row as Record<string, unknown>);
+      if (b) classifiedAsActivelyBot += 1;
+      return b;
+    });
   }
+
+  const botCount = vista === "bot" ? list.length : classifiedAsActivelyBot;
+  const inboxCount = vista === "inbox" ? list.length : totalAfterQuery - list.length;
+  console.log("[BOT-LIST]", {
+    vista,
+    empresa_id,
+    total: totalAfterQuery,
+    botCount,
+    inboxCount,
+    sessionMapSize: flowSessionById.size,
+    activeFlowCodes: activeFlowCodeSet.size,
+  });
+
   if (list.length === 0) return [];
 
   const channelIds = [

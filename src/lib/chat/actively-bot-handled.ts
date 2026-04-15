@@ -26,6 +26,16 @@ export function buildFlowSessionMap(rows: FlowSessionRowMin[] | null | undefined
 }
 
 /**
+ * Prueba nuclear (equivalente a `if (true) return false` en código):
+ * en Vercel / .env local setear `CHAT_BOT_IF_TRUE_RETURN_FALSE=true` → Bot queda vacío si esta función alimenta el listado.
+ */
+function debugForceInboxLikeTrue(): boolean {
+  return String(process.env.CHAT_BOT_IF_TRUE_RETURN_FALSE ?? "")
+    .trim()
+    .toLowerCase() === "true";
+}
+
+/**
  * `true` solo si en este momento hay automatización de flujo **vigente** (sesión `active` en BD),
  * flujo publicado como activo en `chat_flows`, sin toma humana, y datos coherentes (sin legado incoherente).
  */
@@ -34,23 +44,51 @@ export function isActivelyBotHandledConversation(
   activeFlowCodeSet: Set<string>,
   sessionById: Map<string, FlowSessionRowMin>
 ): boolean {
-  if (Boolean((conv as { human_taken_over?: boolean }).human_taken_over)) return false;
+  if (debugForceInboxLikeTrue()) {
+    const conversationId = String((conv as { id?: string }).id ?? "").trim();
+    console.log("[BOT-DEBUG]", {
+      conversation_id: conversationId,
+      flow_status: String((conv as { flow_status?: string | null }).flow_status ?? "").trim(),
+      flow_code: String((conv as { flow_code?: string | null }).flow_code ?? "").trim(),
+      active_flow_session_id: String(
+        (conv as { active_flow_session_id?: string | null }).active_flow_session_id ?? ""
+      ).trim(),
+      hasActiveSession: false,
+      result: false,
+      forced: true,
+    });
+    return false;
+  }
 
+  const humanTaken = Boolean((conv as { human_taken_over?: boolean }).human_taken_over);
   const flowStatus = String((conv as { flow_status?: string | null }).flow_status ?? "").trim();
-  if (flowStatus === "human") return false;
-
   const conversationId = String((conv as { id?: string }).id ?? "").trim();
   const flowCode = String((conv as { flow_code?: string | null }).flow_code ?? "").trim();
-  if (!conversationId || !flowCode || !activeFlowCodeSet.has(flowCode)) return false;
-
   const sessionId = String((conv as { active_flow_session_id?: string | null }).active_flow_session_id ?? "").trim();
-  if (!sessionId) return false;
 
-  const sess = sessionById.get(sessionId);
-  if (!sess) return false;
-  if (sess.status !== "active") return false;
-  if (sess.conversation_id !== conversationId) return false;
-  if (sess.flow_code !== flowCode) return false;
+  const sess = sessionId ? sessionById.get(sessionId) : undefined;
+  const hasActiveSession = Boolean(
+    sess &&
+      sess.status === "active" &&
+      sess.conversation_id === conversationId &&
+      sess.flow_code === flowCode
+  );
 
-  return true;
+  let result = false;
+  if (!humanTaken && flowStatus !== "human" && conversationId && flowCode && activeFlowCodeSet.has(flowCode) && sessionId) {
+    if (sess && sess.status === "active" && sess.conversation_id === conversationId && sess.flow_code === flowCode) {
+      result = true;
+    }
+  }
+
+  console.log("[BOT-DEBUG]", {
+    conversation_id: conversationId,
+    flow_status: flowStatus,
+    flow_code: flowCode,
+    active_flow_session_id: sessionId,
+    hasActiveSession,
+    result,
+  });
+
+  return result;
 }
