@@ -11,7 +11,7 @@ export type OmnicanalScope = {
   /** Rol en `chat_empresa_operator_roles`; null si no hay fila (ver `agentUsuarioIds` para fallback operador). */
   role: OmnicanalOperatorRole | null;
   /**
-   * Colas supervisadas (solo `supervisor`). Vacío en admin (acceso total) y en agente.
+   * Colas en `chat_queue_supervisors` (legacy / otros usos). Para conversaciones, el rol `supervisor` no filtra por esto.
    */
   queueIds: string[];
   /**
@@ -61,12 +61,13 @@ async function usuarioTieneFilaChatAgents(
  * Alcance omnicanal unificado para un usuario en una empresa.
  *
  * - **admin**: `queueIds` y `agentUsuarioIds` vacíos → sin filtro por estas listas (acceso total a nivel módulo cuando se aplique).
- * - **supervisor**: colas en `chat_queue_supervisors` + agentes en `chat_supervisor_agents`.
+ * - **supervisor**: solo conversaciones asignadas a agentes en `chat_supervisor_agents` (equipo). Las colas en
+ *   `chat_queue_supervisors` son opcionales para otros usos; **no** amplían el inbox/monitoreo por cola completa.
  * - **agente**: `agentUsuarioIds = [usuarioId]`, `queueIds` vacío.
  * - **sin rol** pero con fila en `chat_agents`: `role` null, `agentUsuarioIds = [usuarioId]` (vista mínima tipo operador).
  * - **sin rol** y sin `chat_agents`: todo vacío y `role` null.
  *
- * El filtrado en consultas lo aplican los módulos (inbox, monitoreo, etc.); historial/finalizadas pueden ignorar este scope.
+ * El filtrado en consultas lo aplican los módulos (inbox, monitoreo, historial, etc.).
  */
 export async function getOmnicanalScope(
   supabase: AppSupabaseClient,
@@ -234,6 +235,20 @@ export async function appendOmnicanalConversationScopeToQuery(
   const wrap = (b: any): OmnicanalScopedPostgrestBuilder => ({ builder: b });
 
   if (isOmnicanalAdminScope(scope)) return wrap(q);
+
+  /** Supervisor: solo equipo humano (`chat_supervisor_agents` → chat_agents), sin ver colas enteras ni chats sin asignar por cola. */
+  if (scope.role === "supervisor") {
+    const agentFkIds = await resolveChatAgentIdsForUsuarios(supabase, empresaId, scope.agentUsuarioIds);
+    if (agentFkIds.length === 0) {
+      if ((scope.agentUsuarioIds?.length ?? 0) > 0) {
+        console.warn(
+          "[appendOmnicanalConversationScopeToQuery] supervisor con agentes declarados pero sin filas chat_agents activas; alcance vacío."
+        );
+      }
+      return wrap(q.eq("id", NO_CONVERSATION_MATCH));
+    }
+    return wrap(q.in("assigned_agent_id", agentFkIds));
+  }
 
   const agentFkIds = await resolveChatAgentIdsForUsuarios(supabase, empresaId, scope.agentUsuarioIds);
   const queueIds = scope.queueIds ?? [];

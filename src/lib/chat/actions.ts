@@ -224,17 +224,15 @@ async function fetchChatConversationsUnsafe(
       qb = qb.eq("status", "closed");
     }
 
-    if (vista !== "historial") {
-      try {
-        const scope = await getOmnicanalScope(supabase, empresa_id, usuario_id);
-        const bypass = await shouldBypassOmnicanalConversationScope(catalogSr, usuario_id, scope);
-        if (!bypass) {
-          const { builder } = await appendOmnicanalConversationScopeToQuery(supabase, empresa_id, scope, qb);
-          qb = builder;
-        }
-      } catch (e) {
-        console.error("[fetchChatConversations] alcance omnicanal omitido (inbox estable):", e);
+    try {
+      const scope = await getOmnicanalScope(supabase, empresa_id, usuario_id);
+      const bypass = await shouldBypassOmnicanalConversationScope(catalogSr, usuario_id, scope);
+      if (!bypass) {
+        const { builder } = await appendOmnicanalConversationScopeToQuery(supabase, empresa_id, scope, qb);
+        qb = builder;
       }
+    } catch (e) {
+      console.error("[fetchChatConversations] alcance omnicanal omitido:", e);
     }
 
     const assignment = filters?.assignment ?? "all";

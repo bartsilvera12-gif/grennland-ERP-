@@ -5,6 +5,8 @@ import {
   appendOmnicanalConversationScopeToQuery,
   filterConversationIdsByOmnicanalScope,
   getOmnicanalScope,
+  isOmnicanalAdminScope,
+  resolveChatAgentIdsForUsuarios,
   resolveQueueIdsForUsuarios,
   shouldBypassOmnicanalConversationScope,
 } from "@/lib/chat/omnicanal-scope";
@@ -284,10 +286,9 @@ export async function listChatQueues(): Promise<ChatQueueListRow[]> {
 
   if (!bypass) {
     if (scope.role === "supervisor") {
-      const extra = await resolveQueueIdsForUsuarios(supabase, empresa_id, scope.agentUsuarioIds);
-      const union = [...new Set([...scope.queueIds, ...extra])];
-      if (union.length > 0) {
-        q = q.in("id", union);
+      const qids = await resolveQueueIdsForUsuarios(supabase, empresa_id, scope.agentUsuarioIds);
+      if (qids.length > 0) {
+        q = q.in("id", qids);
       } else {
         return [];
       }
@@ -366,10 +367,9 @@ export async function fetchMonitoringDashboard(): Promise<MonitoringDashboard> {
     .eq("is_active", true);
   if (!bypass) {
     if (scope.role === "supervisor") {
-      const extra = await resolveQueueIdsForUsuarios(supabase, empresa_id, scope.agentUsuarioIds);
-      const union = [...new Set([...scope.queueIds, ...extra])];
-      if (union.length > 0) {
-        queuesCountQ = queuesCountQ.in("id", union);
+      const qids = await resolveQueueIdsForUsuarios(supabase, empresa_id, scope.agentUsuarioIds);
+      if (qids.length > 0) {
+        queuesCountQ = queuesCountQ.in("id", qids);
       } else {
         queuesCountQ = queuesCountQ.eq("id", OMNICANAL_NO_MATCH_UUID);
       }
@@ -427,12 +427,36 @@ export async function fetchMonitoringDashboard(): Promise<MonitoringDashboard> {
       q = (await scopedConv(q)).builder;
       return await q;
     })(),
-    supabase
-      .from("chat_channels")
-      .select("*", { count: "exact", head: true })
-      .eq("empresa_id", empresa_id)
-      .eq("activo", true)
-      .eq("config_status", "active"),
+    (async () => {
+      if (bypass || isOmnicanalAdminScope(scope)) {
+        return await supabase
+          .from("chat_channels")
+          .select("*", { count: "exact", head: true })
+          .eq("empresa_id", empresa_id)
+          .eq("activo", true)
+          .eq("config_status", "active");
+      }
+      const agentFkIds = await resolveChatAgentIdsForUsuarios(supabase, empresa_id, scope.agentUsuarioIds);
+      if (agentFkIds.length === 0) {
+        return { count: 0, error: null };
+      }
+      const { data: chRows, error: chErr } = await supabase
+        .from("chat_conversations")
+        .select("channel_id")
+        .eq("empresa_id", empresa_id)
+        .not("channel_id", "is", null)
+        .in("assigned_agent_id", agentFkIds);
+      if (chErr) {
+        console.warn("[fetchMonitoringDashboard] active_channels:", chErr.message);
+        return { count: 0, error: null };
+      }
+      const uniq = new Set(
+        (chRows ?? [])
+          .map((r: { channel_id?: string | null }) => String(r.channel_id ?? "").trim())
+          .filter(Boolean)
+      );
+      return { count: uniq.size, error: null };
+    })(),
     (async () => {
       const colsFull =
         "id, status, last_message_at, created_at, queue_id, channel_id, contact_id, assigned_agent_id, assignment_wait_code";

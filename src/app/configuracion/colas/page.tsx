@@ -95,12 +95,16 @@ export default function ConfiguracionColasPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <nav className="flex items-center gap-2 text-sm text-slate-500">
+      <nav className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
         <Link href="/configuracion" className="hover:text-slate-800">
           Configuración
         </Link>
         <span>/</span>
         <span className="text-slate-800 font-medium">Colas y enrutamiento</span>
+        <span className="text-slate-300">·</span>
+        <Link href="/configuracion/omnicanal-equipos" className="text-[#0EA5E9] hover:underline font-medium">
+          Equipos y supervisión
+        </Link>
       </nav>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>

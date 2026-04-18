@@ -1,6 +1,12 @@
 "use server";
 
 import { requireEmpresaTenantServiceRole } from "@/lib/chat/empresa-tenant-service-role";
+import {
+  appendOmnicanalConversationScopeToQuery,
+  getOmnicanalScope,
+  isOmnicanalAdminScope,
+  shouldBypassOmnicanalConversationScope,
+} from "@/lib/chat/omnicanal-scope";
 
 export type FinalizedClosureListRow = {
   closure_id: string;
@@ -196,13 +202,35 @@ export async function listFinalizedClosures(
   page: number,
   page_size: number
 ): Promise<FinalizedClosuresListResult> {
-  const { supabase, catalogSr, empresa_id } = await requireEmpresaTenantServiceRole();
+  const { supabase, catalogSr, empresa_id, usuario_id } = await requireEmpresaTenantServiceRole();
   const ps = Math.min(Math.max(page_size, 5), 100);
   const p = Math.max(1, page);
   const from = (p - 1) * ps;
   const to = from + ps - 1;
 
   let conversationIdFilter: string[] | null = null;
+
+  const scope = await getOmnicanalScope(supabase, empresa_id, usuario_id);
+  const bypass = await shouldBypassOmnicanalConversationScope(catalogSr, usuario_id, scope);
+  let omnicanalConvIds: string[] | null = null;
+  if (!bypass && !isOmnicanalAdminScope(scope)) {
+    let cq = supabase.from("chat_conversations").select("id").eq("empresa_id", empresa_id);
+    cq = (await appendOmnicanalConversationScopeToQuery(supabase, empresa_id, scope, cq)).builder;
+    const { data: scopedConv, error: omnErr } = await cq.limit(15000);
+    if (omnErr) {
+      console.warn("[listFinalizedClosures] alcance omnicanal:", omnErr.message);
+      return { rows: [], total: 0, page: p, page_size: ps };
+    }
+    omnicanalConvIds = (scopedConv ?? [])
+      .map((r: { id?: string }) => String(r.id ?? "").trim())
+      .filter(Boolean);
+    if (omnicanalConvIds.length === 0) {
+      return { rows: [], total: 0, page: p, page_size: ps };
+    }
+    if (omnicanalConvIds.length >= 15000) {
+      console.warn("[listFinalizedClosures] alcance omnicanal truncado a 15000 conversaciones");
+    }
+  }
 
   const qTrim = filters.q?.trim() ?? "";
   if (qTrim) {
@@ -290,6 +318,13 @@ export async function listFinalizedClosures(
       if (conversationIdFilter !== null && conversationIdFilter.length === 0) {
         return { rows: [], total: 0, page: p, page_size: ps };
       }
+    }
+  }
+
+  if (omnicanalConvIds && omnicanalConvIds.length > 0) {
+    conversationIdFilter = intersectIds(conversationIdFilter, omnicanalConvIds);
+    if (conversationIdFilter.length === 0) {
+      return { rows: [], total: 0, page: p, page_size: ps };
     }
   }
 
