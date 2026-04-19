@@ -396,19 +396,51 @@ function mapUsuarioPickRows(data: unknown[]): UsuarioPickRow[] {
 
 /**
  * Equipos y supervisión: perfiles ERP supervisor (comparación normalizada: heredados con distinto casing).
+ *
+ * No filtrar por `estado = activo` aquí: el listado de /usuarios tampoco lo hace, y un supervisor
+ * "inactivo" seguía viéndose allí pero desaparecía de este selector (línea .eq("estado", "activo") previa).
+ * Se etiqueta (inactivo) en el nombre para el desplegable.
  */
 export async function repoListSupervisoresForEquiposPick(ctx: QueueAdminTenantContext): Promise<UsuarioPickRow[]> {
   const { data, error } = await ctx.catalogSr
     .from("usuarios")
-    .select("id, nombre, email, rol")
+    .select("id, nombre, email, rol, estado")
     .eq("empresa_id", ctx.empresa_id)
-    .eq("estado", "activo")
     .order("nombre", { ascending: true });
   if (error) throw new Error(error.message);
-  const filtered = (data ?? []).filter((row) =>
-    isErpRolSupervisor((row as { rol?: string | null }).rol)
-  );
-  return mapUsuarioPickRows(filtered);
+  const raw = data ?? [];
+  if (process.env.OMNICANAL_EQUIPOS_DEBUG === "1") {
+    // Misma fuente que /api/empresas/usuarios: zentra_erp.usuarios (cliente catalogSr = service role + schema zentra_erp)
+    console.info("[repoListSupervisoresForEquiposPick]", {
+      empresa_id: ctx.empresa_id,
+      source: "zentra_erp.usuarios",
+      countRow: raw.length,
+      byRol: raw.map((r) => ({
+        id: (r as { id: string }).id,
+        rol: (r as { rol?: string | null }).rol,
+        estado: (r as { estado?: string | null }).estado,
+        pasaFiltroSupervisor: isErpRolSupervisor((r as { rol?: string | null }).rol),
+      })),
+    });
+  }
+  const filtered = raw.filter((row) => isErpRolSupervisor((row as { rol?: string | null }).rol));
+  if (process.env.OMNICANAL_EQUIPOS_DEBUG === "1") {
+    console.info("[repoListSupervisoresForEquiposPick] tras isErpRolSupervisor", { count: filtered.length });
+  }
+  return filtered
+    .map((row) => {
+      const u = row as { id?: string; nombre?: string | null; email?: string | null; estado?: string | null };
+      const id = String(u.id ?? "").trim();
+      if (!id) return null;
+      const base = (u.nombre?.trim() || u.email || "—") as string;
+      const inactivo = String(u.estado ?? "").trim().toLowerCase() !== "activo";
+      return {
+        id,
+        nombre: inactivo ? `${base} (inactivo)` : base,
+        email: (u.email ?? "") as string,
+      };
+    })
+    .filter((x): x is UsuarioPickRow => x !== null);
 }
 
 /**
