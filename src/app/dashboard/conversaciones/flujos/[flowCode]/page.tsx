@@ -281,6 +281,8 @@ export default function FlowEditorPage() {
   const [savingSorteoLink, setSavingSorteoLink] = useState(false);
   const [sorteoIncompleteMsgDraft, setSorteoIncompleteMsgDraft] = useState("");
   const [savingSorteoIncompleteMsg, setSavingSorteoIncompleteMsg] = useState(false);
+  /** Evita pantalla completa «Cargando nodos…» en acciones rápidas (p. ej. crear bloque imagen). */
+  const [creatingBlockKey, setCreatingBlockKey] = useState<string | null>(null);
 
   const orderedNodes = useMemo(() => [...nodes].sort(compareFlowNodes), [nodes]);
 
@@ -342,8 +344,13 @@ export default function FlowEditorPage() {
     return friendlyNodeTitle(target);
   }
 
-  async function reload(): Promise<FlowNode[]> {
-    setLoading(true);
+  function blockBusyKey(nodeId: string, blockType: FlowNodeBlock["block_type"]) {
+    return `${nodeId}:${blockType}`;
+  }
+
+  async function reload(opts?: { soft?: boolean }): Promise<FlowNode[]> {
+    const fullScreen = opts?.soft !== true;
+    if (fullScreen) setLoading(true);
     try {
       const res = await fetchWithSupabaseSession(`/api/chat/flows/${encodeURIComponent(flowCode)}/nodes`, {
         credentials: "same-origin",
@@ -401,7 +408,7 @@ export default function FlowEditorPage() {
       setError(e instanceof Error ? e.message : "Error al cargar");
       return [];
     } finally {
-      setLoading(false);
+      if (fullScreen) setLoading(false);
     }
   }
 
@@ -676,7 +683,7 @@ export default function FlowEditorPage() {
     setSuccess(`Opción creada en ${prettifyCode(node.node_code)}.`);
   }
 
-  async function createBlock(node: FlowNode, blockType: FlowNodeBlock["block_type"]) {
+  async function createBlock(node: FlowNode, blockType: FlowNodeBlock["block_type"]): Promise<FlowNodeBlock | null> {
     const res = await fetchWithSupabaseSession(
       `/api/chat/flows/${encodeURIComponent(flowCode)}/nodes/${encodeURIComponent(node.node_code)}/blocks`,
       {
@@ -691,8 +698,15 @@ export default function FlowEditorPage() {
         }),
       }
     );
-    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-    if (!res.ok || !json.ok) throw new Error(json.error ?? "No se pudo crear bloque");
+    const raw = await res.text();
+    let json: { ok?: boolean; error?: string; item?: FlowNodeBlock } = {};
+    try {
+      json = raw ? (JSON.parse(raw) as typeof json) : {};
+    } catch {
+      throw new Error(raw.trim().slice(0, 280) || `Respuesta inválida del servidor (HTTP ${res.status}).`);
+    }
+    if (!res.ok || !json.ok) throw new Error(json.error ?? `No se pudo crear bloque (HTTP ${res.status}).`);
+    return json.item ?? null;
   }
 
   async function saveBlock(node: FlowNode, block: FlowNodeBlock) {
@@ -1202,17 +1216,37 @@ export default function FlowEditorPage() {
                   ) : (
                     <button
                       type="button"
-                      className="inline-flex items-center rounded-lg bg-[#0EA5E9] px-4 py-2 text-sm font-medium text-white hover:bg-[#0284C7]"
+                      disabled={creatingBlockKey === blockBusyKey(node.id, "image")}
+                      className="inline-flex items-center rounded-lg bg-[#0EA5E9] px-4 py-2 text-sm font-medium text-white hover:bg-[#0284C7] disabled:opacity-60 disabled:pointer-events-none"
                       onClick={async () => {
+                        const busy = blockBusyKey(node.id, "image");
+                        setError(null);
+                        setCreatingBlockKey(busy);
                         try {
-                          await createBlock(node, "image");
-                          await reload();
+                          const item = await createBlock(node, "image");
+                          if (item) {
+                            setNodes((prev) =>
+                              prev.map((n) => {
+                                if (n.id !== node.id) return n;
+                                const merged = [...n.blocks.filter((b) => b.id !== item.id), item].sort(
+                                  (a, b) => a.sort_order - b.sort_order
+                                );
+                                return { ...n, blocks: merged };
+                              })
+                            );
+                          }
+                          await reload({ soft: true });
+                          setSuccess("Podés pegar la URL, subir un archivo o escribir el texto debajo de la imagen.");
                         } catch (e) {
                           setError(e instanceof Error ? e.message : "Error al preparar mensaje con imagen");
+                        } finally {
+                          setCreatingBlockKey((k) => (k === busy ? null : k));
                         }
                       }}
                     >
-                      Configurar imagen y texto
+                      {creatingBlockKey === blockBusyKey(node.id, "image")
+                        ? "Preparando…"
+                        : "Configurar imagen y texto"}
                     </button>
                   )}
                 </div>
@@ -1314,17 +1348,98 @@ export default function FlowEditorPage() {
                   </div>
                   <div className="flex gap-2">
                     {node.node_type !== "media" && (
-                      <button type="button" className="text-xs text-[#0EA5E9] hover:underline" onClick={async () => {
-                        try { await createBlock(node, "text"); await reload(); } catch (e) { setError(e instanceof Error ? e.message : "Error"); }
-                      }}>+ Texto</button>
+                      <button
+                        type="button"
+                        disabled={creatingBlockKey === blockBusyKey(node.id, "text")}
+                        className="text-xs text-[#0EA5E9] hover:underline disabled:opacity-50"
+                        onClick={async () => {
+                          const busy = blockBusyKey(node.id, "text");
+                          setCreatingBlockKey(busy);
+                          try {
+                            const item = await createBlock(node, "text");
+                            if (item) {
+                              setNodes((prev) =>
+                                prev.map((n) => {
+                                  if (n.id !== node.id) return n;
+                                  const merged = [...n.blocks.filter((b) => b.id !== item.id), item].sort(
+                                    (a, b) => a.sort_order - b.sort_order
+                                  );
+                                  return { ...n, blocks: merged };
+                                })
+                              );
+                            }
+                            await reload({ soft: true });
+                          } catch (e) {
+                            setError(e instanceof Error ? e.message : "Error");
+                          } finally {
+                            setCreatingBlockKey((k) => (k === busy ? null : k));
+                          }
+                        }}
+                      >
+                        + Texto
+                      </button>
                     )}
-                    <button type="button" className="text-xs text-[#0EA5E9] hover:underline" onClick={async () => {
-                      try { await createBlock(node, "image"); await reload(); } catch (e) { setError(e instanceof Error ? e.message : "Error"); }
-                    }}>+ Imagen</button>
+                    <button
+                      type="button"
+                      disabled={creatingBlockKey === blockBusyKey(node.id, "image")}
+                      className="text-xs text-[#0EA5E9] hover:underline disabled:opacity-50"
+                      onClick={async () => {
+                        const busy = blockBusyKey(node.id, "image");
+                        setCreatingBlockKey(busy);
+                        try {
+                          const item = await createBlock(node, "image");
+                          if (item) {
+                            setNodes((prev) =>
+                              prev.map((n) => {
+                                if (n.id !== node.id) return n;
+                                const merged = [...n.blocks.filter((b) => b.id !== item.id), item].sort(
+                                  (a, b) => a.sort_order - b.sort_order
+                                );
+                                return { ...n, blocks: merged };
+                              })
+                            );
+                          }
+                          await reload({ soft: true });
+                        } catch (e) {
+                          setError(e instanceof Error ? e.message : "Error");
+                        } finally {
+                          setCreatingBlockKey((k) => (k === busy ? null : k));
+                        }
+                      }}
+                    >
+                      + Imagen
+                    </button>
                     {node.node_type !== "media" && (
-                      <button type="button" className="text-xs text-[#0EA5E9] hover:underline" onClick={async () => {
-                        try { await createBlock(node, "buttons"); await reload(); } catch (e) { setError(e instanceof Error ? e.message : "Error"); }
-                      }}>+ Botones</button>
+                      <button
+                        type="button"
+                        disabled={creatingBlockKey === blockBusyKey(node.id, "buttons")}
+                        className="text-xs text-[#0EA5E9] hover:underline disabled:opacity-50"
+                        onClick={async () => {
+                          const busy = blockBusyKey(node.id, "buttons");
+                          setCreatingBlockKey(busy);
+                          try {
+                            const item = await createBlock(node, "buttons");
+                            if (item) {
+                              setNodes((prev) =>
+                                prev.map((n) => {
+                                  if (n.id !== node.id) return n;
+                                  const merged = [...n.blocks.filter((b) => b.id !== item.id), item].sort(
+                                    (a, b) => a.sort_order - b.sort_order
+                                  );
+                                  return { ...n, blocks: merged };
+                                })
+                              );
+                            }
+                            await reload({ soft: true });
+                          } catch (e) {
+                            setError(e instanceof Error ? e.message : "Error");
+                          } finally {
+                            setCreatingBlockKey((k) => (k === busy ? null : k));
+                          }
+                        }}
+                      >
+                        + Botones
+                      </button>
                     )}
                   </div>
                 </div>
