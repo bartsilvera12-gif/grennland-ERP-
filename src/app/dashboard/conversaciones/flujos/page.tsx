@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  isLikelyDuplicateFlowError,
+  normalizeManualFlowCode,
+  pickUniqueFlowCode,
+  slugifyFlowCodeFromLabel,
+} from "@/lib/chat/flow-code-slug";
 import { getSorteoById } from "@/lib/sorteos/actions";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
@@ -31,19 +37,6 @@ function fmt(iso: string) {
   }
 }
 
-/** Código interno estable: letras minúsculas, números y guiones bajos (válido para `flow_code`). */
-function suggestedFlowCodeFromSorteoName(nombre: string): string {
-  const base = nombre
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 40);
-  if (base.length > 0) return `sorteo_${base}`;
-  return "sorteo_whatsapp";
-}
-
 function FlowsListContent() {
   const searchParams = useSearchParams();
   const sorteoIdParam = searchParams?.get("sorteo_id")?.trim() || null;
@@ -55,12 +48,31 @@ function FlowsListContent() {
   const [creating, setCreating] = useState(false);
   const [togglingCode, setTogglingCode] = useState<string | null>(null);
   const [duplicatingCode, setDuplicatingCode] = useState<string | null>(null);
-  const [newCode, setNewCode] = useState("");
-  const [newLabel, setNewLabel] = useState("");
+
+  /** Nombre que ve el usuario en la lista (campo principal). */
+  const [flowNombre, setFlowNombre] = useState("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  /** Solo si opciones avanzadas: sustituye la generación automática. */
+  const [manualFlowCode, setManualFlowCode] = useState("");
   const [duplicateFrom, setDuplicateFrom] = useState("");
+
   const prefilledSorteoRef = useRef(false);
 
-  async function reload() {
+  const existingCodes = useMemo(() => new Set(rows.map((r) => r.flow_code)), [rows]);
+
+  const previewBase = useMemo(() => {
+    if (advancedOpen && manualFlowCode.trim()) {
+      return normalizeManualFlowCode(manualFlowCode);
+    }
+    return slugifyFlowCodeFromLabel(flowNombre);
+  }, [advancedOpen, manualFlowCode, flowNombre]);
+
+  const previewResolved = useMemo(
+    () => pickUniqueFlowCode(previewBase || "flujo", existingCodes),
+    [previewBase, existingCodes],
+  );
+
+  async function reload(): Promise<FlowRow[]> {
     setLoading(true);
     try {
       const res = await fetchWithSupabaseSession("/api/chat/flows", {
@@ -73,11 +85,14 @@ function FlowsListContent() {
         items?: FlowRow[];
       };
       if (!res.ok || !json.ok) throw new Error(json.error ?? "Error al cargar flujos");
-      setRows(json.items ?? []);
+      const items = json.items ?? [];
+      setRows(items);
       setError(null);
       setSuccess(null);
+      return items;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al cargar flujos");
+      return [];
     } finally {
       setLoading(false);
     }
@@ -92,50 +107,84 @@ function FlowsListContent() {
     prefilledSorteoRef.current = true;
     void getSorteoById(sorteoIdParam).then((s) => {
       if (!s) return;
-      setNewCode((prev) => (prev.trim() ? prev : suggestedFlowCodeFromSorteoName(s.nombre)));
-      setNewLabel((prev) => (prev.trim() ? prev : s.nombre.trim() || suggestedFlowCodeFromSorteoName(s.nombre)));
+      setFlowNombre((prev) => (prev.trim() ? prev : s.nombre.trim()));
     });
   }, [sorteoIdParam]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    const flowCode = newCode.trim();
-    if (!flowCode) {
-      setError("Definí un flow_code: es el identificador técnico del flujo (ej. sorteo_navidad). Podés cambiarlo antes de crear.");
+    const nombre = flowNombre.trim();
+    if (!nombre) {
+      setError("Ingresá el nombre del flujo.");
       return;
     }
+
+    const base =
+      advancedOpen && manualFlowCode.trim()
+        ? normalizeManualFlowCode(manualFlowCode)
+        : slugifyFlowCodeFromLabel(nombre);
+
+    if (!base) {
+      setError("No se pudo generar el identificador interno. Probá otro nombre o editá el código en opciones avanzadas.");
+      return;
+    }
+
     setCreating(true);
     setError(null);
     setSuccess(null);
+
     try {
-      const res = await fetchWithSupabaseSession("/api/chat/flows", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          flow_code: flowCode,
-          label: newLabel.trim() || flowCode,
-          duplicate_from: duplicateFrom.trim() || undefined,
-        }),
-      });
-      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!res.ok || !json.ok) throw new Error(json.error ?? "Error al crear flujo");
-      setNewCode("");
-      setNewLabel("");
-      setDuplicateFrom("");
-      await reload();
-      const editorHref = `/configuracion/conversaciones/flujos/${encodeURIComponent(flowCode)}`;
-      setSuccess(
-        <>
-          Flujo «{flowCode}» creado correctamente.{" "}
-          <Link href={editorHref} className="font-semibold text-emerald-800 underline underline-offset-2">
-            Abrir editor del flujo
-          </Link>
-          {sorteoIdParam
-            ? " para vincular este sorteo y configurar los mensajes."
-            : " para asociar un sorteo y los pasos del WhatsApp."}
-        </>,
-      );
+      let list = rows;
+      let flowCode = pickUniqueFlowCode(base, new Set(list.map((r) => r.flow_code)));
+      let lastErr = "";
+
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const res = await fetchWithSupabaseSession("/api/chat/flows", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            flow_code: flowCode,
+            label: nombre,
+            duplicate_from: duplicateFrom.trim() || undefined,
+          }),
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          flow_code?: string;
+          error?: string;
+        };
+
+        if (res.ok && json.ok) {
+          const created = json.flow_code ?? flowCode;
+          list = await reload();
+          setFlowNombre("");
+          setManualFlowCode("");
+          setDuplicateFrom("");
+          setAdvancedOpen(false);
+
+          const editorHref = `/configuracion/conversaciones/flujos/${encodeURIComponent(created)}`;
+          setSuccess(
+            <>
+              Flujo creado.{" "}
+              <Link href={editorHref} className="font-semibold text-emerald-800 underline underline-offset-2">
+                Abrir editor
+              </Link>
+              {sorteoIdParam ? " para vincular el sorteo y los mensajes." : " para configurar mensajes y pasos."}
+            </>,
+          );
+          return;
+        }
+
+        lastErr = json.error ?? `HTTP ${res.status}`;
+        if (attempt < 5 && isLikelyDuplicateFlowError(lastErr)) {
+          list = await reload();
+          flowCode = pickUniqueFlowCode(base, new Set(list.map((r) => r.flow_code)));
+          continue;
+        }
+        throw new Error(lastErr || "Error al crear flujo");
+      }
+      throw new Error(lastErr || "No se pudo crear el flujo tras varios intentos.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error al crear flujo");
     } finally {
@@ -199,7 +248,7 @@ function FlowsListContent() {
       <div className="flex flex-wrap justify-between gap-3 items-start">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Flujos conversacionales</h1>
-          <p className="text-sm text-slate-500">Administración simple de flujos WhatsApp por empresa</p>
+          <p className="text-sm text-slate-600 mt-1">Creá el flujo que usará tu bot de WhatsApp</p>
         </div>
         <Link
           href="/configuracion/canales"
@@ -210,74 +259,93 @@ function FlowsListContent() {
       </div>
 
       {sorteoIdParam ? (
-        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-          Venís desde un sorteo: completá el formulario y después en{" "}
-          <strong>Editar</strong> del flujo elegí ese sorteo en la configuración del bot.
-        </div>
+        <p className="text-sm text-sky-800 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
+          Podés asociar este sorteo en el editor del flujo después de crearlo.
+        </p>
       ) : null}
 
       {error && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-2">{error}</div>}
       {success && <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">{success}</div>}
 
-      <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-        <p className="text-sm text-slate-600 leading-relaxed">
-          Crear un sorteo no crea solo el flujo de WhatsApp: aquí definís el{" "}
-          <strong className="text-slate-800">flow_code</strong> (identificador único interno, sin espacios). El nombre
-          que venís usando en el sorteo puede ir en <strong>label visible</strong>. Para atender compras por WhatsApp,
-          después abrís <strong>Editar</strong> en el flujo y allí vinculás el sorteo y los pasos del chat.
-        </p>
-        <form noValidate onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-          <div className="space-y-1 md:col-span-1">
-            <label htmlFor="flow-new-code" className="block text-xs font-semibold text-slate-600">
-              flow_code <span className="text-red-600">*</span>
-            </label>
-            <input
-              id="flow-new-code"
-              type="text"
-              autoComplete="off"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono"
-              placeholder="ej: sorteo_navidad"
-              value={newCode}
-              onChange={(e) => setNewCode(e.target.value)}
-              aria-describedby="flow-code-help"
-            />
-            <p id="flow-code-help" className="text-[11px] text-slate-500 leading-snug">
-              Solo letras minúsculas, números y guiones bajos. No es el nombre público del sorteo.
-            </p>
+      <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+        <form noValidate onSubmit={handleCreate} className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+            <div className="flex-1 min-w-0 space-y-1">
+              <label htmlFor="flow-nombre" className="block text-sm font-semibold text-slate-800">
+                Nombre del flujo
+              </label>
+              <input
+                id="flow-nombre"
+                type="text"
+                autoComplete="off"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm"
+                placeholder="Ej: Sorteo Kita Peña"
+                value={flowNombre}
+                onChange={(e) => setFlowNombre(e.target.value)}
+              />
+              <p className="text-xs text-slate-500">Así se verá en tu lista.</p>
+              <p className="text-xs text-slate-500 font-mono mt-2">
+                ID interno: <span className="text-slate-700">{previewResolved || "—"}</span>
+              </p>
+            </div>
+            <button
+              type="submit"
+              disabled={creating}
+              className="shrink-0 bg-[#0EA5E9] hover:bg-[#0284C7] disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm font-semibold"
+            >
+              {creating ? "Creando…" : "Crear flujo"}
+            </button>
           </div>
-          <div className="space-y-1 md:col-span-1">
-            <label htmlFor="flow-new-label" className="block text-xs font-semibold text-slate-600">
-              Nombre visible
+
+          <div className="rounded-lg border border-slate-100 bg-slate-50/80 overflow-hidden">
+            <label className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
+              <input
+                type="checkbox"
+                className="rounded border-slate-300 text-[#0EA5E9] focus:ring-[#0EA5E9]"
+                checked={advancedOpen}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setAdvancedOpen(on);
+                  if (!on) {
+                    setManualFlowCode("");
+                    setDuplicateFrom("");
+                  }
+                }}
+              />
+              Opciones avanzadas
             </label>
-            <input
-              id="flow-new-label"
-              type="text"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
-              placeholder="Cómo lo ves en la lista"
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-            />
+            {advancedOpen ? (
+              <div className="px-3 pb-3 pt-0 space-y-3 border-t border-slate-100">
+                <div className="space-y-1">
+                  <label htmlFor="flow-code-manual" className="block text-xs font-medium text-slate-600">
+                    ID interno personalizado (opcional)
+                  </label>
+                  <input
+                    id="flow-code-manual"
+                    type="text"
+                    autoComplete="off"
+                    className="w-full max-w-md border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
+                    placeholder="Vacío = se genera desde el nombre del flujo"
+                    value={manualFlowCode}
+                    onChange={(e) => setManualFlowCode(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="flow-duplicate-from" className="block text-xs font-medium text-slate-600">
+                    Copiar pasos desde otro flujo (opcional)
+                  </label>
+                  <input
+                    id="flow-duplicate-from"
+                    type="text"
+                    className="w-full max-w-md border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono bg-white"
+                    placeholder="ID interno del flujo plantilla"
+                    value={duplicateFrom}
+                    onChange={(e) => setDuplicateFrom(e.target.value)}
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
-          <div className="space-y-1 md:col-span-1">
-            <label htmlFor="flow-duplicate-from" className="block text-xs font-semibold text-slate-600">
-              Duplicar desde (opcional)
-            </label>
-            <input
-              id="flow-duplicate-from"
-              type="text"
-              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono"
-              placeholder="flow_code de otro flujo"
-              value={duplicateFrom}
-              onChange={(e) => setDuplicateFrom(e.target.value)}
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={creating}
-            className="bg-[#0EA5E9] hover:bg-[#0284C7] disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium"
-          >
-            {creating ? "Creando..." : "Crear flujo"}
-          </button>
         </form>
       </div>
 
@@ -286,29 +354,27 @@ function FlowsListContent() {
         {loading ? (
           <div className="p-6 text-sm text-slate-400 animate-pulse">Cargando...</div>
         ) : rows.length === 0 ? (
-          <div className="p-6 text-sm text-slate-500">
-            No hay flujos creados. Completá el flow_code arriba y pulsá Crear flujo (no es un error del sistema).
-          </div>
+          <div className="p-6 text-sm text-slate-500">Todavía no creaste ningún flujo.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="bg-slate-50 text-slate-600">
                 <tr>
-                  <th className="text-left px-4 py-2">flow_code</th>
-                  <th className="text-left px-4 py-2">nombre</th>
-                  <th className="text-left px-4 py-2">canal</th>
-                  <th className="text-left px-4 py-2">estado</th>
-                  <th className="text-left px-4 py-2">nodos</th>
-                  <th className="text-left px-4 py-2">sorteo</th>
-                  <th className="text-left px-4 py-2">actualizado</th>
-                  <th className="text-left px-4 py-2">acciones</th>
+                  <th className="text-left px-4 py-2">Nombre</th>
+                  <th className="text-left px-4 py-2">ID interno</th>
+                  <th className="text-left px-4 py-2">Canal</th>
+                  <th className="text-left px-4 py-2">Estado</th>
+                  <th className="text-left px-4 py-2">Nodos</th>
+                  <th className="text-left px-4 py-2">Sorteo</th>
+                  <th className="text-left px-4 py-2">Actualizado</th>
+                  <th className="text-left px-4 py-2">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className="border-t border-slate-100">
-                    <td className="px-4 py-2 font-mono">{r.flow_code}</td>
-                    <td className="px-4 py-2">{r.label || r.flow_code}</td>
+                    <td className="px-4 py-2 font-medium text-slate-800">{r.label || r.flow_code}</td>
+                    <td className="px-4 py-2 font-mono text-xs text-slate-500">{r.flow_code}</td>
                     <td className="px-4 py-2">{r.channel}</td>
                     <td className="px-4 py-2">
                       {r.activo ? <span className="text-emerald-600">Activo</span> : <span className="text-amber-600">Inactivo</span>}
