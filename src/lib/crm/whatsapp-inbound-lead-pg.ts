@@ -2,49 +2,16 @@
  * Alta de lead CRM + enlace a `chat_contacts` vía Postgres (mismo pool que webhooks YCloud).
  * Evita depender de que PostgREST exponga `crm_*` en schemas tenant (`erp_*`).
  *
- * Schemas `er_<uuid>` (solo omnicanal) no contienen `crm_*`: el FK de `chat_contacts.crm_prospecto_id`
- * apunta a `zentra_erp.crm_prospectos`. Se detecta con `information_schema` y se escribe CRM ahí.
+ * El schema donde se insertan prospectos debe coincidir con la FK real de `chat_contacts.crm_prospecto_id`.
  */
-import type { Pool, PoolClient } from "pg";
+import type { Pool } from "pg";
 import { quoteSchemaTable } from "@/lib/supabase/chat-pg-pool";
 import { assertAllowedChatDataSchema } from "@/lib/supabase/chat-data-schema";
 import { SUPABASE_APP_SCHEMA } from "@/lib/supabase/schema";
+import { resolveCrmProspectosSchemaForTenant, whatsappCrmLogs } from "@/lib/crm/crm-prospectos-pg";
+import { nextNumeroControlFromLast } from "@/lib/crm/numero-control";
 
 const LOG = "[crm][whatsapp-inbound-lead-pg]";
-
-/** Schemas `er_*` omnicanal suelen tener solo `chat_*`; CRM vive en la plantilla compartida. */
-async function resolveCrmDataSchema(client: PoolClient, chatSchema: string): Promise<string | null> {
-  const r1 = await client.query<{ ok: boolean }>(
-    `SELECT EXISTS (
-       SELECT 1 FROM information_schema.tables t
-       WHERE t.table_schema = $1 AND t.table_type = 'BASE TABLE' AND t.table_name = 'crm_prospectos'
-     ) AS ok`,
-    [chatSchema]
-  );
-  if (r1.rows[0]?.ok) return chatSchema;
-
-  const app = assertAllowedChatDataSchema(SUPABASE_APP_SCHEMA);
-  if (app === chatSchema) return null;
-
-  const r2 = await client.query<{ ok: boolean }>(
-    `SELECT EXISTS (
-       SELECT 1 FROM information_schema.tables t
-       WHERE t.table_schema = $1 AND t.table_type = 'BASE TABLE' AND t.table_name = 'crm_prospectos'
-     ) AS ok`,
-    [app]
-  );
-  if (r2.rows[0]?.ok) {
-    console.info(LOG, "crm_schema_plantilla", { chat_schema: chatSchema, crm_schema: app });
-    return app;
-  }
-  return null;
-}
-
-function nextNumeroControlFromLast(last: string | null | undefined): string {
-  const m = (last ?? "").match(/CRM-(\d+)/i);
-  const next = (parseInt(m?.[1] ?? "0", 10) || 0) + 1;
-  return `CRM-${String(next).padStart(6, "0")}`;
-}
 
 export async function ensureWhatsappInboundCrmLeadPg(input: {
   pool: Pool;
@@ -80,18 +47,32 @@ export async function ensureWhatsappInboundCrmLeadPg(input: {
       return { ok: false, error: "Contacto no encontrado (PG)" };
     }
     if (row0.crm_prospecto_id && String(row0.crm_prospecto_id).trim()) {
+      console.info(whatsappCrmLogs.FIND, "skip_already_linked", {
+        schema,
+        empresa_id: input.empresa_id,
+        prospecto_id: row0.crm_prospecto_id,
+      });
       await client.query("COMMIT");
       return { ok: true };
     }
 
-    const crmSchema = await resolveCrmDataSchema(client, schema);
-    if (!crmSchema) {
+    const resolved = await resolveCrmProspectosSchemaForTenant(client, schema);
+    if (!resolved) {
       await client.query("ROLLBACK");
       return {
         ok: false,
-        error: `No hay tabla crm_prospectos en "${schema}" ni en "${SUPABASE_APP_SCHEMA}"`,
+        error: `No hay tabla crm_prospectos resoluble para "${schema}" ni plantilla "${SUPABASE_APP_SCHEMA}"`,
       };
     }
+    const crmSchema = resolved.crmSchema;
+    console.info(whatsappCrmLogs.FIND, "crm_schema_resolved", {
+      schema_chat: schema,
+      crm_schema: crmSchema,
+      empresa_id: input.empresa_id,
+      resolved_via: resolved.source,
+      contact_id: input.contact_id,
+    });
+
     const ce = quoteSchemaTable(crmSchema, "crm_etapas");
     const cp = quoteSchemaTable(crmSchema, "crm_prospectos");
     const cn = quoteSchemaTable(crmSchema, "crm_notas");
@@ -112,6 +93,13 @@ export async function ensureWhatsappInboundCrmLeadPg(input: {
         etRows[0]?.codigo ??
         "LEAD";
       etapaCodigo = String(etapaCodigo || "LEAD").trim() || "LEAD";
+      console.info(whatsappCrmLogs.STAGE, "initial_etapa", {
+        schema_chat: schema,
+        crm_schema: crmSchema,
+        empresa_id: input.empresa_id,
+        etapa_codigo: etapaCodigo,
+        crm_etapas_rows: etRows.length,
+      });
       if (etRows.length === 0) {
         console.warn(LOG, "crm_etapas_vacío_usando_LEAD", {
           empresa_id: input.empresa_id,
@@ -122,6 +110,12 @@ export async function ensureWhatsappInboundCrmLeadPg(input: {
     } catch (e) {
       console.warn(LOG, "crm_etapas_omitido", e instanceof Error ? e.message : e);
       etapaCodigo = "LEAD";
+      console.info(whatsappCrmLogs.STAGE, "fallback_LEAD", {
+        schema_chat: schema,
+        crm_schema: crmSchema,
+        empresa_id: input.empresa_id,
+        etapa_codigo: etapaCodigo,
+      });
     }
 
     let creadoPor = "WhatsApp";
@@ -173,6 +167,14 @@ export async function ensureWhatsappInboundCrmLeadPg(input: {
       (lastNum.rows[0] as { numero_control?: string } | undefined)?.numero_control
     );
 
+    console.info(whatsappCrmLogs.FIND, "insert_prospecto", {
+      schema_chat: schema,
+      crm_schema: crmSchema,
+      empresa_id: input.empresa_id,
+      numero_control: numeroControl,
+      origen_creacion: "whatsapp",
+    });
+
     const ins = await client.query(
       `INSERT INTO ${cp} (
          empresa_id, numero_control, empresa, contacto, email, telefono,
@@ -202,6 +204,13 @@ export async function ensureWhatsappInboundCrmLeadPg(input: {
       return { ok: false, error: "Insert CRM sin id" };
     }
 
+    console.info(whatsappCrmLogs.FIND, "created", {
+      schema_chat: schema,
+      crm_schema: crmSchema,
+      empresa_id: input.empresa_id,
+      prospecto_id: prospectoId,
+    });
+
     const preview = input.first_message_preview?.trim();
     if (preview) {
       await client.query(
@@ -217,6 +226,13 @@ export async function ensureWhatsappInboundCrmLeadPg(input: {
        WHERE id = $2::uuid AND empresa_id = $3::uuid`,
       [prospectoId, input.contact_id, input.empresa_id]
     );
+
+    console.info(whatsappCrmLogs.LINK, "updated_chat_contact", {
+      schema_chat: schema,
+      empresa_id: input.empresa_id,
+      prospecto_id: prospectoId,
+      contact_id: input.contact_id,
+    });
 
     await client.query("COMMIT");
     console.info(LOG, "lead_creado", {

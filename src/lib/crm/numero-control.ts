@@ -1,5 +1,12 @@
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
 
+/** Siguiente numeración CRM-###### a partir del último valor conocido. */
+export function nextNumeroControlFromLast(last: string | null | undefined): string {
+  const m = (last ?? "").match(/CRM-(\d+)/i);
+  const next = (parseInt(m?.[1] ?? "0", 10) || 0) + 1;
+  return `CRM-${String(next).padStart(6, "0")}`;
+}
+
 /**
  * Reutiliza la misma lógica de numeración que el CRM:
  *  - busca el último numero_control
@@ -21,8 +28,6 @@ export async function generarNumeroControlFromSupabase(
   const { data } = await q;
 
   const last = data?.[0] as { numero_control?: string } | undefined;
-  const match = last?.numero_control?.match(/CRM-(\d+)/);
-  const next = (parseInt(match?.[1] ?? "0", 10) + 1);
-  return `CRM-${String(next).padStart(6, "0")}`;
+  return nextNumeroControlFromLast(last?.numero_control);
 }
 

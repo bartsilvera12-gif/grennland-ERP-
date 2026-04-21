@@ -4,6 +4,14 @@ import { generarNumeroControlFromSupabase } from "@/lib/crm/numero-control";
 import { getTenantSupabaseFromAuth } from "@/lib/supabase/tenant-api";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { API_ERRORS } from "@/lib/api/errors";
+import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
+import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
+import { isLikelyUnexposedTenantChatSchema } from "@/lib/supabase/chat-data-schema";
+import {
+  insertProspectoForEmpresaPg,
+  listProspectosForEmpresaPg,
+  getProspectoForEmpresaPg,
+} from "@/lib/crm/crm-prospectos-pg";
 
 /**
  * GET /api/crm/prospectos
@@ -15,6 +23,19 @@ export async function GET(request: NextRequest) {
     if (!ctx) {
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
+    const dataSchema = await fetchDataSchemaForEmpresaId(ctx.auth.empresa_id);
+    const pool = getChatPostgresPool();
+    if (pool && isLikelyUnexposedTenantChatSchema(dataSchema)) {
+      const pgList = await listProspectosForEmpresaPg(pool, dataSchema, ctx.auth.empresa_id);
+      if (pgList !== null) {
+        return NextResponse.json(successResponse(pgList));
+      }
+      return NextResponse.json(
+        errorResponse("No se pudieron listar prospectos vía Postgres (tenant no expuesto)"),
+        { status: 500 }
+      );
+    }
+
     const items = await listProspectosForEmpresa(ctx.supabase, ctx.auth.empresa_id);
     return NextResponse.json(successResponse(items));
   } catch (err) {
@@ -52,13 +73,15 @@ export async function POST(request: NextRequest) {
     }
 
     const sb = ctx.supabase;
-    const numeroControl = await generarNumeroControlFromSupabase(sb, empresaId);
+    const dataSchema = await fetchDataSchemaForEmpresaId(empresaId);
+    const pool = getChatPostgresPool();
+    const usePg = Boolean(pool && isLikelyUnexposedTenantChatSchema(dataSchema));
+
     const creadoPor =
       (typeof ctx.auth.user.email === "string" && ctx.auth.user.email.trim()) || null;
 
     const insert = {
       empresa_id: empresaId,
-      numero_control: numeroControl,
       empresa,
       contacto,
       email: typeof body.email === "string" && body.email.trim() ? body.email.trim().toLowerCase() : null,
@@ -78,7 +101,38 @@ export async function POST(request: NextRequest) {
       observaciones: typeof body.observaciones === "string" && body.observaciones.trim() ? body.observaciones.trim() : null,
     };
 
-    const { data, error } = await sb.from("crm_prospectos").insert([insert]).select("id").single();
+    if (usePg && pool) {
+      const created = await insertProspectoForEmpresaPg(pool, dataSchema, {
+        empresa_id: empresaId,
+        empresa: insert.empresa,
+        contacto: insert.contacto,
+        email: insert.email,
+        telefono: insert.telefono,
+        servicio: insert.servicio,
+        valor_estimado: insert.valor_estimado,
+        etapa: insert.etapa,
+        proxima_accion: insert.proxima_accion,
+        fecha_proxima_accion: insert.fecha_proxima_accion,
+        creado_por: insert.creado_por,
+        origen_creacion: insert.origen_creacion,
+        origen_detalle: insert.origen_detalle,
+        responsable: insert.responsable,
+        observaciones: insert.observaciones,
+      });
+      if (!created?.id) {
+        return NextResponse.json(errorResponse("No se pudo crear prospecto en tenant PG"), { status: 400 });
+      }
+      const prospectoPg = await getProspectoForEmpresaPg(pool, dataSchema, empresaId, created.id);
+      if (!prospectoPg) {
+        return NextResponse.json(errorResponse("Prospecto creado pero no se pudo leer"), { status: 500 });
+      }
+      return NextResponse.json(successResponse(prospectoPg));
+    }
+
+    const numeroControl = await generarNumeroControlFromSupabase(sb, empresaId);
+    const insertWithNum = { ...insert, numero_control: numeroControl };
+
+    const { data, error } = await sb.from("crm_prospectos").insert([insertWithNum]).select("id").single();
 
     if (error) {
       return NextResponse.json(errorResponse(error.message), { status: 400 });
