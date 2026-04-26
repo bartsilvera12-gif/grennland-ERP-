@@ -615,6 +615,8 @@ function GestionClientesPageInner() {
   const [facturaCobroModal, setFacturaCobroModal] = useState<Factura | null>(null);
   const [facturasDetalleAbierto, setFacturasDetalleAbierto] = useState(true);
   const [panelFiltrosFacturas, setPanelFiltrosFacturas] = useState(false);
+  /** Evita carrera: al limpiar, `?cliente=` aún no se quitó y el efecto URL→estado reabría la ficha. */
+  const omitirUrlASeleccion = useRef(false);
 
   const [filters, setFilters] = useState({
     fecha_desde:             "",
@@ -651,7 +653,11 @@ function GestionClientesPageInner() {
   );
 
   useEffect(() => {
-    const cid = searchParams?.get("cliente")?.trim();
+    const cid = searchParams?.get("cliente")?.trim() || null;
+    if (omitirUrlASeleccion.current) {
+      if (!cid) omitirUrlASeleccion.current = false;
+      return;
+    }
     if (!cid || clientes.length === 0) return;
     if (selected?.id === cid) return;
     const c = clientes.find((x) => x.id === cid);
@@ -689,8 +695,10 @@ function GestionClientesPageInner() {
   }
 
   function handleClearLookup() {
+    omitirUrlASeleccion.current = true;
     setSelected(null);
     setFacturas([]);
+    setFacturaCobroModal(null);
     limpiarFiltrosFacturas();
     setPanelFiltrosFacturas(false);
     router.replace("/gestion-clientes", { scroll: false });
