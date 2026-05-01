@@ -1,4 +1,10 @@
-import type { AppSupabaseClient } from "@/lib/supabase/schema";
+import { fetchDataSchemaForEmpresaId, createServiceRoleClientWithDbSchema } from "@/lib/supabase/empresa-data-schema";
+import { SUPABASE_APP_SCHEMA, type AppSupabaseClient } from "@/lib/supabase/schema";
+import {
+  ensureSorteoOrderViaDirectPostgres,
+  getSupabaseDirectPgConnectionString,
+  type DirectPgSorteoOk,
+} from "@/lib/sorteos/sorteo-order-direct-pg";
 import { flowTrace, summarizeFlowDataForTrace } from "@/lib/chat/flow-trace-log";
 import {
   SORTEO_COMPROBANTE_ESTADO_VALIDACION_FIELD,
@@ -17,6 +23,36 @@ export function buildSorteoIdempotencyKey(
 
 function norm(s: string | undefined): string {
   return (s ?? "").trim();
+}
+
+/** PostgREST no expone la RPC en cache / función ausente → fallback SQL directo. */
+function isRpcUnavailableError(error: { message?: string; code?: string }): boolean {
+  const m = (error.message ?? "").toLowerCase();
+  const c = error.code ?? "";
+  return (
+    c === "PGRST202" ||
+    m.includes("pgrst202") ||
+    m.includes("could not find the function") ||
+    m.includes("schema cache") ||
+    (m.includes("function") && m.includes("does not exist"))
+  );
+}
+
+function mapDirectPgOkToRpcRow(d: DirectPgSorteoOk): Record<string, unknown> {
+  return {
+    ok: true,
+    idempotent: d.idempotent,
+    entrada: {
+      id: d.entradaId,
+      numero_orden: d.numeroOrden,
+      cantidad_boletos: d.cantidadBoletos,
+      monto_total: d.montoTotal,
+      promo_nombre: d.promoNombre,
+      precio_fuente: d.precioFuente,
+      estado_pago: d.estadoPago,
+    },
+    cupones: d.cupones,
+  };
 }
 
 const FLOW_SORTEO_LOG = "[flow-sorteo]" as const;
@@ -927,6 +963,8 @@ export async function ensureSorteoOrderFromChat(
     rpcPayload.precio_regular_referencia = pricing.precioRegularReferencia;
   }
 
+  let revendedorId: string | null = null;
+  let codigoReferidoSnap: string | null = null;
   const sidTrim = input.flowSessionId?.trim() ?? null;
   if (sidTrim) {
     const { data: sRef } = await supabase
@@ -940,38 +978,103 @@ export async function ensureSorteoOrderFromChat(
     if (rid) {
       rpcPayload.revendedor_id = rid;
       rpcPayload.codigo_referido = csnap ?? "";
+      revendedorId = rid;
+      codigoReferidoSnap = csnap ?? null;
     }
   }
 
-  const { data, error } = await supabase.rpc("sorteos_ensure_order_from_chat", {
-    p: rpcPayload,
-  });
+  const dataSchema = await fetchDataSchemaForEmpresaId(input.empresaId);
+  const hasDirectPg = Boolean(getSupabaseDirectPgConnectionString());
 
-  if (error) {
-    flowTrace("sorteo_order_failed", {
-      conversation_id: input.conversationId,
-      flow_session_id_context: input.flowSessionId?.trim() ?? null,
-      flow_code: flowCode,
-      reason: "rpc_error",
-      message: error.message,
-    });
-    console.error(FLOW_SORTEO_LOG, "ensureSorteoOrderFromChat_outcome", {
-      path: "failed",
-      reason: "rpc_error",
-      error: error.message,
+  const directOrderArgs = {
+    schema: dataSchema,
+    empresaId: input.empresaId,
+    sorteoId,
+    conversationId: input.conversationId,
+    flowCode,
+    idempotencyKey,
+    whatsappNumero: input.whatsappNumero,
+    nombreCompleto: participant.nombre_completo,
+    cedula: participant.cedula || "",
+    ciudad: participant.ciudad || "",
+    cantidadBoletos: participant.cantidad_boletos,
+    comprobanteUrl: input.comprobanteUrl,
+    validadoPor: "chat_flow",
+    montoCompra: pricing.montoCompra,
+    promoNombre: pricing.promoNombre,
+    precioRegularReferencia: pricing.precioRegularReferencia,
+    revendedorId,
+    codigoReferidoSnapshot: codigoReferidoSnap,
+    comprobanteValidacionId: norm(flowData[SORTEO_COMPROBANTE_VALIDACION_ID_FIELD]) || null,
+  };
+
+  const msgFallback =
+    "No pudimos registrar tu compra en el sorteo. Intentá de nuevo en unos minutos o escribí a soporte.";
+
+  let row: Record<string, unknown> | null = null;
+
+  if (dataSchema !== SUPABASE_APP_SCHEMA) {
+    if (!hasDirectPg) {
+      return {
+        ok: false,
+        message:
+          "No hay conexión directa a la base de datos para registrar la compra. Contactá soporte.",
+      };
+    }
+    const directOut = await ensureSorteoOrderViaDirectPostgres(directOrderArgs);
+    if (!directOut.ok) {
+      return { ok: false, message: directOut.message };
+    }
+    row = mapDirectPgOkToRpcRow(directOut);
+    console.info(FLOW_SORTEO_LOG, "ensureSorteoOrderFromChat_path", {
+      path: "direct_pg_tenant",
+      schema: dataSchema,
       conversationId: input.conversationId,
-      flowCode,
-      sorteo_id: sorteoId,
-      archivo: "src/lib/sorteos/sorteo-order-from-chat.ts",
-      condicion: "supabase.rpc sorteos_ensure_order_from_chat devolvió error",
-      rpcError: error.message,
-      rpcCode: error.code,
-      rpcDetails: error.details,
     });
-    return { ok: false, message: error.message || "RPC sorteos_ensure_order_from_chat falló" };
-  }
+  } else {
+    const { data, error } = await supabase.rpc("sorteos_ensure_order_from_chat", {
+      p: rpcPayload,
+    });
 
-  const row = data as Record<string, unknown> | null;
+    if (error) {
+      flowTrace("sorteo_order_failed", {
+        conversation_id: input.conversationId,
+        flow_session_id_context: input.flowSessionId?.trim() ?? null,
+        flow_code: flowCode,
+        reason: "rpc_error",
+        message: error.message,
+      });
+      console.error(FLOW_SORTEO_LOG, "ensureSorteoOrderFromChat_outcome", {
+        path: "failed",
+        reason: "rpc_error",
+        error: error.message,
+        conversationId: input.conversationId,
+        flowCode,
+        sorteo_id: sorteoId,
+        archivo: "src/lib/sorteos/sorteo-order-from-chat.ts",
+        condicion: "supabase.rpc sorteos_ensure_order_from_chat devolvió error",
+        rpcError: error.message,
+        rpcCode: error.code,
+        rpcDetails: error.details,
+      });
+      if (hasDirectPg && isRpcUnavailableError(error)) {
+        const directOut = await ensureSorteoOrderViaDirectPostgres(directOrderArgs);
+        if (!directOut.ok) {
+          return { ok: false, message: directOut.message };
+        }
+        row = mapDirectPgOkToRpcRow(directOut);
+        console.info(FLOW_SORTEO_LOG, "ensureSorteoOrderFromChat_path", {
+          path: "direct_pg_fallback_after_rpc_missing",
+          schema: dataSchema,
+          conversationId: input.conversationId,
+        });
+      } else {
+        return { ok: false, message: msgFallback };
+      }
+    } else {
+      row = data as Record<string, unknown> | null;
+    }
+  }
   if (!row || typeof row.ok !== "boolean") {
     const invalidMsg = "Respuesta inválida del servidor (sorteo)";
     console.error(FLOW_SORTEO_LOG, "ensureSorteoOrderFromChat_outcome", {
@@ -983,7 +1086,7 @@ export async function ensureSorteoOrderFromChat(
       sorteo_id: sorteoId,
       archivo: "src/lib/sorteos/sorteo-order-from-chat.ts",
       condicion: "!row || typeof row.ok !== boolean",
-      rawData: data,
+      rawData: row,
     });
     return { ok: false, message: invalidMsg };
   }
@@ -1064,7 +1167,10 @@ export async function ensureSorteoOrderFromChat(
       ? precioFuenteRaw
       : "lista";
 
-  const { data: sorteoRow, error: sorteoNomErr } = await supabase
+  const dbForTenantTables =
+    dataSchema === SUPABASE_APP_SCHEMA ? supabase : createServiceRoleClientWithDbSchema(dataSchema);
+
+  const { data: sorteoRow, error: sorteoNomErr } = await dbForTenantTables
     .from("sorteos")
     .select("nombre")
     .eq("id", sorteoId)
@@ -1105,7 +1211,7 @@ export async function ensureSorteoOrderFromChat(
 
   const cvId = norm(flowData[SORTEO_COMPROBANTE_VALIDACION_ID_FIELD]);
   if (cvId && entradaId) {
-    await supabase
+    await dbForTenantTables
       .from("sorteo_entradas")
       .update({
         comprobante_validacion_id: cvId,
@@ -1113,7 +1219,7 @@ export async function ensureSorteoOrderFromChat(
       })
       .eq("id", entradaId)
       .eq("empresa_id", input.empresaId);
-    await supabase
+    await dbForTenantTables
       .from("chat_comprobante_validaciones")
       .update({
         sorteo_entrada_id: entradaId,
