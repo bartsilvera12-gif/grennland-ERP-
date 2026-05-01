@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { getSorteos } from "@/lib/sorteos/actions";
 import { parseMoneyPy } from "@/lib/sorteos/parse-money-py";
-import { optionPayloadFinalizesSorteoOrder } from "@/lib/sorteos/sorteo-order-from-chat";
+import { optionPayloadFinalizesSorteoOrder } from "@/lib/sorteos/sorteo-option-payload";
 
 type FlowNodeOption = {
   id: string;

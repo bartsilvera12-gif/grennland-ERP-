@@ -1,7 +1,11 @@
 /**
  * Creación de orden sorteo + cupones vía Postgres directo (sin PostgREST RPC).
  * Usado cuando `sorteos_ensure_order_from_chat` no está expuesto o falla PGRST202.
+ *
+ * Solo importar desde código servidor (API, flow engine). No desde `"use client"`.
  */
+import "server-only";
+
 import pg from "pg";
 
 const FLOW_SORTEO_LOG = "[flow-sorteo]" as const;

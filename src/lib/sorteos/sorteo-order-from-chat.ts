@@ -746,19 +746,7 @@ export function buildChatFlowDataUpsertsForSorteoOrder(
 export const SORTEO_COMPROBANTE_MEDIA_ID_FIELD = "sorteo_comprobante_media_id";
 export const SORTEO_COMPROBANTE_URL_FIELD = "sorteo_comprobante_url";
 
-/**
- * En el JSON `option_payload` del botón que cierra la compra (después de resumen/datos), incluir:
- * `{ "confirmar_orden_sorteo": true }` (o `finalize_sorteo_order` / `cerrar_compra_sorteo`).
- */
-export function optionPayloadFinalizesSorteoOrder(payload: unknown): boolean {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return false;
-  const o = payload as Record<string, unknown>;
-  for (const k of ["confirmar_orden_sorteo", "finalize_sorteo_order", "cerrar_compra_sorteo"] as const) {
-    const v = o[k];
-    if (v === true || v === "true" || v === "1" || v === 1) return true;
-  }
-  return false;
-}
+export { optionPayloadFinalizesSorteoOrder } from "@/lib/sorteos/sorteo-option-payload";
 
 export function resolveComprobanteUrlFromFlowData(data: Record<string, string>): string {
   const u = norm(data[SORTEO_COMPROBANTE_URL_FIELD]);
