@@ -29,6 +29,7 @@ const ALLOWED_TABLES = new Set([
   "chat_usuario_omnicanal",
   "sorteo_entradas",
   "sorteo_cupones",
+  "sorteo_ticket_deliveries",
   "sorteo_revendedor_clicks",
   "sorteo_revendedores",
   "sorteos",
