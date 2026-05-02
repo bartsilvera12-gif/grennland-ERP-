@@ -2,8 +2,13 @@ import type { Pool } from "pg";
 import {
   buildFlowSessionMap,
   conversationBelongsToBotTab,
+  explainConversationBotClassification,
+  maskPhonePartialForLog,
   type FlowSessionRowMin,
 } from "@/lib/chat/inbox-bot-tab-classification";
+import {
+  loadActiveFlowSessionsByConversationForInboxListPg,
+} from "@/lib/chat/inbox-list-flow-sessions";
 import { parseComprobanteValidationConfig } from "@/lib/chat/comprobante-validation-types";
 import {
   getOmnicanalScope,
@@ -279,7 +284,52 @@ export async function fetchChatConversationsFromTenantPg(
     }
   }
 
-  const classifyCtx = { activeFlowCodeSet, sessionById: flowSessionById };
+  const activeSessionByConversationId = await loadActiveFlowSessionsByConversationForInboxListPg(
+    pool,
+    dataSchema,
+    empresa_id,
+    list,
+    flowSessionById
+  );
+
+  if (
+    String(process.env.CHAT_REPAIR_FLOW_SESSION_POINTERS ?? "")
+      .trim()
+      .toLowerCase() === "true"
+  ) {
+    const convT = quoteSchemaTable(sch, "chat_conversations");
+    for (const row of list) {
+      const cid = String((row as { id?: unknown }).id ?? "").trim();
+      const sess = activeSessionByConversationId.get(cid);
+      const cur = String((row as { active_flow_session_id?: string | null }).active_flow_session_id ?? "").trim();
+      if (sess && cur !== sess.id) {
+        try {
+          await pool.query(
+            `UPDATE ${convT} SET active_flow_session_id = $1::uuid, updated_at = now() WHERE id = $2::uuid AND empresa_id = $3::uuid`,
+            [sess.id, cid, empresa_id]
+          );
+          (row as { active_flow_session_id?: string | null }).active_flow_session_id = sess.id;
+        } catch (e) {
+          console.warn("[chat-list] pg repair active_flow_session_id:", e instanceof Error ? e.message : e);
+        }
+      }
+    }
+  }
+
+  const classifyCtx = {
+    activeFlowCodeSet,
+    sessionById: flowSessionById,
+    activeSessionByConversationId,
+  };
+
+  const rowsSnapshotForLogs = (
+    String(process.env.CHAT_LIST_CLASSIFICATION_VERBOSE ?? "")
+      .trim()
+      .toLowerCase() === "true"
+      ? [...list]
+      : []
+  ) as Record<string, unknown>[];
+
   let botTabCount = 0;
   if (vista === "inbox") {
     botTabCount = list.filter((row) => conversationBelongsToBotTab(row, classifyCtx)).length;
@@ -299,7 +349,73 @@ export async function fetchChatConversationsFromTenantPg(
     bot_like_count: botTabCount,
     active_flow_codes: activeFlowCodeSet.size,
     session_map_size: flowSessionById.size,
+    active_sessions_by_conversation: activeSessionByConversationId.size,
   });
+
+  if (rowsSnapshotForLogs.length > 0) {
+    const contactIds = [
+      ...new Set(
+        rowsSnapshotForLogs
+          .map((r) => String((r as { contact_id?: string | null }).contact_id ?? "").trim())
+          .filter(Boolean)
+      ),
+    ];
+    const contactById: Record<string, { name: string | null; phone_number: string | null }> = {};
+    const contQt = quoteSchemaTable(sch, "chat_contacts");
+    const cchunk = 80;
+    for (let i = 0; i < contactIds.length; i += cchunk) {
+      const part = contactIds.slice(i, i + cchunk);
+      try {
+        const cr = await pool.query(
+          `SELECT id::text, name::text, phone_number::text FROM ${contQt}
+           WHERE empresa_id = $1::uuid AND id = ANY($2::uuid[])`,
+          [empresa_id, part]
+        );
+        for (const c of cr.rows ?? []) {
+          const row = c as { id?: string; name?: string | null; phone_number?: string | null };
+          const id = String(row.id ?? "").trim();
+          if (!id) continue;
+          contactById[id] = { name: row.name ?? null, phone_number: row.phone_number ?? null };
+        }
+      } catch (e) {
+        console.warn("[chat-list][classification-debug] contactos:", e instanceof Error ? e.message : e);
+      }
+    }
+
+    for (const row of rowsSnapshotForLogs) {
+      const ex = explainConversationBotClassification(row, classifyCtx);
+      const cid = String(row.id ?? "").trim();
+      const ctc = String((row as { contact_id?: string | null }).contact_id ?? "").trim();
+      const ct = ctc ? contactById[ctc] : undefined;
+      const label =
+        (ct?.name && String(ct.name).trim()) ||
+        maskPhonePartialForLog(ct?.phone_number ?? undefined) ||
+        "(sin contacto)";
+      console.info("[chat-list][classification-debug]", {
+        empresa_id,
+        schema: dataSchema,
+        vista,
+        source: "tenant_pg",
+        conversation_id: cid,
+        contact_label: label,
+        status: String(row.status ?? ""),
+        human_taken_over: Boolean(row.human_taken_over),
+        flow_status: String(row.flow_status ?? ""),
+        active_flow_session_id: String((row as { active_flow_session_id?: string | null }).active_flow_session_id ?? "") || null,
+        flow_code: String((row as { flow_code?: string | null }).flow_code ?? "") || null,
+        channel_id: String((row as { channel_id?: string | null }).channel_id ?? "") || null,
+        has_channel_flow: ex.flags.hasChannelFlow,
+        has_active_flow_session_from_table: ex.flags.hasActiveSessionInTable,
+        chat_flow_sessions: {
+          id: ex.resolvedSessionId,
+          status: ex.flags.sessionStatus,
+        },
+        result_is_bot_conversation: ex.isBot,
+        reason_not_bot: ex.isBot ? null : ex.reason,
+        flags: ex.flags,
+      });
+    }
+  }
 
   if (list.length === 0) return [];
 

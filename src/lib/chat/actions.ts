@@ -3,8 +3,13 @@
 import {
   buildFlowSessionMap,
   conversationBelongsToBotTab,
+  explainConversationBotClassification,
+  maskPhonePartialForLog,
   type FlowSessionRowMin,
 } from "@/lib/chat/inbox-bot-tab-classification";
+import {
+  loadActiveFlowSessionsByConversationForInboxList,
+} from "@/lib/chat/inbox-list-flow-sessions";
 import {
   SORTEO_COMPROBANTE_ESTADO_VALIDACION_FIELD,
   SORTEO_COMPROBANTE_MOTIVO_VALIDACION_FIELD,
@@ -409,7 +414,53 @@ async function fetchChatConversationsUnsafe(
     }
   }
 
-  const classifyCtx = { activeFlowCodeSet, sessionById: flowSessionById };
+  const activeSessionByConversationId = await loadActiveFlowSessionsByConversationForInboxList(
+    supabase,
+    empresa_id,
+    list,
+    flowSessionById
+  );
+
+  if (
+    String(process.env.CHAT_REPAIR_FLOW_SESSION_POINTERS ?? "")
+      .trim()
+      .toLowerCase() === "true"
+  ) {
+    for (const row of list) {
+      const cid = String((row as { id?: unknown }).id ?? "").trim();
+      const sess = activeSessionByConversationId.get(cid);
+      const cur = String((row as { active_flow_session_id?: string | null }).active_flow_session_id ?? "").trim();
+      if (sess && cur !== sess.id) {
+        const { error: repErr } = await supabase
+          .from("chat_conversations")
+          .update({
+            active_flow_session_id: sess.id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", cid)
+          .eq("empresa_id", empresa_id);
+        if (!repErr) {
+          (row as { active_flow_session_id?: string | null }).active_flow_session_id = sess.id;
+        } else {
+          console.warn("[chat-list] repair active_flow_session_id:", repErr.message);
+        }
+      }
+    }
+  }
+
+  const classifyCtx = {
+    activeFlowCodeSet,
+    sessionById: flowSessionById,
+    activeSessionByConversationId,
+  };
+  const rowsSnapshotForLogs = (
+    String(process.env.CHAT_LIST_CLASSIFICATION_VERBOSE ?? "")
+      .trim()
+      .toLowerCase() === "true"
+      ? [...list]
+      : []
+  ) as Record<string, unknown>[];
+
   const isBotRow = (row: Record<string, unknown>) => conversationBelongsToBotTab(row, classifyCtx);
 
   let botLikeCount = 0;
@@ -431,6 +482,7 @@ async function fetchChatConversationsUnsafe(
     bot_like_count: botLikeCount,
     active_flow_codes: activeFlowCodeSet.size,
     session_map_size: flowSessionById.size,
+    active_sessions_by_conversation: activeSessionByConversationId.size,
   });
   if (vista === "inbox") {
     console.info("[chat-list][inbox]", {
@@ -449,24 +501,61 @@ async function fetchChatConversationsUnsafe(
     });
   }
 
-  if (
-    String(process.env.CHAT_LIST_CLASSIFICATION_VERBOSE ?? "")
-      .trim()
-      .toLowerCase() === "true"
-  ) {
-    const sample = (convs ?? []).slice(0, 8) as Record<string, unknown>[];
-    for (const row of sample) {
+  if (rowsSnapshotForLogs.length > 0) {
+    const contactIds = [
+      ...new Set(
+        rowsSnapshotForLogs
+          .map((r) => String((r as { contact_id?: string | null }).contact_id ?? "").trim())
+          .filter(Boolean)
+      ),
+    ];
+    const contactById: Record<string, { name: string | null; phone_number: string | null }> = {};
+    const cchunk = 80;
+    for (let i = 0; i < contactIds.length; i += cchunk) {
+      const part = contactIds.slice(i, i + cchunk);
+      const { data: cRows } = await supabase
+        .from("chat_contacts")
+        .select("id, name, phone_number")
+        .eq("empresa_id", empresa_id)
+        .in("id", part);
+      for (const c of cRows ?? []) {
+        const cr = c as { id?: string; name?: string | null; phone_number?: string | null };
+        const id = String(cr.id ?? "").trim();
+        if (!id) continue;
+        contactById[id] = { name: cr.name ?? null, phone_number: cr.phone_number ?? null };
+      }
+    }
+
+    for (const row of rowsSnapshotForLogs) {
+      const ex = explainConversationBotClassification(row, classifyCtx);
       const cid = String(row.id ?? "").trim();
-      const sid = String(row.active_flow_session_id ?? "").trim();
-      console.info("[chat-list][classification]", {
+      const ctc = String((row as { contact_id?: string | null }).contact_id ?? "").trim();
+      const ct = ctc ? contactById[ctc] : undefined;
+      const label =
+        (ct?.name && String(ct.name).trim()) ||
+        maskPhonePartialForLog(ct?.phone_number ?? undefined) ||
+        "(sin contacto)";
+      console.info("[chat-list][classification-debug]", {
         empresa_id,
         schema: dataSchema,
+        vista,
         conversation_id: cid,
+        contact_label: label,
+        status: String(row.status ?? ""),
         human_taken_over: Boolean(row.human_taken_over),
         flow_status: String(row.flow_status ?? ""),
-        has_active_flow_session: sid.length > 0,
-        has_channel_flow: activeFlowCodeSet.size > 0,
-        belongs_bot_tab: isBotRow(row),
+        active_flow_session_id: String((row as { active_flow_session_id?: string | null }).active_flow_session_id ?? "") || null,
+        flow_code: String((row as { flow_code?: string | null }).flow_code ?? "") || null,
+        channel_id: String((row as { channel_id?: string | null }).channel_id ?? "") || null,
+        has_channel_flow: ex.flags.hasChannelFlow,
+        has_active_flow_session_from_table: ex.flags.hasActiveSessionInTable,
+        chat_flow_sessions: {
+          id: ex.resolvedSessionId,
+          status: ex.flags.sessionStatus,
+        },
+        result_is_bot_conversation: ex.isBot,
+        reason_not_bot: ex.isBot ? null : ex.reason,
+        flags: ex.flags,
       });
     }
   }

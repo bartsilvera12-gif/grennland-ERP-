@@ -892,6 +892,12 @@ export async function processInboundWebhookValue(
           flow_code: convFlow.trim(),
           active_flow_session_id: ensuredSid,
         });
+        if (ensuredSid) {
+          existingConv = {
+            ...existingConv,
+            active_flow_session_id: ensuredSid,
+          };
+        }
       }
 
       const logW = "[webhook/whatsapp][inbound]";

@@ -24,11 +24,16 @@ function debugForceInboxLikeTrue(): boolean {
 export function isActivelyBotHandledConversation(
   conv: Record<string, unknown>,
   activeFlowCodeSet: Set<string>,
-  sessionById: Map<string, FlowSessionRowMin>
+  sessionById: Map<string, FlowSessionRowMin>,
+  activeSessionByConversationId?: Map<string, FlowSessionRowMin>
 ): boolean {
   if (debugForceInboxLikeTrue()) {
     return false;
   }
-  const ctx: InboxBotClassificationInput = { activeFlowCodeSet, sessionById };
+  const ctx: InboxBotClassificationInput = {
+    activeFlowCodeSet,
+    sessionById,
+    activeSessionByConversationId,
+  };
   return conversationBelongsToBotTab(conv, ctx);
 }
