@@ -1,10 +1,8 @@
 "use server";
 
-import {
-  createSupabaseServerClient,
-  createSupabaseServerClientWithDbSchema,
-} from "@/lib/supabase/server";
-import { resolveEmpresaDataSchema } from "@/lib/supabase/schema";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
+import { getChatServiceClientForEmpresa } from "@/lib/supabase/chat-service-role-empresa";
 import { asuncionDayBoundsUtc, asuncionMonthBoundsUtc } from "@/lib/sorteos/kpis-time-bounds";
 import { getChatPostgresPool, quoteSchemaTable } from "@/lib/supabase/chat-pg-pool";
 import { assertAllowedChatDataSchema, isLikelyUnexposedTenantChatSchema } from "@/lib/supabase/chat-data-schema";
@@ -13,6 +11,8 @@ import { assertAllowedChatDataSchema, isLikelyUnexposedTenantChatSchema } from "
  * KPIs de ventas de sorteos (página principal).
  *
  * Tabla: `sorteo_entradas` en el schema de datos de la empresa (`data_schema` o plantilla legada).
+ * Lectura: mismo criterio que `/api/sorteos` — cliente service role / PG directo (no sesión anónima:
+ * con usuario logueado el PostgREST anon suele quedar bloqueado por RLS y los KPI quedaban en 0).
  * Criterio de fecha: created_at (momento en que se registró la orden en el ERP).
  * Boletos: suma de cantidad_boletos (excluye filas con estado_pago = 'rechazado').
  * Monto: suma de monto_total en la misma moneda de la fila (PYG), mismo filtro de estado.
@@ -60,12 +60,7 @@ export async function getSorteosVentasKpis(): Promise<SorteosVentasKpis> {
 
   const empresaId = usuario.empresa_id as string;
 
-  const { data: emp } = await catalog
-    .from("empresas")
-    .select("data_schema")
-    .eq("id", empresaId)
-    .maybeSingle();
-  const schema = resolveEmpresaDataSchema((emp as { data_schema?: string | null } | null)?.data_schema);
+  const schema = await fetchDataSchemaForEmpresaId(empresaId);
 
   const day = asuncionDayBoundsUtc();
   const month = asuncionMonthBoundsUtc();
@@ -105,7 +100,7 @@ export async function getSorteosVentasKpis(): Promise<SorteosVentasKpis> {
     }
   }
 
-  const supabase = await createSupabaseServerClientWithDbSchema(schema);
+  const supabase = await getChatServiceClientForEmpresa(empresaId);
 
   const [dayRes, monthRes] = await Promise.all([
     supabase
