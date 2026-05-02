@@ -2,9 +2,9 @@
 
 import {
   buildFlowSessionMap,
-  isActivelyBotHandledConversation,
+  conversationBelongsToBotTab,
   type FlowSessionRowMin,
-} from "@/lib/chat/actively-bot-handled";
+} from "@/lib/chat/inbox-bot-tab-classification";
 import {
   SORTEO_COMPROBANTE_ESTADO_VALIDACION_FIELD,
   SORTEO_COMPROBANTE_MOTIVO_VALIDACION_FIELD,
@@ -252,13 +252,9 @@ async function fetchChatConversationsUnsafe(
   const buildFilteredConversationQuery = async (selectStr: string) => {
     let qb = supabase.from("chat_conversations").select(selectStr).eq("empresa_id", empresa_id);
 
-    if (vista === "inbox") {
+    if (vista === "inbox" || vista === "bot") {
+      /** Misma base abierta/pendiente; Inbox vs Bot se resuelve en memoria (`conversationBelongsToBotTab`). */
       qb = qb.in("status", ["open", "pending"]);
-    } else if (vista === "bot") {
-      qb = qb
-        .eq("human_taken_over", false)
-        .in("status", ["open", "pending"])
-        .not("active_flow_session_id", "is", null);
     } else if (vista === "historial") {
       qb = qb.eq("status", "closed");
     }
@@ -413,34 +409,67 @@ async function fetchChatConversationsUnsafe(
     }
   }
 
-  const isActivelyBot = (row: Record<string, unknown>) =>
-    isActivelyBotHandledConversation(row, activeFlowCodeSet, flowSessionById);
+  const classifyCtx = { activeFlowCodeSet, sessionById: flowSessionById };
+  const isBotRow = (row: Record<string, unknown>) => conversationBelongsToBotTab(row, classifyCtx);
 
-  let classifiedAsActivelyBot = 0;
+  let botLikeCount = 0;
   if (vista === "inbox") {
-    /** Inbox lista todo lo abierto/pendiente; si ocultáramos «solo bot» los operadores no ven WhatsApp en flujo (inbox vacío). La pestaña Bot sigue filtrando solo automatización. */
-    for (const row of list) {
-      if (isActivelyBot(row as Record<string, unknown>)) classifiedAsActivelyBot += 1;
-    }
+    botLikeCount = list.filter((row) => isBotRow(row as Record<string, unknown>)).length;
+    list = list.filter((row) => !isBotRow(row as Record<string, unknown>));
   } else if (vista === "bot") {
-    list = list.filter((row) => {
-      const b = isActivelyBot(row as Record<string, unknown>);
-      if (b) classifiedAsActivelyBot += 1;
-      return b;
+    list = list.filter((row) => isBotRow(row as Record<string, unknown>));
+    botLikeCount = list.length;
+  }
+
+  console.info("[chat-list][classification]", {
+    vista,
+    empresa_id,
+    schema: dataSchema,
+    source: "postgrest",
+    total_fetched: totalAfterQuery,
+    after_tab_split: list.length,
+    bot_like_count: botLikeCount,
+    active_flow_codes: activeFlowCodeSet.size,
+    session_map_size: flowSessionById.size,
+  });
+  if (vista === "inbox") {
+    console.info("[chat-list][inbox]", {
+      empresa_id,
+      schema: dataSchema,
+      total_fetched: totalAfterQuery,
+      after_excluding_bot_tab: list.length,
+      excluded_bot_like: botLikeCount,
+    });
+  } else if (vista === "bot") {
+    console.info("[chat-list][bot]", {
+      empresa_id,
+      schema: dataSchema,
+      total_fetched: totalAfterQuery,
+      bot_tab_rows: list.length,
     });
   }
 
-  const botCount = vista === "bot" ? list.length : classifiedAsActivelyBot;
-  const inboxCount = vista === "inbox" ? list.length : totalAfterQuery - list.length;
-  console.log("[BOT-LIST]", {
-    vista,
-    empresa_id,
-    total: totalAfterQuery,
-    botCount,
-    inboxCount,
-    sessionMapSize: flowSessionById.size,
-    activeFlowCodes: activeFlowCodeSet.size,
-  });
+  if (
+    String(process.env.CHAT_LIST_CLASSIFICATION_VERBOSE ?? "")
+      .trim()
+      .toLowerCase() === "true"
+  ) {
+    const sample = (convs ?? []).slice(0, 8) as Record<string, unknown>[];
+    for (const row of sample) {
+      const cid = String(row.id ?? "").trim();
+      const sid = String(row.active_flow_session_id ?? "").trim();
+      console.info("[chat-list][classification]", {
+        empresa_id,
+        schema: dataSchema,
+        conversation_id: cid,
+        human_taken_over: Boolean(row.human_taken_over),
+        flow_status: String(row.flow_status ?? ""),
+        has_active_flow_session: sid.length > 0,
+        has_channel_flow: activeFlowCodeSet.size > 0,
+        belongs_bot_tab: isBotRow(row),
+      });
+    }
+  }
 
   if (list.length === 0) return [];
 

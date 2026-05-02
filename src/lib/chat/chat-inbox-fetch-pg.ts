@@ -1,9 +1,9 @@
 import type { Pool } from "pg";
 import {
   buildFlowSessionMap,
-  isActivelyBotHandledConversation,
+  conversationBelongsToBotTab,
   type FlowSessionRowMin,
-} from "@/lib/chat/actively-bot-handled";
+} from "@/lib/chat/inbox-bot-tab-classification";
 import { parseComprobanteValidationConfig } from "@/lib/chat/comprobante-validation-types";
 import {
   getOmnicanalScope,
@@ -40,14 +40,11 @@ function isoPg(v: unknown): string | null {
 async function pgActiveFlowCodes(pool: Pool, schema: string, empresaId: string): Promise<Set<string>> {
   try {
     const qt = quoteSchemaTable(schema, "chat_flows");
+    /** Misma regla que PostgREST en `fetchChatConversations`: todos los flujos activos de la empresa. */
     const q = `
       SELECT flow_code::text AS flow_code FROM ${qt}
       WHERE empresa_id = $1::uuid
         AND COALESCE(activo, false) = true
-        AND (
-          trim(coalesce(channel::text, '')) = ''
-          OR lower(trim(coalesce(channel::text, ''))) = 'whatsapp'
-        )
     `;
     const r = await pool.query(q, [empresaId]);
     return new Set(
@@ -169,12 +166,9 @@ export async function fetchChatConversationsFromTenantPg(
   let pi = 2;
   const whereParts: string[] = [`empresa_id = $1::uuid`];
 
-  if (vista === "inbox") {
+  if (vista === "inbox" || vista === "bot") {
+    /** Inbox y Bot comparten el mismo universo (abiertas/pendientes); la pestaña se decide al clasificar. */
     whereParts.push(`status IN ('open','pending')`);
-  } else if (vista === "bot") {
-    whereParts.push(`COALESCE(human_taken_over, false) = false`);
-    whereParts.push(`status IN ('open','pending')`);
-    whereParts.push(`active_flow_session_id IS NOT NULL`);
   } else if (vista === "historial") {
     whereParts.push(`status = 'closed'`);
   }
@@ -285,33 +279,26 @@ export async function fetchChatConversationsFromTenantPg(
     }
   }
 
-  const isActivelyBot = (row: Record<string, unknown>) =>
-    isActivelyBotHandledConversation(row, activeFlowCodeSet, flowSessionById);
-
-  let classifiedAsActivelyBot = 0;
+  const classifyCtx = { activeFlowCodeSet, sessionById: flowSessionById };
+  let botTabCount = 0;
   if (vista === "inbox") {
-    for (const row of list) {
-      if (isActivelyBot(row)) classifiedAsActivelyBot += 1;
-    }
+    botTabCount = list.filter((row) => conversationBelongsToBotTab(row, classifyCtx)).length;
+    list = list.filter((row) => !conversationBelongsToBotTab(row, classifyCtx));
   } else if (vista === "bot") {
-    list = list.filter((row) => {
-      const b = isActivelyBot(row);
-      if (b) classifiedAsActivelyBot += 1;
-      return b;
-    });
+    list = list.filter((row) => conversationBelongsToBotTab(row, classifyCtx));
+    botTabCount = list.length;
   }
 
-  const botCount = vista === "bot" ? list.length : classifiedAsActivelyBot;
-  const inboxCount = vista === "inbox" ? list.length : totalAfterQuery - list.length;
-  console.log("[BOT-LIST]", {
+  console.info("[chat-list][classification]", {
     vista,
     empresa_id,
-    total: totalAfterQuery,
-    botCount,
-    inboxCount,
-    sessionMapSize: flowSessionById.size,
-    activeFlowCodes: activeFlowCodeSet.size,
+    schema: dataSchema,
     source: "tenant_pg",
+    total_fetched: totalAfterQuery,
+    after_tab_split: list.length,
+    bot_like_count: botTabCount,
+    active_flow_codes: activeFlowCodeSet.size,
+    session_map_size: flowSessionById.size,
   });
 
   if (list.length === 0) return [];
