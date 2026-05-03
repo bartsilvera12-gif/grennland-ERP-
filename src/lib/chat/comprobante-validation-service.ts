@@ -30,8 +30,38 @@ export function sha256Hex(bytes: Buffer): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-/** Referencias OCR más cortas generan demasiados falsos positivos al comparar contra otras sesiones. */
-export const MIN_OCR_REF_LENGTH_FOR_STRONG_DUPLICATE = 10;
+/** Referencias OCR cortas o token genérico repetido en muchos comprobantes (ej. mismo dígito OCR en PY). Producción: ref 10 chars → 21 conversaciones distintas bloqueadas. */
+export const MIN_OCR_REF_LENGTH_FOR_STRONG_DUPLICATE = 12;
+
+/** Etiquetas de UI / palabras que no son número de operación bancaria. */
+const OCR_REF_STRONG_BLOCKLIST = new Set(
+  [
+    "CONCEPTO",
+    "VOLVER",
+    "INICIO",
+    "MENU",
+    "PAGAR",
+    "CANCELAR",
+    "CONTINUAR",
+    "ACEPTAR",
+    "TRANSFERENCIA",
+    "OPERACION",
+    "OPERACIÓN",
+    "COMPROBANTE",
+    "IMPORTE",
+    "MONTO",
+  ].map((s) => s.toUpperCase())
+);
+
+/** Solo refs que pueden usarse para bloqueo fuerte entre sesiones. */
+export function ocrReferenceUsableForStrongDuplicate(ref: string | null | undefined): string | null {
+  const r = (ref ?? "").trim().toUpperCase();
+  if (r.length < MIN_OCR_REF_LENGTH_FOR_STRONG_DUPLICATE) return null;
+  if (OCR_REF_STRONG_BLOCKLIST.has(r)) return null;
+  const compact = r.replace(/[^A-Z0-9]/g, "");
+  if (compact.length > 0 && OCR_REF_STRONG_BLOCKLIST.has(compact)) return null;
+  return r;
+}
 
 /**
  * Estados en los que un hash ya visto implica “no reenviar la misma imagen” para bloqueo temprano.
@@ -563,14 +593,13 @@ export async function runComprobanteValidationPipeline(ctx: PipelineCtx): Promis
       : null;
 
   const refStored = extracted.referencia.trim().toUpperCase() || null;
-  const refStrong =
-    Boolean(refStored && refStored.length >= MIN_OCR_REF_LENGTH_FOR_STRONG_DUPLICATE);
+  const refForDup = ocrReferenceUsableForStrongDuplicate(refStored);
 
   let ocrRefStrongDup = false;
   let ocrFingerprintWeakDup = false;
   if (settings.bloquear_por_ocr_duplicado) {
-    if (settings.ocr_fields.referencia.use_duplicate_detection && refStrong && refStored) {
-      ocrRefStrongDup = await existsOcrRefDuplicate(supabase, ctx.empresaId, refStored, sid);
+    if (settings.ocr_fields.referencia.use_duplicate_detection && refForDup) {
+      ocrRefStrongDup = await existsOcrRefDuplicate(supabase, ctx.empresaId, refForDup, sid);
     }
     if (
       !ocrRefStrongDup &&
@@ -594,7 +623,7 @@ export async function runComprobanteValidationPipeline(ctx: PipelineCtx): Promis
     ocr_present: fullText.trim().length > 0,
     normalized_fields_present: {
       ref: Boolean(refStored),
-      ref_strong: refStrong,
+      ref_eligible_strong_dup: Boolean(refForDup),
       monto: Boolean(extracted.monto),
       fecha: Boolean(extracted.fecha),
     },
