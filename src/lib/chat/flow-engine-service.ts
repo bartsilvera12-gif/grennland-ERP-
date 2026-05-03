@@ -1,6 +1,12 @@
 import { downloadMetaMediaBytes } from "@/lib/chat/meta-media-download";
 import { flowTrace, summarizeFlowDataForTrace } from "@/lib/chat/flow-trace-log";
-import { COMPROBANTE_BUTTON_IDS, parseComprobanteValidationConfig } from "@/lib/chat/comprobante-validation-types";
+import {
+  COMPROBANTE_BUTTON_IDS,
+  FLOW_SORTEO_PENDIENTE_DATOS_PARTICIPANTE_FIELD,
+  parseComprobanteValidationConfig,
+  SORTEO_COMPROBANTE_ESTADO_VALIDACION_FIELD,
+  SORTEO_COMPROBANTE_VALIDACION_ID_FIELD,
+} from "@/lib/chat/comprobante-validation-types";
 import {
   mensajeClienteComprobanteNoValido,
   runComprobanteValidationPipeline,
@@ -32,6 +38,7 @@ import {
   optionPayloadFinalizesSorteoOrder,
   parseSorteoParticipantFromFlowData,
   prepareFlowDataForSorteoOrder,
+  resolveComprobanteUrlFromFlowData,
   SORTEO_COMPROBANTE_MEDIA_ID_FIELD,
   SORTEO_COMPROBANTE_URL_FIELD,
   type EnsureSorteoOrderCreatedData,
@@ -2010,6 +2017,41 @@ export function createFlowEngine(ctx: FlowEngineContext) {
           trigger: "confirmacion_final",
         },
       });
+      const hydFdRec = hydFd as Record<string, string>;
+      const hadManualPending =
+        (hydFdRec[FLOW_SORTEO_PENDIENTE_DATOS_PARTICIPANTE_FIELD] ?? "").trim() === "si";
+      if (hadManualPending) {
+        console.info("[sorteo-manual-approval][completed-after-data]", {
+          conversation_id: state.id,
+          flow_session_id: flowSidInteractive,
+          entrada_id: fin.entradaId,
+          numero_orden: fin.numeroOrden,
+        });
+        await insertFlowEvent({
+          empresaId: state.empresa_id,
+          conversationId: state.id,
+          flowCode: state.flow_code,
+          nodeCode: currentNode.node_code,
+          flowSessionId: flowSidInteractive,
+          eventType: "sorteo_manual_approval_completed_after_data",
+          payload: {
+            entrada_id: fin.entradaId,
+            numero_orden: fin.numeroOrden,
+            validation_id: (hydFdRec[SORTEO_COMPROBANTE_VALIDACION_ID_FIELD] ?? "").trim() || null,
+          },
+        });
+        await supabase.from("chat_flow_data").upsert(
+          {
+            empresa_id: state.empresa_id,
+            conversation_id: state.id,
+            flow_code: state.flow_code as string,
+            flow_session_id: flowSidInteractive,
+            field_name: FLOW_SORTEO_PENDIENTE_DATOS_PARTICIPANTE_FIELD,
+            field_value: "no",
+          },
+          { onConflict: "flow_session_id,field_name" }
+        );
+      }
       sorteoTicketPackage = { fin, flowData: hydFd };
     }
 
@@ -2636,6 +2678,48 @@ export function createFlowEngine(ctx: FlowEngineContext) {
         ensureSorteoOrderFromChat: "no_llamado",
       });
       return { ok: true, status: "ignored_not_image_node" };
+    }
+
+    const imgSidPeek = state.active_flow_session_id?.trim();
+    if (imgSidPeek && state.flow_code && currentNode.next_node_code?.trim()) {
+      const rawPeek = await getConversationFlowDataMap({
+        empresaId: state.empresa_id,
+        conversationId: state.id,
+        flowCode: state.flow_code,
+        flowSessionId: imgSidPeek,
+        traceReadContext: "skip_comprobante_manual_ok_peek",
+      });
+      const hydPeek = await hydrateFlowDataFromSessionEvents(
+        state.id,
+        state.flow_code,
+        rawPeek,
+        imgSidPeek
+      );
+      const urlPeek = resolveComprobanteUrlFromFlowData(hydPeek as Record<string, string>);
+      const estPeek = String(
+        (hydPeek as Record<string, string>)[SORTEO_COMPROBANTE_ESTADO_VALIDACION_FIELD] ?? ""
+      ).trim();
+      if (urlPeek && estPeek === "aprobado_manual") {
+        const advSkip = await advanceConversationToNode({
+          conversationId: state.id,
+          empresaId: state.empresa_id,
+          flowCode: state.flow_code,
+          nextNodeCode: currentNode.next_node_code.trim(),
+        });
+        if (advSkip.ok) {
+          await insertFlowEvent({
+            empresaId: state.empresa_id,
+            conversationId: state.id,
+            flowCode: state.flow_code,
+            nodeCode: currentNode.node_code,
+            flowSessionId: imgSidPeek,
+            eventType: "image_input_skipped_manual_comprobante_ok",
+            payload: { reason: "comprobante_aprobado_manual_sesion" },
+          });
+          await sendCurrentFlowNode({ conversationId: state.id });
+          return { ok: true, status: "skipped_redundant_comprobante_manual_ok" };
+        }
+      }
     }
 
     const sendCtx = await getConversationSendContext(state.id);

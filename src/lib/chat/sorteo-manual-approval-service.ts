@@ -5,10 +5,19 @@ import {
   finalizeSorteoOrderFromConfirmedFlowData,
 } from "@/lib/sorteos/sorteo-order-from-chat";
 import {
+  MOTIVO_VALIDACION_ASESOR_PENDIENTE_DATOS,
   SORTEO_COMPROBANTE_ESTADO_VALIDACION_FIELD,
   SORTEO_COMPROBANTE_MOTIVO_VALIDACION_FIELD,
   SORTEO_COMPROBANTE_VALIDACION_ID_FIELD,
 } from "@/lib/chat/comprobante-validation-types";
+import {
+  findResumeNodeForMissingFields,
+  runManualApprovalResumeParticipantFlow,
+} from "@/lib/chat/sorteo-manual-approval-resume-flow";
+import {
+  isParticipantDataCompleteForSorteoClose,
+  listMissingParticipantFieldKinds,
+} from "@/lib/sorteos/sorteo-participant-preflight";
 import { loadHydratedFlowSessionData } from "@/lib/chat/flow-engine-service";
 import { deliverSorteoPostOrderToCustomer } from "@/lib/chat/sorteo-post-order-customer-delivery";
 import { buildOrderResultFromEntradaId } from "@/lib/sorteos/sorteo-ticket-admin";
@@ -24,6 +33,7 @@ import { isLikelyUnexposedTenantChatSchema } from "@/lib/supabase/chat-data-sche
 export type ManualSorteoApprovalResult =
   | {
       ok: true;
+      mode: "order_closed";
       reused: boolean;
       entradaId: string;
       numeroOrden: number;
@@ -31,6 +41,14 @@ export type ManualSorteoApprovalResult =
       sorteoId: string;
       whatsappWarning?: string;
       ticketWarning?: string;
+    }
+  | {
+      ok: true;
+      mode: "pending_participant_data";
+      reused: boolean;
+      missingFields: string[];
+      nextNodeCode: string | null;
+      whatsappWarning?: string;
     }
   | { ok: false; code: string; message: string };
 
@@ -155,7 +173,7 @@ export async function approveComprobanteAndCloseSorteoPurchase(input: {
         entrada_id: existing.entradaId,
         cupones_count: existing.cupones.length,
       });
-      const hydFd = await loadHydratedFlowSessionData(input.supabase, {
+      const hydFd = await loadHydratedFlowSessionData(tenantSb, {
         empresaId: input.empresaId,
         conversationId: row.conversation_id,
         flowCode,
@@ -184,6 +202,7 @@ export async function approveComprobanteAndCloseSorteoPurchase(input: {
       });
       return {
         ok: true,
+        mode: "order_closed",
         reused: true,
         entradaId: existing.entradaId,
         numeroOrden: existing.numeroOrden,
@@ -208,6 +227,106 @@ export async function approveComprobanteAndCloseSorteoPurchase(input: {
     [SORTEO_COMPROBANTE_ESTADO_VALIDACION_FIELD]: "aprobado_manual",
     [SORTEO_COMPROBANTE_MOTIVO_VALIDACION_FIELD]: "asesor_aprobo_comprobante",
   };
+
+  const participantOk = isParticipantDataCompleteForSorteoClose(hydFd);
+  if (!participantOk) {
+    const missingKinds = listMissingParticipantFieldKinds(hydFd);
+    logManual("missing-fields", {
+      schema: dataSchema,
+      empresa_id: input.empresaId,
+      validation_id: row.id,
+      missing: missingKinds,
+    });
+
+    const resumeTarget = await findResumeNodeForMissingFields(
+      tenantSb,
+      input.empresaId,
+      flowCode,
+      missingKinds
+    );
+    if (!resumeTarget) {
+      logManual("error", { code: "no_resume_node", validation_id: row.id });
+      return {
+        ok: false,
+        code: "no_resume_node",
+        message:
+          "El comprobante puede aprobarse pero no encontramos un paso del flujo para pedir los datos faltantes. Revisá la configuración del flujo o cargá los datos manualmente en el chat.",
+      };
+    }
+
+    const prevEstP = row.estado_validacion;
+    const prevMotP = row.motivo_validacion;
+
+    const { error: upPend } = await tenantSb
+      .from("chat_comprobante_validaciones")
+      .update({
+        estado_validacion: "aprobado_manual",
+        motivo_validacion: MOTIVO_VALIDACION_ASESOR_PENDIENTE_DATOS,
+        previous_estado_validacion: prevEstP,
+        previous_motivo_validacion: prevMotP,
+        manual_approval_usuario_id: input.usuarioId,
+        manual_approval_at: new Date().toISOString(),
+        manual_approval_source: "inbox_manual",
+        manual_approval_note: note || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", row.id)
+      .eq("empresa_id", input.empresaId);
+
+    if (upPend) {
+      logManual("error", { phase: "validation_update_pending", message: upPend.message });
+      return { ok: false, code: "validation_update", message: upPend.message };
+    }
+
+    logManual("pending-data", {
+      schema: dataSchema,
+      empresa_id: input.empresaId,
+      validation_id: row.id,
+      next_node: resumeTarget.nodeCode,
+    });
+
+    try {
+      const wOut = await runManualApprovalResumeParticipantFlow({
+        supabase: tenantSb,
+        empresaId: input.empresaId,
+        usuarioId: input.usuarioId,
+        conversationId: row.conversation_id,
+        flowCode,
+        flowSessionId,
+        channelId,
+        contactId,
+        validationId: row.id,
+        missingFields: missingKinds,
+        nextNodeCode: resumeTarget.nodeCode,
+        note,
+        mergedFlowDataPatch: {},
+      });
+      logManual("resume-flow", {
+        schema: dataSchema,
+        validation_id: row.id,
+        conversation_id: row.conversation_id,
+        next_node_code: resumeTarget.nodeCode,
+      });
+      logManual("done", {
+        schema: dataSchema,
+        empresa_id: input.empresaId,
+        validation_id: row.id,
+        mode: "pending_participant_data",
+      });
+      return {
+        ok: true,
+        mode: "pending_participant_data",
+        reused: false,
+        missingFields: missingKinds,
+        nextNodeCode: resumeTarget.nodeCode,
+        whatsappWarning: wOut.whatsappWarning,
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      logManual("error", { phase: "resume_flow", message: msg });
+      return { ok: false, code: "resume_flow", message: msg };
+    }
+  }
 
   const { data: contactRow } = await tenantSb
     .from("chat_contacts")
@@ -252,10 +371,10 @@ export async function approveComprobanteAndCloseSorteoPurchase(input: {
       fin.reason === "sin_comprobante_en_sesion"
         ? "Falta comprobante o media en la sesión del flujo."
         : fin.reason === "datos_flujo_incompletos"
-          ? "Datos del participante incompletos en el flujo."
-          : fin.reason === "comprobante_no_validado"
-            ? "Estado de comprobante no permite cierre."
-            : `No se pudo cerrar: ${fin.reason ?? "desconocido"}`;
+          ? "Datos del participante incompletos (revisión interna). Volvé a intentar o completá los datos en el flujo."
+        : fin.reason === "comprobante_no_validado"
+          ? "Estado de comprobante no permite cierre."
+          : `No se pudo cerrar: ${fin.reason ?? "desconocido"}`;
     logManual("error", { validation_id: row.id, reason: fin.reason });
     return { ok: false, code: fin.reason ?? "skipped", message: msg };
   }
@@ -402,6 +521,7 @@ export async function approveComprobanteAndCloseSorteoPurchase(input: {
 
   return {
     ok: true,
+    mode: "order_closed",
     reused: orderData.idempotent === true,
     entradaId: orderData.entradaId,
     numeroOrden: orderData.numeroOrden,

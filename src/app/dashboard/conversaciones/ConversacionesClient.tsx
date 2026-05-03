@@ -1415,6 +1415,16 @@ export function ConversacionesClient({
                       const res = await approveComprobanteValidacion(vid);
                       if (!res.ok) {
                         setSendError(res.message);
+                      } else if (res.mode === "pending_participant_data") {
+                        const parts = [
+                          "Comprobante aprobado. Faltan datos del participante; el bot continuará la carga por WhatsApp.",
+                          res.nextNodeCode ? `(Siguiente paso: ${res.nextNodeCode})` : "",
+                          res.missingFields?.length
+                            ? `Pendiente: ${res.missingFields.join(", ")}.`
+                            : "",
+                        ].filter(Boolean);
+                        if (res.whatsappWarning) parts.push(`WhatsApp: ${res.whatsappWarning}`);
+                        setCompApprovalInfo(parts.join(" "));
                       } else {
                         const parts = [
                           res.reused ? "Orden ya existente (reutilizada)." : "Compra cerrada.",

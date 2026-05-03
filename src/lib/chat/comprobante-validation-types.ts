@@ -90,6 +90,10 @@ export const COMPROBANTE_BUTTON_IDS = {
 export const SORTEO_COMPROBANTE_VALIDACION_ID_FIELD = "sorteo_comprobante_validacion_id";
 export const SORTEO_COMPROBANTE_ESTADO_VALIDACION_FIELD = "sorteo_comprobante_estado_validacion";
 export const SORTEO_COMPROBANTE_MOTIVO_VALIDACION_FIELD = "sorteo_comprobante_motivo_validacion";
+/** Manual inbox: comprobante OK pero faltan datos del participante para crear entrada. */
+export const MOTIVO_VALIDACION_ASESOR_PENDIENTE_DATOS = "asesor_aprobo_pendiente_datos";
+/** Flag en chat_flow_data cuando el asesor aprobó pendiente de datos del cliente. */
+export const FLOW_SORTEO_PENDIENTE_DATOS_PARTICIPANTE_FIELD = "sorteo_pendiente_datos_participante";
 export const SORTEO_COMPROBANTE_HASH_FIELD = "sorteo_comprobante_hash";
 export const SORTEO_COMPROBANTE_OCR_TEXT_FIELD = "sorteo_comprobante_ocr_text_raw";
 export const SORTEO_COMPROBANTE_OCR_MONTO_FIELD = "sorteo_comprobante_ocr_monto";
