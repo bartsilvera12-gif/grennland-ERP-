@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { BusinessAutomationConfigSection } from "@/components/chat/BusinessAutomationConfigSection";
+import { BotWakeKeywordsSection } from "@/components/chat/BotWakeKeywordsSection";
 import { ChannelQuickRepliesEditor } from "@/components/chat/ChannelQuickRepliesEditor";
 import { ConfigCollapsibleSection } from "@/components/chat/ConfigCollapsibleSection";
 import {
@@ -29,6 +30,10 @@ import {
   type ChatChannelRow,
 } from "@/lib/chat/actions";
 import { mapChannelSaveError } from "@/lib/chat/channel-save-errors";
+import {
+  parseBotWakeKeywordsSettingsFromConfig,
+  type BotWakeKeywordsFormState,
+} from "@/lib/chat/bot-wake-keywords";
 import {
   defaultChannelFormSectionState,
   formSectionStateForPersistence,
@@ -156,6 +161,11 @@ export function WhatsAppChannelForm({
       ? parseBusinessAutomationFromChannelConfig(initialRow.config)
       : defaultBusinessAutomationSettings()
   );
+  const [wakeSettings, setWakeSettings] = useState<BotWakeKeywordsFormState>(() =>
+    mode === "edit" && initialRow
+      ? parseBotWakeKeywordsSettingsFromConfig(initialRow.config)
+      : parseBotWakeKeywordsSettingsFromConfig({})
+  );
   const [sectionUi, setSectionUi] = useState<ChannelFormSectionStateMap>(() => {
     if (mode === "edit" && initialRow) {
       const cv = parseComprobanteValidationConfig(initialRow.config);
@@ -180,6 +190,7 @@ export function WhatsAppChannelForm({
       const cv = parseComprobanteValidationConfig(initialRow.config);
       setCvSettings(cv);
       setBaSettings(parseBusinessAutomationFromChannelConfig(initialRow.config));
+      setWakeSettings(parseBotWakeKeywordsSettingsFromConfig(initialRow.config));
       setSectionUi(parseFormSectionStateFromChannelConfigWithCvSync(initialRow.config, cv.enabled));
       if (isYcloud) {
         setYc(ycloudRowToLocal(initialRow));
@@ -217,6 +228,9 @@ export function WhatsAppChannelForm({
             business_automation: baPayload,
             form_section_state: fsPayload,
             quick_replies_inbox_enabled: sectionUi.quick_replies.active,
+            bot_wake_keywords_enabled: wakeSettings.enabled,
+            bot_wake_keywords: wakeSettings.keywords,
+            bot_wake_keywords_match_mode: wakeSettings.matchMode,
           });
           setSuccess("Cambios guardados.");
           onSaved?.(id);
@@ -233,6 +247,9 @@ export function WhatsAppChannelForm({
             business_automation: baPayload,
             form_section_state: fsPayload,
             quick_replies_inbox_enabled: sectionUi.quick_replies.active,
+            bot_wake_keywords_enabled: wakeSettings.enabled,
+            bot_wake_keywords: wakeSettings.keywords,
+            bot_wake_keywords_match_mode: wakeSettings.matchMode,
           });
           setSuccess("Canal creado.");
           onSaved?.(id);
@@ -251,6 +268,9 @@ export function WhatsAppChannelForm({
           business_automation: baPayload,
           form_section_state: fsPayload,
           quick_replies_inbox_enabled: sectionUi.quick_replies.active,
+          bot_wake_keywords_enabled: wakeSettings.enabled,
+          bot_wake_keywords: wakeSettings.keywords,
+          bot_wake_keywords_match_mode: wakeSettings.matchMode,
         });
         setSuccess("Cambios guardados.");
         onSaved?.(id);
@@ -261,6 +281,9 @@ export function WhatsAppChannelForm({
           business_automation: baPayload,
           form_section_state: fsPayload,
           quick_replies_inbox_enabled: sectionUi.quick_replies.active,
+          bot_wake_keywords_enabled: wakeSettings.enabled,
+          bot_wake_keywords: wakeSettings.keywords,
+          bot_wake_keywords_match_mode: wakeSettings.matchMode,
         });
         setSuccess("Canal creado.");
         onSaved?.(id);
@@ -488,6 +511,17 @@ export function WhatsAppChannelForm({
             onExpandedChange={(v) => patchSection("business_automation", { expanded: v })}
           >
             <BusinessAutomationConfigSection value={baSettings} onChange={setBaSettings} />
+          </ConfigCollapsibleSection>
+
+          <ConfigCollapsibleSection
+            title="Palabras para despertar el bot"
+            description="Definí qué mensajes pueden reiniciar o despertar el bot en este canal."
+            active={sectionUi.bot_wake_keywords.active}
+            expanded={sectionUi.bot_wake_keywords.expanded}
+            onActiveChange={(v) => patchSection("bot_wake_keywords", { active: v })}
+            onExpandedChange={(v) => patchSection("bot_wake_keywords", { expanded: v })}
+          >
+            <BotWakeKeywordsSection value={wakeSettings} onChange={setWakeSettings} />
           </ConfigCollapsibleSection>
 
           <ConfigCollapsibleSection

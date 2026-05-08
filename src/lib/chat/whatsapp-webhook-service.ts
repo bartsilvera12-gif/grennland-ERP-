@@ -22,6 +22,7 @@ import {
   sendOutboundTextMessage,
 } from "@/lib/chat/conversation-send-context";
 import { attachInboundMessageMedia } from "@/lib/chat/inbound-media-attach";
+import { fetchChatChannelConfigForWebhookWakeKeywords } from "@/lib/chat/fetch-channel-config-webhook";
 import { maybeRestartForPurchaseIntent } from "@/lib/chat/flow-restart-intent";
 import {
   CONV_LOG,
@@ -636,6 +637,14 @@ export async function processInboundWebhookValue(
   });
 
   const channelId = channel.id as string;
+  const channelWakeConfig = await fetchChatChannelConfigForWebhookWakeKeywords({
+    pool: pool ?? null,
+    useTenantPg,
+    tenantDataSchema,
+    empresaId,
+    channelId,
+    supabase,
+  });
   const messages = value.messages ?? [];
 
   for (const msg of messages) {
@@ -805,7 +814,12 @@ export async function processInboundWebhookValue(
       let keywordHandoffPendingConfirmation = false;
 
       const restartKeywordMatch =
-        message_type === "text" ? matchesConversationRestartKeyword(content) : false;
+        message_type === "text"
+          ? matchesConversationRestartKeyword(content, channelWakeConfig, {
+              channelId,
+              empresaId,
+            })
+          : false;
 
       /**
        * Reinicio por palabra (hola, menú, iniciar…): debe aplicar también si el chat estaba en modo humano,
@@ -857,6 +871,7 @@ export async function processInboundWebhookValue(
           convHuman,
           convFlowStatus,
           restartedThisMessage,
+          channelConfig: channelWakeConfig,
         });
         if (pi.restarted) {
           convFlow = pi.flow_code;

@@ -15,6 +15,10 @@ import {
 } from "@/lib/chat/inbox-list-flow-sessions";
 import { parseComprobanteValidationConfig, type ComprobanteValidacionListRow } from "@/lib/chat/comprobante-validation-types";
 import {
+  applyBotWakeKeywordsInputToChannelConfig,
+  type BotWakeKeywordsMatchMode,
+} from "@/lib/chat/bot-wake-keywords";
+import {
   approveComprobanteAndCloseSorteoPurchase,
   type ManualSorteoApprovalResult,
 } from "@/lib/chat/sorteo-manual-approval-service";
@@ -1528,6 +1532,10 @@ export type ChatChannelFormInput = {
   form_section_state?: Record<string, { active: boolean; expanded: boolean }>;
   /** Persistido en `config.quick_replies_inbox_enabled` (icono rayo en inbox). */
   quick_replies_inbox_enabled?: boolean;
+  /** Palabras para reiniciar/despertar bot (`config.bot_wake_*`). Opcional; omitido en otros guardados. */
+  bot_wake_keywords_enabled?: boolean;
+  bot_wake_keywords?: string[];
+  bot_wake_keywords_match_mode?: BotWakeKeywordsMatchMode;
 };
 
 function metaChannelConfigStatus(params: {
@@ -1556,6 +1564,9 @@ export type YCloudWhatsappChannelInput = {
   business_automation?: Record<string, unknown>;
   form_section_state?: Record<string, { active: boolean; expanded: boolean }>;
   quick_replies_inbox_enabled?: boolean;
+  bot_wake_keywords_enabled?: boolean;
+  bot_wake_keywords?: string[];
+  bot_wake_keywords_match_mode?: BotWakeKeywordsMatchMode;
 };
 
 /** WhatsApp vía YCloud (coexistencia). Sin ruta omnicanal Meta. */
@@ -1616,6 +1627,11 @@ export async function saveYCloudWhatsappChannel(input: YCloudWhatsappChannelInpu
   if (input.quick_replies_inbox_enabled !== undefined) {
     config.quick_replies_inbox_enabled = input.quick_replies_inbox_enabled;
   }
+  applyBotWakeKeywordsInputToChannelConfig(config, {
+    bot_wake_keywords_enabled: input.bot_wake_keywords_enabled,
+    bot_wake_keywords: input.bot_wake_keywords,
+    bot_wake_keywords_match_mode: input.bot_wake_keywords_match_mode,
+  });
 
   const hasKey =
     Boolean(keyPatch) ||
@@ -1956,6 +1972,11 @@ export async function saveChatChannel(input: ChatChannelFormInput): Promise<stri
   if (input.quick_replies_inbox_enabled !== undefined) {
     config.quick_replies_inbox_enabled = input.quick_replies_inbox_enabled;
   }
+  applyBotWakeKeywordsInputToChannelConfig(config, {
+    bot_wake_keywords_enabled: input.bot_wake_keywords_enabled,
+    bot_wake_keywords: input.bot_wake_keywords,
+    bot_wake_keywords_match_mode: input.bot_wake_keywords_match_mode,
+  });
 
   const tokenPatch = input.whatsapp_access_token?.trim();
   const hasAccessToken = Boolean(tokenPatch) || Boolean(existingToken);

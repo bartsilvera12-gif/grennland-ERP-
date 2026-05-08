@@ -175,6 +175,8 @@ export type MaybeRestartForPurchaseIntentArgs = {
   convHuman: boolean;
   convFlowStatus: string | null;
   restartedThisMessage: boolean;
+  /** Config del canal (`chat_channels.config`) para keywords de despertar; si falta, defaults del sistema. */
+  channelConfig?: Record<string, unknown> | null;
 };
 
 export type MaybeRestartForPurchaseIntentResult = {
@@ -208,7 +210,7 @@ export async function maybeRestartForPurchaseIntent(
   const content = args.content?.trim() ?? "";
   if (!content) return noop("empty_content");
 
-  if (matchesConversationRestartKeyword(content)) {
+  if (matchesConversationRestartKeyword(content, args.channelConfig ?? undefined)) {
     return noop("handled_by_restart_keyword_branch");
   }
 

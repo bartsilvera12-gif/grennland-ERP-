@@ -269,9 +269,6 @@ export async function isNodeActiveInFlow(
 }
 
 /**
- * Palabras que fuerzan reinicio al primer nodo del flujo activo (primer token o mensaje exacto).
- */
-/**
  * Handoff por botón: incluye el de comprobantes (lo procesa el flow-engine en `image_input`).
  */
 export const HUMAN_HANDOFF_BUTTON_IDS = new Set<string>([
@@ -312,28 +309,7 @@ export function matchesHumanHandoffKeyword(text: string): boolean {
   return false;
 }
 
-export function matchesConversationRestartKeyword(text: string): boolean {
-  const raw = text
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-  if (!raw) return false;
-  const keywords = new Set([
-    "hola",
-    "menu",
-    "menú",
-    "comenzar",
-    "iniciar",
-    "reiniciar",
-    "inicio",
-  ]);
-  const tokens = raw.split(/\s+/).filter(Boolean);
-  const first = tokens[0] ?? "";
-  if (keywords.has(first)) return true;
-  if (tokens.length === 1 && keywords.has(raw)) return true;
-  return false;
-}
+export { matchesConversationRestartKeyword } from "@/lib/chat/bot-wake-keywords";
 
 export type RestartToFlowStartResult = {
   flow_code: string | null;

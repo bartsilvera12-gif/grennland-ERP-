@@ -6,6 +6,7 @@
 export const CHANNEL_FORM_SECTION_KEYS = [
   "credentials",
   "business_automation",
+  "bot_wake_keywords",
   "comprobantes_core",
   "comprobantes_bank",
   "comprobantes_messages",
@@ -25,6 +26,7 @@ export function defaultChannelFormSectionState(): ChannelFormSectionStateMap {
   return {
     credentials: { active: true, expanded: true },
     business_automation: { active: true, expanded: false },
+    bot_wake_keywords: { active: true, expanded: false },
     comprobantes_core: { active: true, expanded: false },
     comprobantes_bank: { active: true, expanded: false },
     comprobantes_messages: { active: true, expanded: false },
