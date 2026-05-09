@@ -5,8 +5,34 @@ import {
   puedeConfigurarComisiones,
   requireComisionesModuleAccess,
 } from "@/lib/comisiones/comisiones-auth";
+import {
+  esRolAdminEmpresa,
+  resolveEffectiveModules,
+} from "@/lib/modulos/resolve-effective-modules";
+import { esRolAdminEmpresaOGlobal } from "@/lib/auth/rol-empresa";
+import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
+import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 
 const BASE_CALCULO = new Set(["pago_registrado", "factura_emitida", "factura_pagada"]);
+
+const POLITICA_PATH = "/api/comisiones/politica";
+
+function traceFromRequest(request: Request): string {
+  const h = request.headers.get("x-client-trace-id")?.trim();
+  if (h && /^[a-zA-Z0-9_-]{4,40}$/.test(h)) return h.slice(0, 40);
+  return globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+}
+
+function withTrace<T extends Record<string, unknown>>(body: T, traceId: string): T & { traceId: string } {
+  return { ...body, traceId };
+}
+
+function politicaJson(body: Record<string, unknown>, status: number, traceId: string) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "X-Trace-Id": traceId },
+  });
+}
 
 export type EscalaInput = {
   desde_monto: number;
@@ -17,10 +43,48 @@ export type EscalaInput = {
 
 /** GET — política única por empresa + escalas (requiere módulo comisiones). */
 export async function GET(request: Request) {
+  const traceId = traceFromRequest(request);
+
   const auth = await requireComisionesModuleAccess(request);
   if (!auth.ok) {
-    return NextResponse.json(errorResponse(auth.message), { status: auth.status });
+    console.warn("[api/comisiones/politica] GET auth denied", {
+      traceId,
+      path: POLITICA_PATH,
+      status_returned: auth.status,
+      error_message: auth.message.slice(0, 200),
+    });
+    return politicaJson(withTrace(errorResponse(auth.message), traceId), auth.status, traceId);
   }
+
+  let schemaResuelto = "";
+  let slugsEfectivos: string[] = [];
+  try {
+    schemaResuelto = await fetchDataSchemaForEmpresaId(auth.empresaId);
+    const catalog = createServiceRoleClient();
+    const modulos = await resolveEffectiveModules(catalog, {
+      id: auth.usuarioCatalogId,
+      empresa_id: auth.empresaId,
+      rol: auth.rol,
+    });
+    slugsEfectivos = modulos.map((m) => (m.slug ?? "").trim()).filter(Boolean).slice(0, 24);
+  } catch (diagErr) {
+    const dm = diagErr instanceof Error ? diagErr.message.slice(0, 160) : String(diagErr);
+    console.warn("[api/comisiones/politica] GET diag_context_failed", { traceId, message: dm });
+    schemaResuelto = schemaResuelto || "(error_resolviendo_schema_o_slugs)";
+  }
+
+  console.warn("[api/comisiones/politica] GET diag", {
+    traceId,
+    path: POLITICA_PATH,
+    status_returned: "200_pending",
+    rol: auth.rol ?? null,
+    es_admin_empresa: esRolAdminEmpresa(auth.rol),
+    es_admin_global: esRolAdminEmpresaOGlobal(auth.rol),
+    slugs_efectivos: slugsEfectivos,
+    empresa_id_prefix:
+      typeof auth.empresaId === "string" && auth.empresaId.length >= 8 ? auth.empresaId.slice(0, 8) : null,
+    schema_resuelto: schemaResuelto || "(vacío)",
+  });
 
   try {
     const sb = await getChatServiceClientForEmpresa(auth.empresaId);
@@ -32,11 +96,17 @@ export async function GET(request: Request) {
       .maybeSingle();
 
     if (ePol) {
-      return NextResponse.json(errorResponse(ePol.message), { status: 400 });
+      console.warn("[api/comisiones/politica] GET query comision_politicas", {
+        traceId,
+        status_returned: 400,
+        error_message: ePol.message.slice(0, 220),
+      });
+      return politicaJson(withTrace(errorResponse(ePol.message), traceId), 400, traceId);
     }
 
     if (!politica) {
-      return NextResponse.json(successResponse({ politica: null, escalas: [] }));
+      console.warn("[api/comisiones/politica] GET ok empty policy", { traceId, status_returned: 200 });
+      return politicaJson(withTrace(successResponse({ politica: null, escalas: [] }), traceId), 200, traceId);
     }
 
     const pid = (politica as { id: string }).id;
@@ -49,20 +119,29 @@ export async function GET(request: Request) {
       .order("desde_monto", { ascending: true });
 
     if (eEsc) {
-      return NextResponse.json(errorResponse(eEsc.message), { status: 400 });
+      console.warn("[api/comisiones/politica] GET query comision_escalas", {
+        traceId,
+        status_returned: 400,
+        error_message: eEsc.message.slice(0, 220),
+      });
+      return politicaJson(withTrace(errorResponse(eEsc.message), traceId), 400, traceId);
     }
 
-    return NextResponse.json(successResponse({ politica, escalas: escalas ?? [] }));
+    console.warn("[api/comisiones/politica] GET ok", { traceId, status_returned: 200 });
+    return politicaJson(withTrace(successResponse({ politica, escalas: escalas ?? [] }), traceId), 200, traceId);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error";
-    console.warn("[api/comisiones/politica] GET error", {
-      message: msg.slice(0, 240),
+    console.warn("[api/comisiones/politica] GET exception", {
+      traceId,
+      path: POLITICA_PATH,
+      status_returned: 500,
+      error_message: msg.slice(0, 240),
       empresa_id_prefix:
         typeof auth.empresaId === "string" && auth.empresaId.length >= 8
           ? auth.empresaId.slice(0, 8)
           : null,
     });
-    return NextResponse.json(errorResponse(msg), { status: 500 });
+    return politicaJson(withTrace(errorResponse(msg), traceId), 500, traceId);
   }
 }
 

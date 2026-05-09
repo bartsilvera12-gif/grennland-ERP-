@@ -27,6 +27,14 @@ const BASE_OPTIONS = [
   { value: "factura_pagada", label: "Factura pagada" },
 ] as const;
 
+const POLITICA_ENDPOINT = "/api/comisiones/politica";
+
+function nuevoTraceCliente(): string {
+  const a = new Uint8Array(8);
+  crypto.getRandomValues(a);
+  return [...a].map((x) => x.toString(16).padStart(2, "0")).join("").slice(0, 12);
+}
+
 export default function ConfiguracionComisionesPage() {
   const [loading, setLoading] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -46,22 +54,61 @@ export default function ConfiguracionComisionesPage() {
   const cargar = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const traceCliente = nuevoTraceCliente();
     try {
       const u = await getCurrentUser();
       setPuedeEditar(esRolAdminEmpresaOGlobal(u?.rol));
 
-      const res = await fetchWithSupabaseSession("/api/comisiones/politica", { cache: "no-store" });
-      const json = (await res.json()) as {
-        success?: boolean;
-        data?: {
-          politica: Record<string, unknown> | null;
-          escalas: Record<string, unknown>[];
-        };
-        error?: string;
-      };
-      if (!res.ok || json.success !== true) {
-        throw new Error(json.error ?? `Error ${res.status}`);
+      const res = await fetchWithSupabaseSession(POLITICA_ENDPOINT, {
+        cache: "no-store",
+        headers: { "X-Client-Trace-Id": traceCliente },
+      });
+
+      const rawText = await res.text();
+      let parsed: unknown = null;
+      try {
+        parsed = rawText.trim() ? JSON.parse(rawText) : null;
+      } catch {
+        parsed = null;
       }
+      const json =
+        parsed && typeof parsed === "object"
+          ? (parsed as {
+              success?: boolean;
+              traceId?: string;
+              data?: {
+                politica: Record<string, unknown> | null;
+                escalas: Record<string, unknown>[];
+              };
+              error?: string;
+            })
+          : null;
+
+      const traceServidor = typeof json?.traceId === "string" ? json.traceId : null;
+      const traceMostrar = traceServidor ?? traceCliente;
+
+      if (!res.ok) {
+        const apiErr =
+          typeof json?.error === "string"
+            ? json.error
+            : rawText.replace(/\s+/g, " ").trim().slice(0, 320) || "(cuerpo vacío o no JSON)";
+        setError(
+          `Error al cargar ${POLITICA_ENDPOINT} — ${res.status} ${res.statusText} — ${apiErr} — trace ${traceMostrar}`
+        );
+        return;
+      }
+
+      if (json?.success !== true) {
+        const detalle =
+          typeof json?.error === "string"
+            ? json.error
+            : rawText.replace(/\s+/g, " ").trim().slice(0, 280) || "success !== true sin mensaje";
+        setError(
+          `Respuesta inválida ${POLITICA_ENDPOINT} — ${res.status} — ${detalle} — trace ${traceMostrar}`
+        );
+        return;
+      }
+
       const pol = json.data?.politica;
       const esc = json.data?.escalas ?? [];
       if (pol && typeof pol === "object") {
@@ -85,7 +132,8 @@ export default function ConfiguracionComisionesPage() {
         );
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al cargar");
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`Excepción al cargar ${POLITICA_ENDPOINT} — ${msg} — trace ${traceCliente}`);
     } finally {
       setLoading(false);
     }
