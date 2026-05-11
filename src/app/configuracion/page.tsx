@@ -150,6 +150,16 @@ export default function ConfiguracionPage() {
           </li>
           <li>
             <SettingsModuleCard
+              title="Configuración Proyectos"
+              subtitle="GLOBAL · KANBAN"
+              description="Columnas del tablero, estados y configuración visual del módulo Proyectos."
+              icon={LayoutGrid}
+              badge={editorBadge}
+              href="/configuracion/proyectos"
+            />
+          </li>
+          <li>
+            <SettingsModuleCard
               title="Canales y comunicación"
               subtitle="OMNICANAL · MENSAJERÍA"
               description="WhatsApp, redes y email: credenciales y estado de conexión."
