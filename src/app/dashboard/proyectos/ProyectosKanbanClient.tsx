@@ -136,6 +136,14 @@ function prioridadFallbackVisual(p: string): {
   return { bgColor: "#f1f5f9", textColor: "#475569", borderColor: "#cbd5e1", accentColor: "#94a3b8" };
 }
 
+function prioridadFallbackLabel(p: string): string {
+  if (p === "normal") return "Media";
+  if (p === "alta") return "Alta";
+  if (p === "urgente") return "Urgente";
+  if (p === "baja") return "Baja";
+  return p;
+}
+
 function prioridadClass(p: string): string {
   if (p === "urgente") return "bg-red-600 text-white";
   if (p === "alta") return "bg-orange-500 text-white";
@@ -462,14 +470,14 @@ export default function ProyectosKanbanClient() {
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="overflow-x-auto pb-4">
-          <div className="flex min-h-[480px] gap-4">
+        <div className="max-h-[calc(100vh-260px)] min-h-[520px] overflow-auto rounded-xl pb-4">
+          <div className="flex min-h-full gap-4">
             {kanbanColumns.map((col) => {
               const items = byColumn.get(col.id) ?? [];
               return (
                 <KanbanColumnView key={col.id} col={col}>
                   <div
-                    className="sticky top-3 z-20 flex items-center justify-between border-b border-slate-200 bg-white/95 px-3 py-2 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/85"
+                    className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2 shadow-sm"
                     style={{ borderTopColor: col.color, borderTopWidth: 3 }}
                   >
                     <span className="text-sm font-semibold text-slate-800">{col.nombre}</span>
@@ -480,7 +488,7 @@ export default function ProyectosKanbanClient() {
                       Esta columna está inactiva, pero contiene proyectos. Movelos a una columna activa.
                     </div>
                   ) : null}
-                  <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
+                  <div className="flex flex-1 flex-col gap-2 p-2">
                     {items.map((p) => (
                       <ProjectCardView
                         key={p.id}
@@ -588,11 +596,14 @@ function ProjectCardView({
     prioridadConfig?.bg_color ??
     fallbackPriority.accentColor;
   const priorityBg = prioridadConfig?.bg_color ?? prioridadConfig?.color ?? fallbackPriority.bgColor;
-  const cardTint = hexToRgba(priorityBg, 0.1);
+  const cardTint = hexToRgba(priorityBg, 0.18);
+  const softBorder = hexToRgba(priorityAccent, 0.48);
   const cardStyle: CSSProperties = {
     ...style,
+    borderColor: softBorder ?? priorityAccent,
     borderLeftColor: priorityAccent,
-    background: cardTint ? `linear-gradient(90deg, ${cardTint}, #ffffff 42%)` : undefined,
+    borderLeftWidth: 6,
+    background: cardTint ? `linear-gradient(90deg, ${cardTint}, #ffffff 72%)` : undefined,
   };
   const badgeStyle: CSSProperties | undefined = prioridadConfig
     ? {
@@ -612,10 +623,15 @@ function ProjectCardView({
       style={cardStyle}
       {...attributes}
       {...listeners}
-      className={`touch-none rounded-lg border border-l-4 border-slate-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md ${
+      className={`relative touch-none overflow-hidden rounded-lg border bg-white p-3 pl-4 shadow-sm transition-shadow hover:shadow-md ${
         dragOverlay ? "rotate-1 cursor-grabbing shadow-2xl" : "cursor-grab active:cursor-grabbing"
       } ${isDragging ? "opacity-40" : ""} ${moving ? "ring-2 ring-sky-100" : ""}`}
     >
+      <span
+        className="absolute bottom-0 left-0 top-0 w-1.5"
+        style={{ backgroundColor: priorityAccent }}
+        aria-hidden
+      />
       <button
         type="button"
         className="block w-full text-left"
@@ -635,7 +651,7 @@ function ProjectCardView({
             }`}
             style={badgeStyle}
           >
-            {prioridadConfig?.nombre ?? p.prioridad}
+            {prioridadConfig?.nombre ?? prioridadFallbackLabel(p.prioridad)}
           </span>
           <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${badgeSlaClass(sla)}`}>
             SLA {badgeSlaLabel(sla)}
