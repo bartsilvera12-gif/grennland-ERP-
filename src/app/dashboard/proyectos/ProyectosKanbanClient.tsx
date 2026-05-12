@@ -12,6 +12,7 @@ type EstadoRow = {
   codigo: string;
   color: string;
   sort_order: number;
+  inactiveFallback?: boolean;
 };
 
 type ProyectoCard = Record<string, unknown> & {
@@ -25,7 +26,7 @@ type ProyectoCard = Record<string, unknown> & {
   bloqueado?: boolean;
   archivado?: boolean;
   proyecto_tipo?: { nombre?: string; codigo?: string } | null;
-  proyecto_estado?: { nombre?: string; color?: string; es_estado_final?: boolean } | null;
+  proyecto_estado?: { nombre?: string; codigo?: string; color?: string; es_estado_final?: boolean } | null;
   cliente?: { empresa?: string | null; nombre_contacto?: string | null } | null;
   responsable_comercial?: { nombre?: string | null } | null;
   responsable_tecnico?: { nombre?: string | null } | null;
@@ -152,15 +153,34 @@ export default function ProyectosKanbanClient() {
     void load();
   }, [load]);
 
+  const estadoActivoIds = useMemo(() => new Set(estados.map((e) => e.id)), [estados]);
+
+  const kanbanColumns = useMemo(() => {
+    const columns = [...estados];
+    const missing = new Map<string, EstadoRow>();
+    for (const p of proyectos) {
+      if (estadoActivoIds.has(p.estado_id) || missing.has(p.estado_id)) continue;
+      missing.set(p.estado_id, {
+        id: p.estado_id,
+        nombre: `Oculto / no usado: ${p.proyecto_estado?.nombre ?? "Estado sin configurar"}`,
+        codigo: p.proyecto_estado?.codigo ?? "estado_inactivo",
+        color: p.proyecto_estado?.color ?? "#94a3b8",
+        sort_order: 9999,
+        inactiveFallback: true,
+      });
+    }
+    return [...columns, ...missing.values()];
+  }, [estadoActivoIds, estados, proyectos]);
+
   const byColumn = useMemo(() => {
     const m = new Map<string, ProyectoCard[]>();
-    for (const e of estados) m.set(e.id, []);
+    for (const e of kanbanColumns) m.set(e.id, []);
     for (const p of proyectos) {
       const col = m.get(p.estado_id);
       if (col) col.push(p);
     }
     return m;
-  }, [estados, proyectos]);
+  }, [kanbanColumns, proyectos]);
 
   const prioridadByCodigo = useMemo(() => {
     const m = new Map<string, PrioridadConfig>();
@@ -291,7 +311,7 @@ export default function ProyectosKanbanClient() {
 
       <div className="overflow-x-auto pb-4">
         <div className="flex min-h-[480px] gap-4">
-          {estados.map((col) => {
+          {kanbanColumns.map((col) => {
             const items = byColumn.get(col.id) ?? [];
             return (
               <div
@@ -305,6 +325,11 @@ export default function ProyectosKanbanClient() {
                   <span className="text-sm font-semibold text-slate-800">{col.nombre}</span>
                   <span className="rounded-full bg-white px-2 py-0.5 text-xs text-slate-600">{items.length}</span>
                 </div>
+                {col.inactiveFallback ? (
+                  <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    Esta columna está inactiva, pero contiene proyectos. Movelos a una columna activa.
+                  </div>
+                ) : null}
                 <div className="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
                   {items.map((p) => {
                     const prioridadConfig = prioridadByCodigo.get(p.prioridad);
@@ -387,6 +412,9 @@ export default function ProyectosKanbanClient() {
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => void cambiarEstado(p.id, e.target.value)}
                         >
+                          {!estadoActivoIds.has(p.estado_id) ? (
+                            <option value={p.estado_id}>Estado actual oculto / no usado</option>
+                          ) : null}
                           {estados.map((e) => (
                             <option key={e.id} value={e.id}>
                               {e.nombre}

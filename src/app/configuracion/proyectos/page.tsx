@@ -360,6 +360,9 @@ export default function ConfiguracionProyectosPage() {
               Estos estados alimentan directamente las columnas del tablero de Proyectos. El código técnico se conserva
               como referencia interna y no se modifica desde esta pantalla.
             </p>
+            <ConfigHelpText>
+              Desactivá una columna si no la usás. Queda oculta en el tablero operativo y no se elimina el historial.
+            </ConfigHelpText>
           </div>
           <button
             type="button"
@@ -395,7 +398,10 @@ export default function ConfiguracionProyectosPage() {
                         aria-hidden
                       />
                       <div>
-                        <p className="text-sm font-bold text-slate-900">{estado.nombre}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-bold text-slate-900">{estado.nombre}</p>
+                          <EstadoVisibilityBadge activo={draft.activo} />
+                        </div>
                         <p className="mt-0.5 text-xs text-slate-500">
                           Código: <span className="font-mono">{estado.codigo}</span> · Proyectos activos:{" "}
                           {estado.proyectos_activos_count}
@@ -482,10 +488,10 @@ export default function ConfiguracionProyectosPage() {
                         }
                       />
                     </label>
-                    <ToggleField
-                      label="Activo"
+                    <EstadoVisibilitySwitch
                       checked={draft.activo}
                       disabled={!canEdit}
+                      blocked={estado.proyectos_activos_count > 0 && draft.activo === false}
                       onChange={(value) => updateDraft(estado.id, "activo", value)}
                     />
                     <ToggleField
@@ -510,7 +516,7 @@ export default function ConfiguracionProyectosPage() {
 
                   {blocksDeactivation ? (
                     <p className="mt-3 text-xs font-semibold text-amber-700">
-                      No se puede desactivar mientras tenga proyectos activos asociados.
+                      Este estado tiene proyectos activos. Mové esos proyectos a otra columna antes de desactivarlo.
                     </p>
                   ) : null}
                   {blocksInitialRemoval ? (
@@ -584,7 +590,7 @@ export default function ConfiguracionProyectosPage() {
                 </select>
               </label>
               <ToggleField
-                label="Activo"
+                label="Estado visible en el tablero"
                 checked={newColumn.activo}
                 onChange={(value) => setNewColumn((prev) => ({ ...prev, activo: value }))}
               />
@@ -748,6 +754,66 @@ function ToggleField({
       />
       <span>{label}</span>
     </label>
+  );
+}
+
+function EstadoVisibilityBadge({ activo }: { activo: boolean }) {
+  return (
+    <span
+      className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+        activo
+          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+          : "border-slate-200 bg-slate-100 text-slate-600"
+      }`}
+    >
+      {activo ? "Activo" : "Inactivo"}
+    </span>
+  );
+}
+
+function EstadoVisibilitySwitch({
+  checked,
+  disabled,
+  blocked,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  blocked?: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800">Estado visible en el tablero</p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {checked ? "Activo" : "Oculto / no usado"} · no elimina el historial.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          disabled={disabled}
+          onClick={() => onChange(!checked)}
+          className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+            checked ? "border-emerald-500 bg-emerald-500" : "border-slate-300 bg-slate-200"
+          }`}
+        >
+          <span
+            className={`mt-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+              checked ? "translate-x-5" : "translate-x-0.5"
+            }`}
+          />
+        </button>
+      </div>
+      {blocked ? (
+        <p className="mt-2 text-xs font-semibold text-amber-700">
+          Este estado tiene proyectos activos. Mové esos proyectos a otra columna antes de desactivarlo.
+        </p>
+      ) : null}
+    </div>
   );
 }
 

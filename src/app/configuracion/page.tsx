@@ -140,22 +140,12 @@ export default function ConfiguracionPage() {
           </li>
           <li>
             <SettingsModuleCard
-              title="Configuración CRM"
-              subtitle="GLOBAL · PIPELINE"
-              description="Etapas del pipeline y columnas del embudo por empresa."
+              title="Configuración de Tableros"
+              subtitle="GLOBAL · CRM / PROYECTOS"
+              description="Configurá etapas, columnas y tableros comerciales de la empresa."
               icon={LayoutGrid}
               badge={editorBadge}
-              href="/configuracion/crm"
-            />
-          </li>
-          <li>
-            <SettingsModuleCard
-              title="Configuración Proyectos"
-              subtitle="GLOBAL · KANBAN"
-              description="Columnas del tablero, estados y configuración visual del módulo Proyectos."
-              icon={LayoutGrid}
-              badge={editorBadge}
-              href="/configuracion/proyectos"
+              href="/configuracion/tableros"
             />
           </li>
           <li>

@@ -49,7 +49,7 @@ export async function PUT(request: Request, context: RouteContext) {
       if (activeProjects > 0) {
         return NextResponse.json(
           errorResponse(
-            `No se puede desactivar: la columna tiene ${activeProjects} proyecto(s) activo(s). Movelos antes.`
+            "Este estado tiene proyectos activos. Mové esos proyectos a otra columna antes de desactivarlo."
           ),
           { status: 409 }
         );
