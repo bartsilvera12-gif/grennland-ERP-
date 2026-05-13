@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { UsuarioConEmpresa } from "@/lib/middleware/auth";
-import { createServiceRoleClientForEmpresa } from "@/lib/supabase/empresa-data-schema";
+import type { AppSupabaseClient } from "@/lib/supabase/schema";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { decryptSecret } from "@/lib/sifen/security";
 import { enviarLoteSifen, type RecibeLoteRespuestaParsed } from "@/lib/sifen/enviar-lote-sifen-test";
@@ -45,15 +45,20 @@ export type HandleSifenEnviarPostOptions = {
 
 /**
  * POST recibe-lote según ambiente en BD (test | producción), salvo `soloAmbienteTest`.
+ *
+ * El cliente Supabase se recibe por parámetro para que la ruta decida si va por
+ * PostgREST (legacy `zentra_erp`) o por el PG shim (tenants `erp_*` no expuestos).
+ * Antes este handler hacía `createServiceRoleClientForEmpresa` adentro, lo que
+ * dejaba a tenants `erp_*` con `PGRST106 Invalid schema`.
  */
 export async function handleSifenEnviarPost(
   request: NextRequest,
   params: Promise<{ id: string }>,
   auth: UsuarioConEmpresa,
+  supabase: AppSupabaseClient,
   options: HandleSifenEnviarPostOptions
 ): Promise<NextResponse> {
   const debugSoap = request.nextUrl.searchParams.get("debug") === "1";
-  const supabase = await createServiceRoleClientForEmpresa(auth.empresa_id);
   const { id: facturaId } = await params;
   if (!facturaId?.trim()) {
     return NextResponse.json(errorResponse("id de factura es obligatorio"), { status: 400 });

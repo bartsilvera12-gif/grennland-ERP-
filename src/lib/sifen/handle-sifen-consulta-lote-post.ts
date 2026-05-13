@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { UsuarioConEmpresa } from "@/lib/middleware/auth";
-import { createServiceRoleClientForEmpresa } from "@/lib/supabase/empresa-data-schema";
+import type { AppSupabaseClient } from "@/lib/supabase/schema";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { decryptSecret } from "@/lib/sifen/security";
 import {
@@ -78,14 +78,20 @@ export type HandleSifenConsultaLotePostOptions = {
   soloAmbienteTest: boolean;
 };
 
+/**
+ * POST consulta-lote contra SIFEN (test | producción) usando el `dProtConsLote`
+ * persistido tras recibe-lote. El cliente Supabase se recibe por parámetro para
+ * que la ruta decida si va por PostgREST (legacy `zentra_erp`) o por PG shim
+ * (tenants `erp_*` no expuestos).
+ */
 export async function handleSifenConsultaLotePost(
   request: NextRequest,
   params: Promise<{ id: string }>,
   auth: UsuarioConEmpresa,
+  supabase: AppSupabaseClient,
   options: HandleSifenConsultaLotePostOptions
 ): Promise<NextResponse> {
   const debugSoap = request.nextUrl.searchParams.get("debug") === "1";
-  const supabase = await createServiceRoleClientForEmpresa(auth.empresa_id);
   const { id: facturaId } = await params;
   if (!facturaId?.trim()) {
     return NextResponse.json(errorResponse("id de factura es obligatorio"), { status: 400 });
