@@ -136,16 +136,19 @@ export async function productoExiste(
 
 export type NuevoProductoData = Omit<Producto, "id">;
 
-/** Crea producto. empresa_id se obtiene del usuario; RLS valida acceso. */
+/**
+ * Crea producto via API server-side (POST /api/productos).
+ *
+ * Se mueve a server porque el cliente browser no tiene permisos para leer
+ * `zentra_erp.usuarios` (RLS / GRANT) y el patrón canonico del repo es
+ * resolver auth + tenant via getTenantSupabaseFromAuth en el backend.
+ * El movimiento de inventario_inicial (cuando stock_actual > 0) tambien
+ * se hace server-side dentro del mismo handler.
+ */
 export async function saveProducto(
   datos: NuevoProductoData
 ): Promise<Producto | null> {
-  const supabase = await getBrowserSupabaseForEmpresaData();
-  const usuario = await getCurrentUser();
-  if (!usuario?.empresa_id) throw new Error("Usuario no autenticado o sin empresa");
-
-  const insert: Record<string, unknown> = {
-    empresa_id: usuario.empresa_id,
+  const body = {
     nombre: datos.nombre,
     sku: datos.sku,
     costo_promedio: datos.costo_promedio,
@@ -154,53 +157,31 @@ export async function saveProducto(
     stock_minimo: datos.stock_minimo ?? 0,
     unidad_medida: datos.unidad_medida || "Unidad",
     metodo_valuacion: datos.metodo_valuacion,
+    codigo_barras:
+      datos.codigo_barras !== undefined && datos.codigo_barras !== null && datos.codigo_barras !== ""
+        ? datos.codigo_barras
+        : null,
+    codigo_barras_interno: datos.codigo_barras_interno === true,
   };
-  if (datos.codigo_barras !== undefined && datos.codigo_barras !== null && datos.codigo_barras !== "") {
-    insert.codigo_barras = datos.codigo_barras;
-    insert.codigo_barras_interno = datos.codigo_barras_interno === true;
+
+  const res = await fetch("/api/productos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    credentials: "include",
+  });
+  const json = await res.json().catch(() => ({} as Record<string, unknown>));
+  if (!res.ok || !json?.success) {
+    const msg = (json as { error?: string })?.error ?? `Error ${res.status} al guardar producto.`;
+    // 409 (conflicto) o validacion: lanzar para que la UI lo muestre.
+    if (res.status === 409 || res.status === 400) throw new Error(msg);
+    console.error("[inventario] saveProducto:", msg);
+    throw new Error(msg);
   }
 
-  const { data, error } = await supabase
-    .from("productos")
-    .insert([insert])
-    .select()
-    .single();
-
-  if (error) {
-    console.error("[inventario] saveProducto:", error.message);
-    // Surface known unique-violations con mensaje claro para la UI.
-    // codigo Postgres 23505 = unique_violation.
-    const code = (error as { code?: string }).code;
-    const msg = error.message ?? "";
-    if (code === "23505" && /codigo_barras/i.test(msg)) {
-      throw new Error("Ya existe otro producto con el mismo código de barras en esta empresa.");
-    }
-    if (code === "23505" && /sku/i.test(msg)) {
-      throw new Error("Ya existe otro producto con el mismo SKU en esta empresa.");
-    }
-    if (code === "23505") {
-      throw new Error("Ya existe un registro con un valor único conflictivo.");
-    }
-    return null;
-  }
-
-  const producto = rowToProducto(data as ProductoRow);
-
-  // Si tiene stock inicial, generar movimiento de inventario_inicial
-  if (producto.stock_actual > 0) {
-    await saveMovimiento({
-      producto_id: producto.id,
-      producto_nombre: producto.nombre,
-      producto_sku: producto.sku,
-      tipo: "ENTRADA",
-      cantidad: producto.stock_actual,
-      costo_unitario: producto.costo_promedio,
-      origen: "inventario_inicial",
-      fecha: new Date().toISOString(),
-    });
-  }
-
-  return producto;
+  const data = (json.data as { producto?: ProductoRow } | undefined)?.producto;
+  if (!data) return null;
+  return rowToProducto(data);
 }
 
 /** Actualiza solo precio_venta y/o costo_promedio. Wrapper de updateProducto. */
@@ -211,52 +192,42 @@ export async function updateProductoPrecios(
   await updateProducto(productoId, datos);
 }
 
-/** Actualiza producto. RLS valida que pertenezca a la empresa del usuario. */
+/** Actualiza producto via API server-side (PATCH /api/productos/[id]). */
 export async function updateProducto(
   id: string,
   datos: Partial<Omit<Producto, "id">>
 ): Promise<Producto | null> {
-  const supabase = await getBrowserSupabaseForEmpresaData();
-  const patch: Record<string, unknown> = {};
-  if (datos.nombre !== undefined) patch.nombre = datos.nombre;
-  if (datos.sku !== undefined) patch.sku = datos.sku;
-  if (datos.costo_promedio !== undefined) patch.costo_promedio = datos.costo_promedio;
-  if (datos.precio_venta !== undefined) patch.precio_venta = datos.precio_venta;
-  if (datos.stock_actual !== undefined) patch.stock_actual = datos.stock_actual;
-  if (datos.stock_minimo !== undefined) patch.stock_minimo = datos.stock_minimo;
-  if (datos.unidad_medida !== undefined) patch.unidad_medida = datos.unidad_medida;
-  if (datos.metodo_valuacion !== undefined) patch.metodo_valuacion = datos.metodo_valuacion;
-  if (datos.codigo_barras !== undefined) {
-    patch.codigo_barras = datos.codigo_barras || null;
-    if (datos.codigo_barras_interno !== undefined) {
-      patch.codigo_barras_interno = datos.codigo_barras_interno;
-    } else if (!datos.codigo_barras) {
-      patch.codigo_barras_interno = false;
-    }
-  }
-  if (datos.imagen_path !== undefined) patch.imagen_path = datos.imagen_path || null;
-  if (datos.imagen_url !== undefined) patch.imagen_url = datos.imagen_url || null;
+  const body: Record<string, unknown> = {};
+  if (datos.nombre !== undefined) body.nombre = datos.nombre;
+  if (datos.sku !== undefined) body.sku = datos.sku;
+  if (datos.costo_promedio !== undefined) body.costo_promedio = datos.costo_promedio;
+  if (datos.precio_venta !== undefined) body.precio_venta = datos.precio_venta;
+  if (datos.stock_actual !== undefined) body.stock_actual = datos.stock_actual;
+  if (datos.stock_minimo !== undefined) body.stock_minimo = datos.stock_minimo;
+  if (datos.unidad_medida !== undefined) body.unidad_medida = datos.unidad_medida;
+  if (datos.metodo_valuacion !== undefined) body.metodo_valuacion = datos.metodo_valuacion;
+  if (datos.codigo_barras !== undefined) body.codigo_barras = datos.codigo_barras ?? null;
+  if (datos.codigo_barras_interno !== undefined) body.codigo_barras_interno = datos.codigo_barras_interno;
+  if (datos.imagen_path !== undefined) body.imagen_path = datos.imagen_path ?? null;
+  if (datos.imagen_url !== undefined) body.imagen_url = datos.imagen_url ?? null;
 
-  const { data, error } = await supabase
-    .from("productos")
-    .update(patch)
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) {
-    const code = (error as { code?: string }).code;
-    const msg = error.message ?? "";
-    if (code === "23505" && /codigo_barras/i.test(msg)) {
-      throw new Error("Ya existe otro producto con el mismo código de barras en esta empresa.");
-    }
-    if (code === "23505" && /sku/i.test(msg)) {
-      throw new Error("Ya existe otro producto con el mismo SKU en esta empresa.");
-    }
-    console.error("[inventario] updateProducto:", error.message);
-    return null;
+  const res = await fetch(`/api/productos/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    credentials: "include",
+  });
+  const json = await res.json().catch(() => ({} as Record<string, unknown>));
+  if (!res.ok || !json?.success) {
+    const msg = (json as { error?: string })?.error ?? `Error ${res.status} al actualizar producto.`;
+    if (res.status === 409 || res.status === 400 || res.status === 404) throw new Error(msg);
+    console.error("[inventario] updateProducto:", msg);
+    throw new Error(msg);
   }
-  return rowToProducto(data as ProductoRow);
+
+  const data = (json.data as { producto?: ProductoRow } | undefined)?.producto;
+  if (!data) return null;
+  return rowToProducto(data);
 }
 
 // ─── Movimientos ─────────────────────────────────────────────────────────────
