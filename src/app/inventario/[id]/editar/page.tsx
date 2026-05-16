@@ -290,7 +290,7 @@ export default function EditarProductoPage() {
         <p className="text-gray-600">Modifica los datos del producto</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow p-6 max-w-3xl">
+      <div className="bg-white rounded-xl shadow p-6 max-w-5xl">
         <form className="space-y-6" onSubmit={handleSubmit}>
           {errorGeneral && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-3">
@@ -393,36 +393,72 @@ export default function EditarProductoPage() {
 
           {/* Clasificación, Proveedor, Ubicación */}
           <div className="border-t border-slate-100 pt-6">
-            <p className="text-xs text-gray-400 mb-3 uppercase tracking-wide font-semibold">
-              Clasificación y ubicación — opcional
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
+            <div className="flex items-baseline justify-between mb-3">
+              <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">
+                Clasificación y ubicación
+              </p>
+              <span className="text-xs text-gray-400">Opcional</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+              <div className="md:col-span-4 min-w-0">
                 <label className={labelClass}>Categoría principal</label>
                 <SelectFromList
                   value={categoriaId}
                   onChange={setCategoriaId}
                   options={categorias.map((c) => ({ id: c.id, label: c.nombre }))}
-                  emptyText="Sin categorías cargadas."
+                  emptyShort="Sin categorías"
                 />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="text-xs text-gray-400 truncate">
+                    {categorias.length === 0 ? "Todavía no cargaste categorías." : `${categorias.length} disponibles`}
+                  </span>
+                  <Link
+                    href="/inventario/categorias"
+                    className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:text-sky-900 border border-sky-200 hover:bg-sky-50 px-2.5 py-1 rounded-md transition-colors"
+                  >
+                    + Crear
+                  </Link>
+                </div>
               </div>
-              <div>
+              <div className="md:col-span-4 min-w-0">
                 <label className={labelClass}>Proveedor principal</label>
                 <SelectFromList
                   value={proveedorId}
                   onChange={setProveedorId}
                   options={proveedores.map((p) => ({ id: p.id, label: p.nombre }))}
-                  emptyText="Sin proveedores cargados."
+                  emptyShort="Sin proveedores"
                 />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="text-xs text-gray-400 truncate">
+                    {proveedores.length === 0 ? "Todavía no cargaste proveedores." : `${proveedores.length} disponibles`}
+                  </span>
+                  <Link
+                    href="/proveedores/nuevo"
+                    className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:text-sky-900 border border-sky-200 hover:bg-sky-50 px-2.5 py-1 rounded-md transition-colors"
+                  >
+                    + Crear
+                  </Link>
+                </div>
               </div>
-              <div>
+              <div className="md:col-span-4 min-w-0">
                 <label className={labelClass}>Ubicación principal</label>
                 <SelectFromList
                   value={ubicacionId}
                   onChange={setUbicacionId}
                   options={ubicaciones.map((u) => ({ id: u.id, label: u.nombre, sublabel: u.tipo }))}
-                  emptyText="Sin ubicaciones cargadas."
+                  emptyShort="Sin ubicaciones"
                 />
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <span className="text-xs text-gray-400 truncate">
+                    {ubicaciones.length === 0 ? "Todavía no cargaste ubicaciones." : `${ubicaciones.length} disponibles`}
+                  </span>
+                  <Link
+                    href="/inventario/ubicaciones"
+                    className="shrink-0 inline-flex items-center gap-1 text-xs font-medium text-sky-700 hover:text-sky-900 border border-sky-200 hover:bg-sky-50 px-2.5 py-1 rounded-md transition-colors"
+                  >
+                    + Crear
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
