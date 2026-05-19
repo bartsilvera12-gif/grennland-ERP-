@@ -219,19 +219,32 @@ function NavItem({
   const childActive = item.children?.some((c) => menuChildPathActive(p, c.href, c.exactMatch));
 
   if (item.children) {
-    const rowTone =
-      isActive || childActive
-        ? "bg-[color:var(--zentra-sidebar-active)] text-white shadow-[inset_3px_0_0_var(--zentra-sidebar-accent)]"
-        : "text-slate-200 hover:bg-[color:var(--zentra-sidebar-hover)]";
+    const active = isActive || !!childActive;
     return (
       <div className="space-y-0.5">
-        <div className={`flex items-center gap-0.5 rounded-lg text-sm font-medium transition-colors ${rowTone}`}>
+        <div
+          className={`group/parent relative flex items-center gap-0.5 rounded-xl text-sm transition-all ${
+            active
+              ? "bg-gradient-to-r from-[#4FAEB2]/18 via-[#4FAEB2]/10 to-transparent text-white"
+              : "text-slate-300 hover:bg-white/[0.04] hover:text-white"
+          }`}
+        >
+          {active ? (
+            <span
+              aria-hidden="true"
+              className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-[#4FAEB2] shadow-[0_0_10px_rgba(79,174,178,0.6)]"
+            />
+          ) : null}
           <Link
             href={item.href}
-            className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5"
+            className={`flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 ${active ? "font-semibold" : "font-medium"}`}
             title={item.label}
           >
-            <Icon className={`h-5 w-5 shrink-0 ${isActive || childActive ? "text-white" : "text-slate-400"}`} />
+            <Icon
+              className={`h-[18px] w-[18px] shrink-0 transition-colors ${
+                active ? "text-[#4FAEB2]" : "text-slate-400 group-hover/parent:text-slate-200"
+              }`}
+            />
             {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
           </Link>
           {!collapsed && (
@@ -239,19 +252,23 @@ function NavItem({
               <button
                 type="button"
                 onClick={() => onToggleFavorito(itemId)}
-                className={`shrink-0 rounded p-0.5 ${isFavorito ? "text-amber-300" : "text-slate-500 hover:text-amber-300"}`}
+                className={`shrink-0 rounded-md p-1 transition-colors ${
+                  isFavorito
+                    ? "text-amber-300"
+                    : "text-slate-500 opacity-0 hover:text-amber-300 group-hover/parent:opacity-100"
+                }`}
                 aria-label="Favorito"
               >
-                <Star className={`h-4 w-4 ${isFavorito ? "fill-current" : ""}`} />
+                <Star className={`h-3.5 w-3.5 ${isFavorito ? "fill-current" : ""}`} />
               </button>
               <button
                 type="button"
                 onClick={() => onToggleExpand()}
-                className="shrink-0 rounded p-1 text-current hover:opacity-90"
+                className="mr-1.5 shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-white/[0.06] hover:text-[#4FAEB2]"
                 aria-expanded={expanded}
                 aria-label={expanded ? "Contraer submenú" : "Expandir submenú"}
               >
-                {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
               </button>
             </>
           )}
@@ -262,21 +279,33 @@ function NavItem({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden pl-4 space-y-0.5"
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="overflow-hidden"
             >
-              {item.children.map((c) => (
-                <Link
-                  key={c.href}
-                  href={c.href}
-                  className={`block rounded-lg px-3 py-2 text-sm transition-all ${
-                    menuChildPathActive(p, c.href, c.exactMatch)
-                      ? "bg-[color:var(--zentra-sidebar-active)] text-white font-medium shadow-[inset_3px_0_0_var(--zentra-sidebar-accent)]"
-                      : "text-slate-300 hover:bg-[color:var(--zentra-sidebar-hover)]"
-                  }`}
-                >
-                  {c.label}
-                </Link>
-              ))}
+              <div className="relative ml-6 mt-1 space-y-0.5 border-l border-white/[0.08] pl-3">
+                {item.children.map((c) => {
+                  const childActive2 = menuChildPathActive(p, c.href, c.exactMatch);
+                  return (
+                    <Link
+                      key={c.href}
+                      href={c.href}
+                      className={`relative block rounded-lg px-3 py-1.5 text-[13px] transition-all ${
+                        childActive2
+                          ? "bg-[#4FAEB2]/12 font-medium text-white"
+                          : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
+                      }`}
+                    >
+                      {childActive2 ? (
+                        <span
+                          aria-hidden="true"
+                          className="absolute -left-[13px] top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-[#4FAEB2] shadow-[0_0_8px_rgba(79,174,178,0.7)]"
+                        />
+                      ) : null}
+                      {c.label}
+                    </Link>
+                  );
+                })}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -287,24 +316,38 @@ function NavItem({
   return (
     <Link
       href={item.href}
-      className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all ${
         isActive
-          ? "bg-[color:var(--zentra-sidebar-active)] text-white shadow-[inset_3px_0_0_var(--zentra-sidebar-accent)]"
-          : "text-slate-200 hover:bg-[color:var(--zentra-sidebar-hover)]"
+          ? "bg-gradient-to-r from-[#4FAEB2]/18 via-[#4FAEB2]/10 to-transparent font-semibold text-white"
+          : "font-medium text-slate-300 hover:bg-white/[0.04] hover:text-white"
       }`}
+      title={item.label}
     >
-      <Icon className={`h-5 w-5 shrink-0 ${isActive ? "text-white" : "text-slate-400"}`} />
+      {isActive ? (
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-[#4FAEB2] shadow-[0_0_10px_rgba(79,174,178,0.6)]"
+        />
+      ) : null}
+      <Icon
+        className={`h-[18px] w-[18px] shrink-0 transition-colors ${
+          isActive ? "text-[#4FAEB2]" : "text-slate-400 group-hover:text-slate-200"
+        }`}
+      />
       {!collapsed && (
         <>
           <span className="flex-1 truncate">{item.label}</span>
           <button
             type="button"
             onClick={(e) => { e.preventDefault(); onToggleFavorito(itemId); }}
-            className={`rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 ${
-              isFavorito ? "opacity-100 text-amber-300" : "text-slate-500 hover:text-amber-300"
+            className={`rounded-md p-1 transition-all ${
+              isFavorito
+                ? "text-amber-300 opacity-100"
+                : "text-slate-500 opacity-0 hover:text-amber-300 group-hover:opacity-100"
             }`}
+            aria-label="Favorito"
           >
-            <Star className={`h-4 w-4 ${isFavorito ? "fill-current" : ""}`} />
+            <Star className={`h-3.5 w-3.5 ${isFavorito ? "fill-current" : ""}`} />
           </button>
         </>
       )}
@@ -520,13 +563,13 @@ export default function Sidebar() {
       </div>
 
       {!collapsed && (
-        <div className="shrink-0 border-b border-[color:var(--zentra-sidebar-border)] px-3 py-2.5">
+        <div className="shrink-0 border-b border-[color:var(--zentra-sidebar-border)] px-3 py-3">
           <label htmlFor="sidebar-menu-search" className="sr-only">
             Buscar en el menú
           </label>
-          <div className="relative">
+          <div className="group relative">
             <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+              className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-[#4FAEB2]"
               aria-hidden
             />
             <input
@@ -536,21 +579,29 @@ export default function Sidebar() {
               placeholder="Buscar en el menú…"
               value={menuSearchQuery}
               onChange={(e) => setMenuSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-white/15 bg-white/10 py-2 pl-8 pr-2.5 text-xs text-white outline-none transition-[border-color,box-shadow] placeholder:text-slate-400 focus:border-sky-400/45 focus:ring-2 focus:ring-sky-400/35"
+              className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] py-2 pl-9 pr-3 text-xs text-white outline-none transition-[border-color,background-color,box-shadow] placeholder:text-slate-500 hover:border-white/[0.14] hover:bg-white/[0.06] focus:border-[#4FAEB2]/45 focus:bg-white/[0.06] focus:ring-2 focus:ring-[#4FAEB2]/25"
             />
           </div>
         </div>
       )}
 
-      <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain p-3">
+      <nav
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-2.5 py-3 [scrollbar-width:thin] [scrollbar-color:rgba(79,174,178,0.25)_transparent]"
+      >
         {showMenuNoResults ? (
           <p className="px-2 py-6 text-center text-xs text-slate-400">Sin resultados</p>
         ) : null}
 
         {/* Favoritos */}
         {favoritosItemsFiltered.length > 0 && !collapsed && (
-          <div className="mb-4">
-            <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">★ Favoritos</p>
+          <div className="mb-5">
+            <div className="mb-2 flex items-center gap-2 px-3">
+              <Star className="h-3 w-3 fill-current text-[#4FAEB2]" />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Favoritos
+              </p>
+              <span className="h-px flex-1 bg-gradient-to-r from-white/[0.08] to-transparent" />
+            </div>
             <div className="space-y-0.5">
               {favoritosItemsFiltered.map((item) => (
                 <NavItem
@@ -573,10 +624,20 @@ export default function Sidebar() {
         {/* Menú principal */}
         <div className="space-y-0.5">
           {!collapsed && mainItemsFiltered.length > 0 && (
-            <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">General</p>
+            <div className="mb-2 flex items-center gap-2 px-3">
+              <span className="h-1 w-1 rounded-full bg-[#4FAEB2]" />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                General
+              </p>
+              <span className="h-px flex-1 bg-gradient-to-r from-white/[0.08] to-transparent" />
+            </div>
           )}
           {cargando ? (
-            <div className="px-3 py-2 text-sm text-slate-500 animate-pulse">Cargando…</div>
+            <div className="space-y-1 px-3 py-2">
+              <div className="h-8 animate-pulse rounded-lg bg-white/[0.04]" />
+              <div className="h-8 animate-pulse rounded-lg bg-white/[0.04]" />
+              <div className="h-8 animate-pulse rounded-lg bg-white/[0.04]" />
+            </div>
           ) : (
             mainItemsFiltered.map((item) => (
               <NavItem
@@ -597,19 +658,32 @@ export default function Sidebar() {
 
         {/* Admin */}
         {esSuperAdmin && adminEmpresasMatchesQuery(menuSearchQuery) && (
-          <div className="mt-6 pt-4 border-t border-[color:var(--zentra-sidebar-border)]">
+          <div className="mt-6 border-t border-[color:var(--zentra-sidebar-border)] pt-4">
             {!collapsed && (
-              <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Admin</p>
+              <div className="mb-2 flex items-center gap-2 px-3">
+                <span className="h-1 w-1 rounded-full bg-amber-400" />
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Admin
+                </p>
+                <span className="h-px flex-1 bg-gradient-to-r from-white/[0.08] to-transparent" />
+              </div>
             )}
             <Link
               href="/admin/empresas"
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+              className={`relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all ${
                 (pathname ?? "").startsWith("/admin/empresas")
-                  ? "bg-[color:var(--zentra-sidebar-active)] text-amber-100 shadow-[inset_3px_0_0_var(--zentra-sidebar-accent)]"
-                  : "text-amber-300/95 hover:bg-[color:var(--zentra-sidebar-hover)]"
+                  ? "bg-gradient-to-r from-amber-400/15 via-amber-400/8 to-transparent font-semibold text-amber-100"
+                  : "font-medium text-amber-300/90 hover:bg-white/[0.04] hover:text-amber-200"
               }`}
+              title="Admin Empresas"
             >
-              <Building2 className="h-5 w-5 shrink-0" />
+              {(pathname ?? "").startsWith("/admin/empresas") ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-y-1.5 left-0 w-[3px] rounded-r-full bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]"
+                />
+              ) : null}
+              <Building2 className="h-[18px] w-[18px] shrink-0" />
               {!collapsed && <span className="truncate">Admin Empresas</span>}
             </Link>
           </div>

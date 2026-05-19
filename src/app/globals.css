@@ -9,10 +9,10 @@
   /* ZENTRA — identidad lateral (azul profundo; logo oficial en blanco) */
   --zentra-sidebar: #0a2540;
   --zentra-sidebar-elevated: #0c2d4d;
-  --zentra-sidebar-border: rgba(255, 255, 255, 0.08);
-  --zentra-sidebar-hover: rgba(255, 255, 255, 0.08);
-  --zentra-sidebar-active: rgba(56, 189, 248, 0.16);
-  --zentra-sidebar-accent: #38bdf8;
+  --zentra-sidebar-border: rgba(255, 255, 255, 0.06);
+  --zentra-sidebar-hover: rgba(79, 174, 178, 0.10);
+  --zentra-sidebar-active: rgba(79, 174, 178, 0.18);
+  --zentra-sidebar-accent: #4FAEB2;
   --zentra-login-bg-mid: #0b2f4c;
   --zentra-login-bg-deep: #051525;
   --sidebar: var(--zentra-sidebar);
