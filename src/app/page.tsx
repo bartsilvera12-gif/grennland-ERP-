@@ -339,7 +339,7 @@ function DonutChart({
     return (
       <div className="flex items-center gap-6">
         <div
-          className={`flex h-32 w-32 shrink-0 items-center justify-center rounded-full ${isZ ? "border border-slate-200" : "bg-gray-100"}`}
+          className={`flex h-32 w-32 shrink-0 items-center justify-center rounded-full ${isZ ? "border border-[#4FAEB2]/25" : "bg-gray-100"}`}
           style={isZ ? { backgroundColor: Z.surface } : undefined}
         >
           <span className={`text-xs ${isZ ? "" : "text-gray-400"}`} style={isZ ? { color: Z.muted } : undefined}>
@@ -502,7 +502,7 @@ function KpiCard({
     return (
       <motion.div
         whileHover={{ y: -2 }}
-        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+        className="rounded-2xl border border-[#4FAEB2]/25 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
         style={{ backgroundColor: Z.card }}
       >
         <div className="flex items-start justify-between gap-2">
@@ -535,7 +535,7 @@ function KpiCard({
   return (
     <motion.div
       whileHover={{ y: -2 }}
-      className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+      className="rounded-xl border border-[#4FAEB2]/25 bg-white p-6 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="text-2xl">{icon}</div>
@@ -766,7 +766,7 @@ function DashComercial({
   const nClientesNuevos = filasClientesPeriodo.length;
   const ticketPromedio = nClientesNuevos > 0 ? totalValorClientesNuevos / nClientesNuevos : 0;
 
-  const panelClass = "rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-8";
+  const panelClass = "rounded-2xl border border-[#4FAEB2]/25 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-8";
   const panelStyle = { backgroundColor: Z.card } as const;
   const titleClass = "text-xs font-bold uppercase tracking-wider";
   const titleStyle = { color: Z.muted } as const;
@@ -880,7 +880,7 @@ function DashComercial({
         </div>
 
         <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div className="rounded-xl border border-[#4FAEB2]/25 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               Clientes nuevos
             </p>
@@ -896,7 +896,7 @@ function DashComercial({
               {formatGsM(totalValorClientesNuevos)}
             </p>
           </div>
-          <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+          <div className="rounded-xl border border-[#4FAEB2]/25 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               Ticket promedio
             </p>
@@ -912,7 +912,7 @@ function DashComercial({
           </p>
         ) : (
           <div
-            className="mt-8 max-h-[min(28rem,55vh)] overflow-auto rounded-xl border border-slate-200"
+            className="mt-8 max-h-[min(28rem,55vh)] overflow-auto rounded-xl border border-[#4FAEB2]/25"
             style={{ backgroundColor: Z.card }}
           >
             <table className="w-full text-sm">
@@ -1276,7 +1276,7 @@ function DashFinanciero({
     : 1;
 
   const finCard =
-    "min-w-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-6 shadow-sm shadow-slate-200/50 transition-shadow hover:shadow-md sm:p-7";
+    "min-w-0 overflow-hidden rounded-2xl border border-[#4FAEB2]/25/90 bg-white p-6 shadow-sm shadow-slate-200/50 transition-shadow hover:shadow-md sm:p-7";
   /** Caja de consulta (inline-size) para `cqi`; alinea al fondo y estira con la card. */
   const finKpiValueWrap =
     "flex min-h-0 w-full min-w-0 flex-1 [container-type:inline-size] items-end";
@@ -1284,7 +1284,7 @@ function DashFinanciero({
   const finAccent = "#4FAEB2";
 
   return (
-    <div className="space-y-6 rounded-2xl border border-slate-200/80 bg-gradient-to-b from-slate-50 to-white p-4 sm:space-y-8 sm:p-6 md:p-8">
+    <div className="space-y-6 rounded-2xl border border-[#4FAEB2]/25/80 bg-gradient-to-b from-slate-50 to-white p-4 sm:space-y-8 sm:p-6 md:p-8">
       <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4 xl:gap-5">
         <motion.div whileHover={{ y: -2 }} className={finKpiCard}>
           <p className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Facturado del período</p>
@@ -1374,7 +1374,7 @@ function DashFinanciero({
                       count: number;
                     };
                     return (
-                      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 shadow-lg">
+                      <div className="rounded-lg border border-[#4FAEB2]/25 bg-white px-3 py-2 text-xs text-slate-800 shadow-lg">
                         <p className="font-medium text-slate-500">{formatFecha(row.fecha)}</p>
                         <p className="mt-1.5 text-sm font-semibold tabular-nums text-slate-900">
                           Gs. {formatGs(row.monto)}
@@ -1655,7 +1655,7 @@ function DashInventario({
 
       {/* Donut + Críticos */}
       <div className="grid grid-cols-3 gap-4">
-        <motion.div whileHover={{ y: -2 }} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6">
+        <motion.div whileHover={{ y: -2 }} className="bg-white border border-[#4FAEB2]/25 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Estado del stock</h3>
           <DonutChart segments={[
             { label: "Saludable", value: cntSaludable, color: "#22c55e" },
@@ -1663,7 +1663,7 @@ function DashInventario({
             { label: "Crítico",   value: cntCritico,   color: "#ef4444" },
           ]} centerLabel="productos" />
         </motion.div>
-        <motion.div whileHover={{ y: -2 }} className="col-span-2 bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6 transition-shadow hover:shadow-md">
+        <motion.div whileHover={{ y: -2 }} className="col-span-2 bg-white border border-[#4FAEB2]/25 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6 transition-shadow hover:shadow-md">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
             Productos críticos — stock bajo mínimo
           </h3>
@@ -1672,7 +1672,7 @@ function DashInventario({
               <span>✅</span> Todos los productos tienen stock suficiente.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <div className="overflow-x-auto rounded-lg border border-[#4FAEB2]/25">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
@@ -1715,14 +1715,14 @@ function DashInventario({
       </div>
 
       {/* Top por valor */}
-      <motion.div whileHover={{ y: -2 }} className="bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6 transition-shadow hover:shadow-md">
+      <motion.div whileHover={{ y: -2 }} className="bg-white border border-[#4FAEB2]/25 rounded-xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 p-6 transition-shadow hover:shadow-md">
         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">
           Top productos por valor de inventario
         </h3>
         {topPorValor.length === 0 ? (
           <p className="text-sm text-slate-400 text-center py-6">Sin productos registrados.</p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <div className="overflow-x-auto rounded-lg border border-[#4FAEB2]/25">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
@@ -2161,7 +2161,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </header>
-        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center text-sm shadow-sm">
+        <div className="rounded-2xl border border-[#4FAEB2]/25 bg-white px-5 py-10 text-center text-sm shadow-sm">
           <p className="font-semibold text-slate-900">Sin vistas asignadas</p>
           <p className="mx-auto mt-2 max-w-md text-slate-500">
             Tu empresa aún no habilitó pestañas para vos, o tu perfil no tiene vistas del dashboard. Pedí a un
@@ -2206,7 +2206,7 @@ export default function DashboardPage() {
               <select
                 value={usuarioId ?? ""}
                 onChange={(e) => handleUsuarioChange(parseInt(e.target.value, 10))}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/20"
+                className="rounded-xl border border-[#4FAEB2]/25 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/20"
               >
                 {usuarios.map((u) => (
                   <option key={u.id} value={u.id}>
@@ -2216,7 +2216,7 @@ export default function DashboardPage() {
               </select>
             </div>
           )}
-          <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          <div className="flex flex-wrap gap-1 rounded-xl border border-[#4FAEB2]/25 bg-white p-1 shadow-sm">
             {PERIODO_OPTS.map((p) => {
               const active = periodo === p.id;
               return (
@@ -2239,7 +2239,7 @@ export default function DashboardPage() {
       </header>
 
       {showTabNav ? (
-        <nav className="flex w-full flex-wrap gap-1 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm sm:w-fit">
+        <nav className="flex w-full flex-wrap gap-1 rounded-2xl border border-[#4FAEB2]/25 bg-white p-1.5 shadow-sm sm:w-fit">
           {effectiveTabs.map((tid) => {
             const meta = TAB_META[tid];
             const active = tab === tid;
