@@ -51,21 +51,20 @@ import {
 
 // ── ZENTRA (solo dashboard / esta página) ─────────────────────────────────────
 const Z = {
-  bg:       "#0B1C3D",
-  surface:  "#111F4A",
-  card:     "#14235A",
-  accent:   "#2563EB",
-  text:     "#FFFFFF",
-  muted:    "#AAB4D6",
-  success:  "#22C55E",
+  bg:       "#F8FAFC",
+  surface:  "#FFFFFF",
+  card:     "#FFFFFF",
+  accent:   "#4FAEB2",
+  text:     "#0F172A",
+  muted:    "#64748B",
+  success:  "#10B981",
   error:    "#EF4444",
 } as const;
 
 function ZentraMark({ className = "" }: { className?: string }) {
   return (
     <div
-      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 shadow-inner ${className}`}
-      style={{ backgroundColor: Z.card }}
+      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#4FAEB2]/25 bg-[#4FAEB2]/10 shadow-[0_0_0_4px_rgba(79,174,178,0.06)] ${className}`}
     >
       <span className="text-xl font-extrabold leading-none tracking-tight" style={{ color: Z.accent }}>
         Z
@@ -231,7 +230,7 @@ function PipelineBar({ data, tone = "light" }: { data: PipelineBarRowZ[]; tone?:
           </div>
           <div
             className={`h-5 overflow-hidden rounded-full ${z ? "" : "bg-gray-100"}`}
-            style={z ? { backgroundColor: "rgba(255,255,255,0.08)" } : undefined}
+            style={z ? { backgroundColor: "rgba(15,23,42,0.06)" } : undefined}
           >
             <div
               className={`h-full rounded-full transition-all ${d.barClass}`}
@@ -258,7 +257,7 @@ function HBarChart({
           <span className={`w-28 shrink-0 truncate text-xs ${z ? "" : "text-gray-600"}`} style={z ? { color: Z.muted } : undefined} title={d.label}>
             {d.label}
           </span>
-          <div className={`h-5 flex-1 overflow-hidden rounded-full ${z ? "" : "bg-gray-100"}`} style={z ? { backgroundColor: "rgba(255,255,255,0.08)" } : undefined}>
+          <div className={`h-5 flex-1 overflow-hidden rounded-full ${z ? "" : "bg-gray-100"}`} style={z ? { backgroundColor: "rgba(15,23,42,0.06)" } : undefined}>
             <div
               className={`h-full rounded-full ${color} transition-all`}
               style={{ width: `${d.value > 0 ? Math.max((d.value / max) * 100, 3) : 0}%` }}
@@ -340,7 +339,7 @@ function DonutChart({
     return (
       <div className="flex items-center gap-6">
         <div
-          className={`flex h-32 w-32 shrink-0 items-center justify-center rounded-full ${isZ ? "border border-white/10" : "bg-gray-100"}`}
+          className={`flex h-32 w-32 shrink-0 items-center justify-center rounded-full ${isZ ? "border border-slate-200" : "bg-gray-100"}`}
           style={isZ ? { backgroundColor: Z.surface } : undefined}
         >
           <span className={`text-xs ${isZ ? "" : "text-gray-400"}`} style={isZ ? { color: Z.muted } : undefined}>
@@ -464,10 +463,10 @@ function ProgressBar({
           {label}
         </span>
         <span className={`text-xs tabular-nums ${isZ ? "" : "text-gray-500"}`} style={isZ ? { color: Z.muted } : undefined}>
-          {fmt(v)} <span style={{ color: isZ ? "rgba(255,255,255,0.2)" : "#d1d5db" }}>/</span> {metaLabel}
+          {fmt(v)} <span style={{ color: isZ ? "rgba(15,23,42,0.2)" : "#d1d5db" }}>/</span> {metaLabel}
         </span>
       </div>
-      <div className={`h-2 overflow-hidden rounded-full ${isZ ? "" : "bg-gray-100"}`} style={isZ ? { backgroundColor: "rgba(255,255,255,0.08)" } : undefined}>
+      <div className={`h-2 overflow-hidden rounded-full ${isZ ? "" : "bg-gray-100"}`} style={isZ ? { backgroundColor: "rgba(15,23,42,0.06)" } : undefined}>
         <div
           className={`h-full rounded-full transition-all ${barClass}`}
           style={isZ ? { width: `${pct}%`, backgroundColor: color ?? Z.accent } : { width: `${pct}%` }}
@@ -503,7 +502,7 @@ function KpiCard({
     return (
       <motion.div
         whileHover={{ y: -2 }}
-        className="rounded-2xl border border-white/10 p-6 shadow-lg shadow-black/10"
+        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
         style={{ backgroundColor: Z.card }}
       >
         <div className="flex items-start justify-between gap-2">
@@ -767,7 +766,7 @@ function DashComercial({
   const nClientesNuevos = filasClientesPeriodo.length;
   const ticketPromedio = nClientesNuevos > 0 ? totalValorClientesNuevos / nClientesNuevos : 0;
 
-  const panelClass = "rounded-2xl border border-white/10 p-6 shadow-lg shadow-black/10 sm:p-8";
+  const panelClass = "rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-8";
   const panelStyle = { backgroundColor: Z.card } as const;
   const titleClass = "text-xs font-bold uppercase tracking-wider";
   const titleStyle = { color: Z.muted } as const;
@@ -780,16 +779,16 @@ function DashComercial({
           icon="🎯"
           label="Leads nuevos"
           value={String(leadsNuevos)}
-          color="text-[#60A5FA]"
+          color="text-[#4FAEB2]"
           variation={12}
         />
-        <KpiCard variant="zentra" icon="💬" label="En negociación" value={String(enNegociacion)} color="text-amber-400" />
+        <KpiCard variant="zentra" icon="💬" label="En negociación" value={String(enNegociacion)} color="text-amber-600" />
         <KpiCard
           variant="zentra"
           icon="✅"
           label="Clientes ganados (CRM)"
           value={String(clientesGanados)}
-          color="text-[#60A5FA]"
+          color="text-[#4FAEB2]"
           variation={8}
         />
         <KpiCard
@@ -797,7 +796,7 @@ function DashComercial({
           icon="📈"
           label="Tasa de conversión"
           value={`${tasaConversion.toFixed(1)}%`}
-          color={tasaConversion >= config.meta_conversion_leads ? "text-emerald-400" : "text-white"}
+          color={tasaConversion >= config.meta_conversion_leads ? "text-emerald-600" : "text-slate-900"}
           variation={tasaConversion >= config.meta_conversion_leads ? 5 : -2}
         />
       </div>
@@ -816,7 +815,7 @@ function DashComercial({
             Clientes ganados por vendedor
           </h3>
           <div className="mt-5">
-            <HBarChart data={rendimiento} color="bg-[#2563EB]" tone="zentra" />
+            <HBarChart data={rendimiento} color="bg-[#4FAEB2]" tone="zentra" />
           </div>
         </motion.div>
       </div>
@@ -857,49 +856,51 @@ function DashComercial({
 
       <motion.div
         whileHover={{ y: -3 }}
-        className="rounded-2xl border p-6 shadow-xl shadow-black/25 sm:p-10"
-        style={{ backgroundColor: Z.surface, borderColor: "rgba(37,99,235,0.35)" }}
+        className="rounded-2xl border border-[#4FAEB2]/25 bg-white p-6 shadow-[0_4px_24px_rgba(79,174,178,0.08)] sm:p-10"
       >
-        <div className="flex flex-col gap-2 border-b border-white/10 pb-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-2 border-b border-slate-100 pb-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: Z.accent }}>
-              Cartera · período
-            </p>
-            <h2 className="mt-2 text-xl font-bold tracking-tight sm:text-2xl" style={{ color: Z.text }}>
+            <div className="flex items-center gap-2">
+              <span className="h-1 w-1 rounded-full bg-[#4FAEB2]" />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#4FAEB2]">
+                Cartera · período
+              </p>
+            </div>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
               Clientes del período
             </h2>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed" style={{ color: Z.muted }}>
-              Altas con <strong style={{ color: Z.text }}>fecha de creación</strong> en el rango del filtro. Valor: suma de{" "}
-              <strong style={{ color: Z.text }}>facturas emitidas en el período</strong> por cliente (neto de{" "}
-              <strong style={{ color: Z.text }}>notas de crédito aprobadas</strong> por SET vinculadas a esas facturas; se excluyen
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-500">
+              Altas con <strong className="text-slate-700">fecha de creación</strong> en el rango del filtro. Valor: suma de{" "}
+              <strong className="text-slate-700">facturas emitidas en el período</strong> por cliente (neto de{" "}
+              <strong className="text-slate-700">notas de crédito aprobadas</strong> por SET vinculadas a esas facturas; se excluyen
               anuladas y corregidas por NC); si no hay, suma de{" "}
-              <strong style={{ color: Z.text }}>precio de suscripción</strong> con alta o inicio en el período.
+              <strong className="text-slate-700">precio de suscripción</strong> con alta o inicio en el período.
             </p>
           </div>
         </div>
 
         <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-white/10 px-5 py-4" style={{ backgroundColor: Z.card }}>
-            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: Z.muted }}>
+          <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               Clientes nuevos
             </p>
-            <p className="mt-2 text-3xl font-bold tabular-nums" style={{ color: Z.text }}>
+            <p className="mt-2 text-3xl font-semibold tabular-nums text-slate-900">
               {nClientesNuevos}
             </p>
           </div>
-          <div className="rounded-xl border border-white/10 px-5 py-4" style={{ backgroundColor: Z.card }}>
-            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: Z.muted }}>
+          <div className="rounded-xl border border-[#4FAEB2]/25 bg-gradient-to-br from-[#4FAEB2]/8 to-[#4FAEB2]/0 px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#4FAEB2]">
               Valor asociado (Gs.)
             </p>
-            <p className="mt-2 text-3xl font-bold tabular-nums" style={{ color: Z.accent }}>
+            <p className="mt-2 text-3xl font-semibold tabular-nums text-[#3F8E91]">
               {formatGsM(totalValorClientesNuevos)}
             </p>
           </div>
-          <div className="rounded-xl border border-white/10 px-5 py-4" style={{ backgroundColor: Z.card }}>
-            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: Z.muted }}>
+          <div className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               Ticket promedio
             </p>
-            <p className="mt-2 text-3xl font-bold tabular-nums" style={{ color: Z.text }}>
+            <p className="mt-2 text-3xl font-semibold tabular-nums text-slate-900">
               {nClientesNuevos > 0 ? formatGsM(ticketPromedio) : "—"}
             </p>
           </div>
@@ -911,11 +912,11 @@ function DashComercial({
           </p>
         ) : (
           <div
-            className="mt-8 max-h-[min(28rem,55vh)] overflow-auto rounded-xl border border-white/10"
+            className="mt-8 max-h-[min(28rem,55vh)] overflow-auto rounded-xl border border-slate-200"
             style={{ backgroundColor: Z.card }}
           >
             <table className="w-full text-sm">
-              <thead className="sticky top-0 border-b border-white/10" style={{ backgroundColor: Z.card }}>
+              <thead className="sticky top-0 border-b border-slate-200" style={{ backgroundColor: Z.card }}>
                 <tr>
                   {["Cliente", "Alta", "Plan / servicio", "Monto (Gs.)", "Origen valor", "Vendedor"].map((h) => (
                     <th
@@ -928,9 +929,9 @@ function DashComercial({
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-slate-100">
                 {filasClientesPeriodo.map((row) => (
-                  <tr key={row.id} className="transition-colors hover:bg-white/[0.04]">
+                  <tr key={row.id} className="transition-colors hover:bg-[#4FAEB2]/5">
                     <td className="max-w-[160px] truncate px-4 py-3 font-medium" style={{ color: Z.text }} title={row.nombre}>
                       {row.nombre}
                     </td>
@@ -1177,7 +1178,7 @@ function DashFinanciero({
       const key = raw || "__sin__";
       map.set(key, (map.get(key) ?? 0) + 1);
     }
-    const PALETTE = ["#2563EB", "#3B82F6", "#60A5FA", "#22C55E", "#A78BFA", "#F59E0B", "#EC4899", "#38BDF8"];
+    const PALETTE = ["#4FAEB2", "#5FBFC3", "#7DCFD2", "#22C55E", "#A78BFA", "#F59E0B", "#EC4899", "#38BDF8"];
     const entries = [...map.entries()].sort((a, b) => b[1] - a[1]);
     return {
       dimCliente: dim,
@@ -1212,7 +1213,7 @@ function DashFinanciero({
       const slug = byCliente.get(String(f.cliente_id)) ?? "__sin__";
       m.set(slug, (m.get(slug) ?? 0) + s);
     }
-    const pal = ["#2563EB", "#3B82F6", "#60A5FA", "#22C55E", "#A78BFA", "#F59E0B", "#EC4899", "#38BDF8"];
+    const pal = ["#4FAEB2", "#5FBFC3", "#7DCFD2", "#22C55E", "#A78BFA", "#F59E0B", "#EC4899", "#38BDF8"];
     const list = [...m.entries()]
       .map(([k, v]) => ({
         key: k,
@@ -1251,7 +1252,7 @@ function DashFinanciero({
       const slug = byCliente.get(String(factura.cliente_id)) ?? "__sin__";
       m.set(slug, (m.get(slug) ?? 0) + pagoMonto);
     }
-    const pal = ["#2563EB", "#3B82F6", "#60A5FA", "#22C55E", "#A78BFA", "#F59E0B", "#EC4899", "#38BDF8"];
+    const pal = ["#4FAEB2", "#5FBFC3", "#7DCFD2", "#22C55E", "#A78BFA", "#F59E0B", "#EC4899", "#38BDF8"];
     const list = [...m.entries()]
       .map(([k, v]) => ({
         key: k,
@@ -1280,7 +1281,7 @@ function DashFinanciero({
   const finKpiValueWrap =
     "flex min-h-0 w-full min-w-0 flex-1 [container-type:inline-size] items-end";
   const finKpiCard = `${finCard} flex h-full min-h-[9.5rem] flex-col`;
-  const finAccent = "#2563EB";
+  const finAccent = "#4FAEB2";
 
   return (
     <div className="space-y-6 rounded-2xl border border-slate-200/80 bg-gradient-to-b from-slate-50 to-white p-4 sm:space-y-8 sm:p-6 md:p-8">
@@ -1294,7 +1295,7 @@ function DashFinanciero({
         <motion.div whileHover={{ y: -2 }} className={finKpiCard}>
           <p className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-slate-500">Cobrado del período</p>
           <div className={finKpiValueWrap}>
-            <FinMontoGs kpi monto={recaudadoCohortPeriodo} className="text-[#2563EB]" />
+            <FinMontoGs kpi monto={recaudadoCohortPeriodo} className="text-[#4FAEB2]" />
           </div>
         </motion.div>
         <motion.div whileHover={{ y: -2 }} className={finKpiCard}>
@@ -1335,7 +1336,7 @@ function DashFinanciero({
           </div>
           <div className="flex min-w-0 flex-col gap-0.5 sm:items-end sm:text-right">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Total cobrado</p>
-            <FinMontoGs monto={cobradoRegistradoPeriodo} dense className="text-[#2563EB]" />
+            <FinMontoGs monto={cobradoRegistradoPeriodo} dense className="text-[#4FAEB2]" />
           </div>
         </div>
         {cobradoPorDiaSerie.length === 0 ? (
@@ -1364,7 +1365,7 @@ function DashFinanciero({
                   width={52}
                 />
                 <Tooltip
-                  cursor={{ stroke: "rgba(37,99,235,0.25)", strokeWidth: 1 }}
+                  cursor={{ stroke: "rgba(79,174,178,0.25)", strokeWidth: 1 }}
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const row = payload[0].payload as {
@@ -1406,7 +1407,7 @@ function DashFinanciero({
           {composicionModalidad.total > 0 ? (
             <>
               <div
-                className="h-full bg-[#2563EB] transition-[width] duration-300"
+                className="h-full bg-[#4FAEB2] transition-[width] duration-300"
                 style={{ width: `${composicionModalidad.pctContado}%`, minWidth: composicionModalidad.contado > 0 ? 4 : 0 }}
                 title={`Contado ${composicionModalidad.pctContado.toFixed(1)}%`}
               />
@@ -2104,11 +2105,11 @@ export default function DashboardPage() {
 
   if (!config) {
     return (
-      <div
-        className="flex min-h-[40vh] items-center justify-center rounded-2xl py-24 text-sm"
-        style={{ backgroundColor: Z.bg, color: Z.muted }}
-      >
-        Cargando…
+      <div className="flex min-h-[40vh] items-center justify-center py-24 text-sm text-slate-500">
+        <div className="flex items-center gap-3">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#4FAEB2]" />
+          Cargando dashboard…
+        </div>
       </div>
     );
   }
@@ -2137,36 +2138,34 @@ export default function DashboardPage() {
 
   if (dashScope.kind === "empty") {
     return (
-      <div
-        className="space-y-8 rounded-2xl border border-white/10 px-4 py-8 sm:px-6 md:px-8"
-        style={{ backgroundColor: Z.bg, color: Z.muted }}
-      >
+      <div className="space-y-8 px-4 py-6 sm:px-6 md:px-8">
         <header className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-4">
             <ZentraMark />
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: Z.accent }}>
-                Zentra
-              </p>
-              <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl" style={{ color: Z.text }}>
+              <div className="flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#4FAEB2] shadow-[0_0_0_3px_rgba(79,174,178,0.18)]"
+                />
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#4FAEB2]">
+                  Zentra
+                </p>
+              </div>
+              <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
                 Dashboard
               </h1>
-              <p className="mt-1 max-w-md text-sm leading-relaxed" style={{ color: Z.muted }}>
+              <p className="mt-1.5 max-w-md text-sm leading-relaxed text-slate-500">
                 No hay vistas del tablero disponibles para tu usuario.
               </p>
             </div>
           </div>
         </header>
-        <div
-          className="rounded-2xl border border-white/10 px-5 py-10 text-center text-sm"
-          style={{ backgroundColor: Z.surface, color: Z.muted }}
-        >
-          <p className="font-medium" style={{ color: Z.text }}>
-            Sin vistas asignadas
-          </p>
-          <p className="mt-2 max-w-md mx-auto">
+        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center text-sm shadow-sm">
+          <p className="font-semibold text-slate-900">Sin vistas asignadas</p>
+          <p className="mx-auto mt-2 max-w-md text-slate-500">
             Tu empresa aún no habilitó pestañas para vos, o tu perfil no tiene vistas del dashboard. Pedí a un
-            administrador que revise <span className="font-semibold">Usuarios</span> y las vistas habilitadas para la
+            administrador que revise <span className="font-semibold text-slate-700">Usuarios</span> y las vistas habilitadas para la
             empresa.
           </p>
         </div>
@@ -2175,21 +2174,24 @@ export default function DashboardPage() {
   }
 
   return (
-    <div
-      className="space-y-8 rounded-2xl border border-white/10 px-4 py-8 sm:px-6 md:px-8"
-      style={{ backgroundColor: Z.bg, color: Z.muted }}
-    >
+    <div className="space-y-8 px-4 py-6 sm:px-6 md:px-8" style={{ color: Z.muted }}>
       <header className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-4">
           <ZentraMark />
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em]" style={{ color: Z.accent }}>
-              Zentra
-            </p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl" style={{ color: Z.text }}>
+            <div className="flex items-center gap-2">
+              <span
+                aria-hidden="true"
+                className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#4FAEB2] shadow-[0_0_0_3px_rgba(79,174,178,0.18)]"
+              />
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#4FAEB2]">
+                Zentra
+              </p>
+            </div>
+            <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
               Dashboard
             </h1>
-            <p className="mt-1 max-w-md text-sm leading-relaxed" style={{ color: Z.muted }}>
+            <p className="mt-1.5 max-w-md text-sm leading-relaxed text-slate-500">
               Neura ERP · Vista {nivel === "supervisor" ? "de tu área" : "global"} · período alineado al filtro
             </p>
           </div>
@@ -2198,50 +2200,49 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           {usuarios.length > 0 && (
             <div className="flex flex-col gap-1.5 sm:items-end">
-              <span className="text-[10px] uppercase tracking-wide" style={{ color: Z.muted }}>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
                 Viendo como
               </span>
               <select
                 value={usuarioId ?? ""}
                 onChange={(e) => handleUsuarioChange(parseInt(e.target.value, 10))}
-                className="rounded-lg border border-white/15 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-offset-0"
-                style={{ backgroundColor: Z.surface, color: Z.text, borderColor: "rgba(255,255,255,0.12)" }}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/20"
               >
                 {usuarios.map((u) => (
-                  <option key={u.id} value={u.id} style={{ backgroundColor: Z.surface }}>
+                  <option key={u.id} value={u.id}>
                     {u.nombre} ({u.nivel})
                   </option>
                 ))}
               </select>
             </div>
           )}
-          <div className="flex flex-wrap gap-1 rounded-xl border border-white/10 p-1" style={{ backgroundColor: Z.surface }}>
-            {PERIODO_OPTS.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setPeriodo(p.id)}
-                className="rounded-lg px-3 py-2 text-xs font-medium transition-all"
-                style={
-                  periodo === p.id
-                    ? { backgroundColor: Z.accent, color: Z.text }
-                    : { color: Z.muted, backgroundColor: "transparent" }
-                }
-              >
-                {p.label}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+            {PERIODO_OPTS.map((p) => {
+              const active = periodo === p.id;
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setPeriodo(p.id)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                    active
+                      ? "bg-[#4FAEB2] text-white shadow-sm shadow-[#4FAEB2]/30"
+                      : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </header>
 
       {showTabNav ? (
-        <nav
-          className="flex w-full flex-wrap gap-1 rounded-2xl border border-white/10 p-1.5 sm:w-fit"
-          style={{ backgroundColor: Z.surface }}
-        >
+        <nav className="flex w-full flex-wrap gap-1 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm sm:w-fit">
           {effectiveTabs.map((tid) => {
             const meta = TAB_META[tid];
+            const active = tab === tid;
             return (
               <button
                 key={tid}
@@ -2252,12 +2253,11 @@ export default function DashboardPage() {
                     window.history.replaceState(null, "", `?tab=${tid}`);
                   }
                 }}
-                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all"
-                style={
-                  tab === tid
-                    ? { backgroundColor: Z.accent, color: Z.text, boxShadow: "0 8px 24px rgba(37,99,235,0.35)" }
-                    : { color: Z.muted }
-                }
+                className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                  active
+                    ? "bg-[#4FAEB2] text-white shadow-md shadow-[#4FAEB2]/30"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                }`}
               >
                 <span aria-hidden>{meta.icon}</span>
                 {meta.label}
