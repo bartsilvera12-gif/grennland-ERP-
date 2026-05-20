@@ -4,8 +4,11 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { getProspectos, moveProspecto } from "@/lib/crm/storage";
 import { getEtapas, getEtapaClasses, normalizeEtapaCodigo, type EtapaCrm } from "@/lib/crm/etapas";
+import { cleanTelefono, formatTelefonoDisplay } from "@/lib/telefono";
+import { FancySelect } from "@/app/dashboard/proyectos/components/FancySelect";
 import type { Prospecto } from "@/lib/crm/types";
 import ProspectoNuevoModal from "@/app/crm/components/ProspectoNuevoModal";
+import ProspectoDetalleModal from "@/app/crm/components/ProspectoDetalleModal";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -143,6 +146,19 @@ const IconClock = ({ className = "h-3 w-3" }: IconProps) => (
 const IconChat = ({ className = "h-3 w-3" }: IconProps) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+  </svg>
+);
+
+const IconPhone = ({ className = "h-3 w-3" }: IconProps) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+  </svg>
+);
+
+const IconCopy = ({ className = "h-3 w-3" }: IconProps) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
   </svg>
 );
 
@@ -303,12 +319,16 @@ function ProspectoCard({
   etapas,
   onDragStart,
   onMoverEtapa,
+  onEdit,
 }: {
   prospecto: Prospecto;
   etapas: EtapaCrm[];
   onDragStart: (id: string) => void;
   onMoverEtapa: (id: string, etapaCodigo: string) => void;
+  onEdit: (id: string) => void;
 }) {
+  const [phoneCopied, setPhoneCopied] = useState(false);
+
   const codigoProspecto = normalizeEtapaCodigo(prospecto.etapa);
   const esGanado = codigoProspecto === "GANADO";
   const esPerdido = codigoProspecto === "PERDIDO";
@@ -317,6 +337,42 @@ function ProspectoCard({
 
   const etapaActual = etapas.find((e) => normalizeEtapaCodigo(e.codigo) === codigoProspecto);
   const tone = getEtapaTone(etapaActual?.color ?? "gray");
+
+  const telefonoRaw = (prospecto.telefono ?? "").trim();
+  const telefonoLimpio = cleanTelefono(telefonoRaw);
+  const telefonoDisplay = telefonoRaw
+    ? telefonoLimpio.length >= 6
+      ? formatTelefonoDisplay(telefonoLimpio)
+      : telefonoRaw
+    : "";
+
+  async function copiarTelefono(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!telefonoRaw) return;
+    const valor = telefonoLimpio.length >= 6 ? telefonoLimpio : telefonoRaw;
+    try {
+      await navigator.clipboard.writeText(valor);
+    } catch {
+      // Fallback navegadores antiguos sin Clipboard API
+      const ta = document.createElement("textarea");
+      ta.value = valor;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "absolute";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        /* noop */
+      }
+      document.body.removeChild(ta);
+    }
+    setPhoneCopied(true);
+    window.setTimeout(() => setPhoneCopied(false), 1500);
+  }
+
+  const etapaSelectOptions = etapas.map((e) => ({ value: e.codigo, label: e.nombre }));
 
   return (
     <div
@@ -338,15 +394,19 @@ function ProspectoCard({
             {prospecto.numero_control}
           </p>
         </div>
-        <Link
-          href={`/crm/${prospecto.id}`}
-          onClick={(e) => e.stopPropagation()}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(prospecto.id);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
           className="shrink-0 rounded-md p-1 text-slate-300 opacity-0 transition-all hover:bg-[#4FAEB2]/10 hover:text-[#4FAEB2] group-hover:opacity-100"
           title="Editar"
           aria-label="Editar prospecto"
         >
           <IconEdit />
-        </Link>
+        </button>
       </div>
 
       <p className="mt-1.5 line-clamp-1 text-[11px] text-slate-500">{prospecto.servicio}</p>
@@ -382,6 +442,36 @@ function ProspectoCard({
         </div>
       </div>
 
+      {telefonoRaw ? (
+        <button
+          type="button"
+          onClick={copiarTelefono}
+          onPointerDown={(e) => e.stopPropagation()}
+          title={phoneCopied ? "Copiado" : "Hacé click para copiar el número"}
+          aria-label={`Copiar teléfono ${telefonoDisplay}`}
+          className={`mt-2 flex w-full items-center justify-between gap-2 rounded-xl border px-2.5 py-1.5 text-left text-[11px] transition-colors ${
+            phoneCopied
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-[#4FAEB2]/30 bg-[#4FAEB2]/8 text-[#3F8E91] hover:border-[#4FAEB2]/50 hover:bg-[#4FAEB2]/12"
+          }`}
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className={phoneCopied ? "text-emerald-600" : "text-[#4FAEB2]"}>
+              <IconPhone />
+            </span>
+            <span className="truncate font-mono font-medium tabular-nums">
+              {telefonoDisplay}
+            </span>
+          </span>
+          <span
+            className={`shrink-0 ${phoneCopied ? "text-emerald-600" : "text-[#4FAEB2]/70"}`}
+            aria-hidden="true"
+          >
+            {phoneCopied ? <IconCheck /> : <IconCopy />}
+          </span>
+        </button>
+      ) : null}
+
       {prospecto.proxima_accion ? (
         <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-100 bg-amber-50/70 px-2 py-1.5">
           <span className="mt-0.5 text-amber-500">
@@ -407,6 +497,24 @@ function ProspectoCard({
         </span>
       </div>
 
+      {/* Selector de etapa: siempre disponible para cambio rápido */}
+      <div
+        className="mt-2 rounded-xl border border-slate-100 bg-slate-50/70 px-2 py-1.5"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <label className="mb-1 block text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+          Mover a etapa
+        </label>
+        <FancySelect
+          size="sm"
+          ariaLabel="Cambiar etapa del prospecto"
+          value={prospecto.etapa}
+          onChange={(v) => onMoverEtapa(prospecto.id, v)}
+          options={etapaSelectOptions}
+        />
+      </div>
+
       {!esGanado && !esPerdido && hayGanado && hayPerdido ? (
         <div className="mt-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           <button
@@ -415,6 +523,7 @@ function ProspectoCard({
               e.stopPropagation();
               onMoverEtapa(prospecto.id, "GANADO");
             }}
+            onPointerDown={(e) => e.stopPropagation()}
             className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-emerald-200 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition-colors hover:bg-emerald-50"
           >
             <IconCheck />
@@ -426,6 +535,7 @@ function ProspectoCard({
               e.stopPropagation();
               onMoverEtapa(prospecto.id, "PERDIDO");
             }}
+            onPointerDown={(e) => e.stopPropagation()}
             className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-700 transition-colors hover:bg-rose-50"
           >
             <IconX />
@@ -467,6 +577,7 @@ function Columna({
   onDrop,
   onDragStart,
   onMoverEtapa,
+  onEdit,
 }: {
   etapa: EtapaCrm;
   prospectos: Prospecto[];
@@ -477,6 +588,7 @@ function Columna({
   onDrop: (e: React.DragEvent) => void;
   onDragStart: (id: string) => void;
   onMoverEtapa: (id: string, etapaCodigo: string) => void;
+  onEdit: (id: string) => void;
 }) {
   const tone = getEtapaTone(etapa.color);
   const total = prospectos.reduce((s, p) => s + p.valor_estimado, 0);
@@ -535,6 +647,7 @@ function Columna({
               etapas={etapas}
               onDragStart={onDragStart}
               onMoverEtapa={onMoverEtapa}
+              onEdit={onEdit}
             />
           ))
         )}
@@ -648,6 +761,7 @@ export default function CrmPage() {
   const [etapas, setEtapas] = useState<EtapaCrm[]>([]);
   const [dragOverEtapa, setDragOverEtapa] = useState<string | null>(null);
   const [nuevoOpen, setNuevoOpen] = useState(false);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const dragIdRef = useRef<string | null>(null);
 
   function recargar() {
@@ -792,6 +906,7 @@ export default function CrmPage() {
               onDrop={(e) => handleDrop(e, etapa.codigo)}
               onDragStart={handleDragStart}
               onMoverEtapa={handleMoverEtapa}
+              onEdit={(id) => setEditandoId(id)}
             />
           ))}
         </div>
@@ -804,6 +919,13 @@ export default function CrmPage() {
           setNuevoOpen(false);
           recargar();
         }}
+      />
+
+      <ProspectoDetalleModal
+        id={editandoId}
+        open={editandoId != null}
+        onClose={() => setEditandoId(null)}
+        onUpdated={() => recargar()}
       />
     </div>
   );
