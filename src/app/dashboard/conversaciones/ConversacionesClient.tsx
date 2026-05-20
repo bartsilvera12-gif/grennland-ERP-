@@ -139,8 +139,10 @@ function displayFilenameForAttachment(message: ChatMessage): string {
 }
 
 function tabClass(active: boolean) {
-  return `px-3 py-2 text-xs font-semibold rounded-lg transition-colors ${
-    active ? "bg-white text-slate-800 shadow-sm border border-slate-200" : "text-slate-500 hover:text-slate-700"
+  return `px-4 py-2 text-xs font-semibold rounded-xl transition-all ${
+    active
+      ? "bg-[#4FAEB2] text-white shadow-sm shadow-[#4FAEB2]/25"
+      : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
   }`;
 }
 
@@ -1790,7 +1792,7 @@ export function ConversacionesClient({
                         setTransferModalOpen(false);
                       })
                     }
-                    className="shrink-0 rounded-xl bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-50 disabled:pointer-events-none"
+                    className="shrink-0 rounded-xl bg-[#4FAEB2] px-5 py-2.5 text-sm font-semibold text-white shadow-sm shadow-[#4FAEB2]/20 hover:bg-[#3F8E91] disabled:opacity-50 disabled:pointer-events-none"
                   >
                     Transferir
                   </button>
@@ -1807,7 +1809,7 @@ export function ConversacionesClient({
                     value={transferAgentSearch}
                     onChange={(e) => setTransferAgentSearch(e.target.value)}
                     placeholder="Buscar"
-                    className="w-full max-w-[14rem] border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white placeholder:text-slate-400 outline-none focus:ring-1 focus:ring-sky-400/50 focus:border-sky-300"
+                    className="w-full max-w-[14rem] border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-[#4FAEB2]/20 focus:border-[#4FAEB2]"
                     aria-label="Buscar agente"
                   />
                 </div>
@@ -1879,11 +1881,19 @@ export function ConversacionesClient({
 
       <div className="flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 leading-tight truncate">
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#4FAEB2] shadow-[0_0_0_3px_rgba(79,174,178,0.18)]"
+            />
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#4FAEB2]">
+              Omnicanal
+            </p>
+          </div>
+          <h1 className="mt-1 text-xl sm:text-2xl font-semibold tracking-tight text-slate-900 leading-tight truncate">
             {agentDisplayName}
           </h1>
-          <p className="text-xs text-slate-500 leading-snug mt-0.5">
-            Omnicanal ·{" "}
+          <p className="text-xs text-slate-500 leading-snug mt-1">
             {mode === "historial"
               ? "Historial omnicanal"
               : vista === "inbox"
@@ -1892,7 +1902,7 @@ export function ConversacionesClient({
             {mode === "historial" ? (
               <>
                 {" · "}
-                <Link href="/dashboard/conversaciones" className="text-[#0EA5E9] hover:underline font-medium">
+                <Link href="/dashboard/conversaciones" className="text-[#4FAEB2] hover:underline font-medium">
                   Inbox
                 </Link>
               </>
@@ -1907,7 +1917,7 @@ export function ConversacionesClient({
               </span>
               <span className="text-[10px] text-slate-600 leading-snug">
                 Sin puesto en colas ·{" "}
-                <Link href="/configuracion/colas" className="font-semibold text-[#0EA5E9] hover:underline">
+                <Link href="/configuracion/colas" className="font-semibold text-[#4FAEB2] hover:underline">
                   Colas
                 </Link>
               </span>
@@ -1919,7 +1929,7 @@ export function ConversacionesClient({
               </span>
               <span className="text-[10px] text-slate-600 leading-snug">
                 Sin fila de agente en colas ·{" "}
-                <Link href="/configuracion/colas" className="font-semibold text-[#0EA5E9] hover:underline">
+                <Link href="/configuracion/colas" className="font-semibold text-[#4FAEB2] hover:underline">
                   Colas
                 </Link>
               </span>
@@ -1944,7 +1954,7 @@ export function ConversacionesClient({
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Tu turno</span>
                 {opPresenceBusy ? (
-                  <span className="text-[10px] font-medium text-sky-600 animate-pulse">Guardando…</span>
+                  <span className="text-[10px] font-medium text-[#4FAEB2] animate-pulse">Guardando…</span>
                 ) : null}
               </div>
               <p className="text-[11px] font-bold text-slate-800 tabular-nums">
@@ -2033,7 +2043,7 @@ export function ConversacionesClient({
             value={listSearch}
             onChange={(e) => setListSearch(e.target.value)}
             placeholder="Buscar por nombre o número"
-            className="flex-1 min-w-[12rem] border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white placeholder:text-slate-400 outline-none focus:ring-1 focus:ring-sky-400/40 focus:border-sky-300"
+            className="flex-1 min-w-[12rem] border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-[#4FAEB2]/20 focus:border-[#4FAEB2]"
             aria-label="Buscar por nombre o número"
           />
         </div>
@@ -2046,18 +2056,24 @@ export function ConversacionesClient({
             value={listSearch}
             onChange={(e) => setListSearch(e.target.value)}
             placeholder="Buscar por nombre o número"
-            className="flex-1 min-w-[12rem] border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white placeholder:text-slate-400 outline-none focus:ring-1 focus:ring-sky-400/40 focus:border-sky-300"
+            className="flex-1 min-w-[12rem] border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-[#4FAEB2]/20 focus:border-[#4FAEB2]"
             aria-label="Buscar en historial"
           />
         </div>
       ) : null}
 
       {(mode === "historial" || vista === "inbox") ? (
-        <div className="flex flex-wrap items-end gap-3 shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
-          <label className="flex flex-col gap-1 min-w-[12rem]">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Canal</span>
+        <div className="flex flex-wrap items-end gap-3 shrink-0 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <label className="flex flex-col gap-1.5 min-w-[12rem]">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              Canal
+            </span>
             <select
-              className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white min-w-[12rem] max-w-[min(22rem,90vw)]"
+              className="appearance-none rounded-xl border border-slate-200 bg-white bg-[length:14px_14px] bg-[right_0.7rem_center] bg-no-repeat px-3 py-2 pr-8 text-xs font-medium text-slate-700 shadow-sm outline-none transition-colors hover:border-[#4FAEB2]/60 focus:border-[#4FAEB2] focus:ring-2 focus:ring-[#4FAEB2]/20 min-w-[12rem] max-w-[min(22rem,90vw)]"
+              style={{
+                backgroundImage:
+                  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234FAEB2' stroke-width='2.5'><path stroke-linecap='round' stroke-linejoin='round' d='M6 9l6 6 6-6'/></svg>\")",
+              }}
               value={displayCanal}
               onChange={(e) => {
                 const v = e.target.value.trim();
@@ -2074,10 +2090,16 @@ export function ConversacionesClient({
               ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1 min-w-[11rem]">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Cola</span>
+          <label className="flex flex-col gap-1.5 min-w-[11rem]">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              Cola
+            </span>
             <select
-              className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white min-w-[11rem]"
+              className="appearance-none rounded-xl border border-slate-200 bg-white bg-[length:14px_14px] bg-[right_0.7rem_center] bg-no-repeat px-3 py-2 pr-8 text-xs font-medium text-slate-700 shadow-sm outline-none transition-colors hover:border-[#4FAEB2]/60 focus:border-[#4FAEB2] focus:ring-2 focus:ring-[#4FAEB2]/20 min-w-[11rem]"
+              style={{
+                backgroundImage:
+                  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234FAEB2' stroke-width='2.5'><path stroke-linecap='round' stroke-linejoin='round' d='M6 9l6 6 6-6'/></svg>\")",
+              }}
               value={displayCola}
               onChange={(e) => {
                 const v = e.target.value.trim();
@@ -2096,10 +2118,16 @@ export function ConversacionesClient({
                 ))}
             </select>
           </label>
-          <label className="flex flex-col gap-1 min-w-[11rem]">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Asignación</span>
+          <label className="flex flex-col gap-1.5 min-w-[11rem]">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              Asignación
+            </span>
             <select
-              className="border border-slate-200 rounded-lg px-2 py-1.5 text-xs bg-white min-w-[11rem]"
+              className="appearance-none rounded-xl border border-slate-200 bg-white bg-[length:14px_14px] bg-[right_0.7rem_center] bg-no-repeat px-3 py-2 pr-8 text-xs font-medium text-slate-700 shadow-sm outline-none transition-colors hover:border-[#4FAEB2]/60 focus:border-[#4FAEB2] focus:ring-2 focus:ring-[#4FAEB2]/20 min-w-[11rem]"
+              style={{
+                backgroundImage:
+                  "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234FAEB2' stroke-width='2.5'><path stroke-linecap='round' stroke-linejoin='round' d='M6 9l6 6 6-6'/></svg>\")",
+              }}
               value={displayAsignacion}
               onChange={(e) => {
                 const v = e.target.value;
@@ -2183,7 +2211,7 @@ export function ConversacionesClient({
                   type="button"
                   onClick={() => handleSelect(c.id)}
                   className={`w-full text-left px-2.5 py-2 border-b border-slate-100 hover:bg-white transition-colors ${
-                    selectedId === c.id ? "bg-white border-l-[3px] border-l-[#0EA5E9]" : ""
+                    selectedId === c.id ? "bg-white border-l-[3px] border-l-[#4FAEB2]" : ""
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -2211,7 +2239,7 @@ export function ConversacionesClient({
                           </span>
                         ) : null}
                         {c.unread_count > 0 && (
-                          <span className="bg-[#0EA5E9] text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                          <span className="bg-[#4FAEB2] text-white text-xs font-bold px-2 py-0.5 rounded-full">
                             {c.unread_count}
                           </span>
                         )}
@@ -2270,7 +2298,7 @@ export function ConversacionesClient({
                 <button
                   type="button"
                   onClick={() => setListColumnHidden(false)}
-                  className="text-xs font-medium text-[#0EA5E9] hover:underline"
+                  className="text-xs font-medium text-[#4FAEB2] hover:underline"
                 >
                   Mostrar lista de chats
                 </button>
@@ -2372,7 +2400,7 @@ export function ConversacionesClient({
                             setTransferQueueTarget(selected.queue_id?.trim() ? selected.queue_id : "");
                             setTransferModalOpen(true);
                           }}
-                          className="inline-flex items-center gap-1 rounded-md bg-sky-600 text-white px-2 py-1 text-[11px] font-semibold shadow-sm hover:bg-sky-700 disabled:opacity-50"
+                          className="inline-flex items-center gap-1 rounded-lg bg-[#4FAEB2] text-white px-2.5 py-1 text-[11px] font-semibold shadow-sm shadow-[#4FAEB2]/20 hover:bg-[#3F8E91] disabled:opacity-50 transition-colors"
                         >
                           <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" aria-hidden />
                           Transferir
@@ -2383,7 +2411,7 @@ export function ConversacionesClient({
                           type="button"
                           disabled={opsBusy || finalizeSaving}
                           onClick={() => void openFinalizeModal()}
-                          className="inline-flex items-center rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                          className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91] disabled:opacity-50"
                         >
                           Finalizar
                         </button>
@@ -2396,7 +2424,7 @@ export function ConversacionesClient({
                               changeConversationStatus(selected.id, "open")
                             )
                           }
-                          className="inline-flex items-center rounded-md border border-emerald-400 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                          className="inline-flex items-center rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800 shadow-sm transition-colors hover:bg-emerald-100 disabled:opacity-50"
                         >
                           Reabrir
                         </button>
@@ -2406,7 +2434,7 @@ export function ConversacionesClient({
                           type="button"
                           disabled={releasingBot}
                           onClick={() => void handleReleaseToBot()}
-                          className="inline-flex items-center rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                          className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:text-[#3F8E91] disabled:opacity-50"
                         >
                           {releasingBot ? "…" : "Modo bot"}
                         </button>
@@ -2429,7 +2457,7 @@ export function ConversacionesClient({
                       {selected.contact.cliente_id ? (
                         <Link
                           href={`/clientes/${selected.contact.cliente_id}`}
-                          className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-semibold text-[#0EA5E9] hover:underline"
+                          className="inline-flex items-center rounded-md px-2 py-1 text-[11px] font-semibold text-[#4FAEB2] hover:underline"
                         >
                           Cliente
                         </Link>
@@ -2514,7 +2542,7 @@ export function ConversacionesClient({
                                   href={v.comprobante_url}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="text-[#0EA5E9] hover:underline"
+                                  className="text-[#4FAEB2] hover:underline"
                                 >
                                   Ver archivo
                                 </a>
@@ -2583,14 +2611,14 @@ export function ConversacionesClient({
                         <div
                           className={`max-w-[88%] rounded-2xl px-2.5 py-1.5 text-sm ${
                             m.from_me
-                              ? "bg-[#0EA5E9] text-white rounded-br-md shadow-md shadow-sky-900/15 ring-1 ring-white/15"
-                              : "bg-white text-slate-800 rounded-bl-md border border-slate-200/95 shadow-sm border-l-[3px] border-l-sky-300/90"
+                              ? "bg-[#4FAEB2] text-white rounded-br-md shadow-md shadow-[#4FAEB2]/25 ring-1 ring-white/15"
+                              : "bg-white text-slate-800 rounded-bl-md border border-slate-200 shadow-sm border-l-[3px] border-l-[#4FAEB2]/55"
                           }`}
                         >
                           {showAsImage && attachUrl ? (
                             <div className="space-y-2">
                               <div
-                                className={`text-xs font-medium ${m.from_me ? "text-sky-100" : "text-slate-500"}`}
+                                className={`text-xs font-medium ${m.from_me ? "text-white/85" : "text-slate-500"}`}
                               >
                                 Imagen
                               </div>
@@ -2613,7 +2641,7 @@ export function ConversacionesClient({
                           ) : m.message_type === "audio" ? (
                             <div className="space-y-2">
                               <div
-                                className={`text-xs font-medium ${m.from_me ? "text-sky-100" : "text-slate-500"}`}
+                                className={`text-xs font-medium ${m.from_me ? "text-white/85" : "text-slate-500"}`}
                               >
                                 Audio
                               </div>
@@ -2639,7 +2667,7 @@ export function ConversacionesClient({
                                   rel="noreferrer"
                                   className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 no-underline transition-colors ${
                                     m.from_me
-                                      ? "border-white/25 bg-sky-500/20 hover:bg-sky-500/30 text-white"
+                                      ? "border-white/30 bg-white/20 hover:bg-white/30 text-white"
                                       : "border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-900"
                                   }`}
                                 >
@@ -2669,7 +2697,7 @@ export function ConversacionesClient({
                               ) : (
                                 <div>
                                   <div
-                                    className={`text-xs font-medium ${m.from_me ? "text-sky-100" : "text-slate-500"}`}
+                                    className={`text-xs font-medium ${m.from_me ? "text-white/85" : "text-slate-500"}`}
                                   >
                                     {m.message_type === "video" ? "Video" : "Documento"}
                                   </div>
@@ -2697,7 +2725,7 @@ export function ConversacionesClient({
                               return (
                                 <div className="space-y-2">
                                   <div
-                                    className={`text-xs font-medium ${m.from_me ? "text-sky-100" : "text-slate-500"}`}
+                                    className={`text-xs font-medium ${m.from_me ? "text-white/85" : "text-slate-500"}`}
                                   >
                                     Mensaje con imagen
                                   </div>
@@ -2805,7 +2833,7 @@ export function ConversacionesClient({
                           }}
                           className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border disabled:opacity-50 ${
                             quickReplyOpen
-                              ? "border-sky-400 bg-sky-50 text-sky-800"
+                              ? "border-[#4FAEB2]/50 bg-[#4FAEB2]/10 text-[#3F8E91]"
                               : "border-slate-200 text-slate-600 hover:bg-slate-50"
                           }`}
                           title="Respuestas rápidas"
@@ -2819,7 +2847,7 @@ export function ConversacionesClient({
                             <div className="border-b border-slate-100 px-2 py-1.5">
                               <input
                                 type="search"
-                                className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-sky-400 focus:ring-1 focus:ring-sky-400/30"
+                                className="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-[#4FAEB2] focus:ring-2 focus:ring-[#4FAEB2]/20"
                                 placeholder="Buscar…"
                                 value={quickReplySearch}
                                 onChange={(e) => setQuickReplySearch(e.target.value)}
@@ -2861,7 +2889,7 @@ export function ConversacionesClient({
                     ) : null}
                   </div>
                   <input
-                    className="flex-1 min-w-0 border border-slate-200 rounded-lg px-2.5 py-2 text-sm min-h-[2.25rem] focus:ring-2 focus:ring-[#0EA5E9]/30 focus:border-[#0EA5E9] outline-none"
+                    className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm transition-colors placeholder:text-slate-400 hover:border-[#4FAEB2]/60 focus:border-[#4FAEB2] focus:ring-2 focus:ring-[#4FAEB2]/20 outline-none min-h-[2.25rem]"
                     placeholder="Escribí un mensaje…"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
@@ -2870,9 +2898,29 @@ export function ConversacionesClient({
                   <button
                     type="submit"
                     disabled={sending || !input.trim()}
-                    className="bg-[#0EA5E9] hover:bg-[#0284C7] disabled:opacity-50 text-white px-3 py-2 rounded-lg text-sm font-medium shrink-0 min-h-[2.25rem]"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#4FAEB2] px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-[#4FAEB2]/20 transition-colors hover:bg-[#3F8E91] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none min-h-[2.25rem]"
                   >
-                    {sending ? "…" : "Enviar"}
+                    {sending ? (
+                      "…"
+                    ) : (
+                      <>
+                        <span>Enviar</span>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="h-3.5 w-3.5"
+                          aria-hidden="true"
+                        >
+                          <line x1="22" y1="2" x2="11" y2="13" />
+                          <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                        </svg>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>
