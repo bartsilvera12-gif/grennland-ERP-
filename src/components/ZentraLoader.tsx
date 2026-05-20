@@ -2,8 +2,9 @@
 
 /**
  * Pantalla de carga premium con animación del logo ZENTRA.
- * El logo está compuesto por dos triángulos asimétricos que se separan
- * y se vuelven a juntar en loop, sugiriendo una "Z" plegada.
+ * El logo está compuesto por dos cursores triangulares agudos que
+ * se cruzan formando una Z. La animación los separa hacia sus
+ * respectivas esquinas (NE y SW) y los vuelve a juntar en loop.
  *
  * Diseñado para reemplazar las pantallas blancas planas de "Cargando…".
  * Tokens visuales: fondo slate-50, marca turquesa #4FAEB2.
@@ -24,7 +25,7 @@ export default function ZentraLoader({
       aria-busy="true"
       role="status"
     >
-      {/* Logo con animación */}
+      {/* Logo: dos cursores cruzados */}
       <div className="relative h-24 w-24">
         <svg
           viewBox="0 0 100 100"
@@ -33,20 +34,20 @@ export default function ZentraLoader({
           className="h-full w-full drop-shadow-[0_4px_18px_rgba(79,174,178,0.25)]"
           aria-hidden="true"
         >
-          {/* Triángulo superior (apunta abajo-izq, simula la cresta de la Z) */}
+          {/* Cursor superior: apex hacia top-right (NE), base hacia centro */}
           <path
-            d="M 14 6 L 92 6 L 86 30 L 50 50 Z"
+            d="M 14 18 L 50 50 L 92 6 Z"
             fill="#4FAEB2"
-            className="zentra-loader-top origin-[50%_50%]"
+            className="zentra-cursor-ne origin-[50%_50%]"
           />
-          {/* Triángulo inferior (apunta arriba-der, simula la base de la Z) */}
+          {/* Cursor inferior: apex hacia bottom-left (SW), base hacia centro */}
           <path
-            d="M 50 50 L 14 70 L 8 94 L 86 94 Z"
+            d="M 86 82 L 50 50 L 8 94 Z"
             fill="#3F8E91"
-            className="zentra-loader-bot origin-[50%_50%]"
+            className="zentra-cursor-sw origin-[50%_50%]"
           />
         </svg>
-        {/* Halo de fondo suave */}
+        {/* Halo turquesa suave detrás */}
         <span
           aria-hidden="true"
           className="zentra-loader-halo absolute inset-0 -z-10 rounded-full bg-[#4FAEB2]/8 blur-2xl"
@@ -72,40 +73,37 @@ export default function ZentraLoader({
         </div>
       </div>
 
-      {/* Estilos locales: keyframes para el logo y los dots */}
       <style jsx>{`
-        :global(.zentra-loader-top) {
-          animation: zentraTop 2400ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        :global(.zentra-cursor-ne) {
+          animation: zentraCursorNE 2200ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
         }
-        :global(.zentra-loader-bot) {
-          animation: zentraBot 2400ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        :global(.zentra-cursor-sw) {
+          animation: zentraCursorSW 2200ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
         }
         :global(.zentra-loader-halo) {
-          animation: zentraHalo 2400ms ease-in-out infinite;
+          animation: zentraHalo 2200ms ease-in-out infinite;
         }
         .zentra-loader-dot {
           animation: zentraDot 1300ms ease-in-out infinite;
         }
-        @keyframes zentraTop {
+        /* Cursor superior: viaja hacia NE (top-right) y vuelve */
+        @keyframes zentraCursorNE {
           0%,
           100% {
             transform: translate(0, 0);
-            opacity: 1;
           }
           50% {
-            transform: translate(-7%, -10%);
-            opacity: 0.92;
+            transform: translate(10%, -10%);
           }
         }
-        @keyframes zentraBot {
+        /* Cursor inferior: viaja hacia SW (bottom-left) y vuelve */
+        @keyframes zentraCursorSW {
           0%,
           100% {
             transform: translate(0, 0);
-            opacity: 1;
           }
           50% {
-            transform: translate(7%, 10%);
-            opacity: 0.92;
+            transform: translate(-10%, 10%);
           }
         }
         @keyframes zentraHalo {
@@ -115,7 +113,7 @@ export default function ZentraLoader({
             opacity: 0.85;
           }
           50% {
-            transform: scale(1.25);
+            transform: scale(1.28);
             opacity: 1;
           }
         }
@@ -132,8 +130,8 @@ export default function ZentraLoader({
           }
         }
         @media (prefers-reduced-motion: reduce) {
-          :global(.zentra-loader-top),
-          :global(.zentra-loader-bot),
+          :global(.zentra-cursor-ne),
+          :global(.zentra-cursor-sw),
           :global(.zentra-loader-halo),
           .zentra-loader-dot {
             animation: none;
