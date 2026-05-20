@@ -2,12 +2,11 @@
 
 /**
  * Pantalla de carga premium con animación del logo ZENTRA.
- * El logo está compuesto por dos cursores triangulares agudos que
- * se cruzan formando una Z. La animación los separa hacia sus
- * respectivas esquinas (NE y SW) y los vuelve a juntar en loop.
  *
- * Diseñado para reemplazar las pantallas blancas planas de "Cargando…".
- * Tokens visuales: fondo slate-50, marca turquesa #4FAEB2.
+ * El logo se compone de dos cursores tipo "mouse pointer" (silueta de
+ * Lucide: cuerpo triangular + cola perpendicular) cruzados en el
+ * centro formando la Z. La animación los separa diagonalmente hacia
+ * sus respectivas esquinas (NE y SW) y los vuelve a juntar en loop.
  */
 export default function ZentraLoader({
   label = "Cargando",
@@ -34,19 +33,51 @@ export default function ZentraLoader({
           className="h-full w-full drop-shadow-[0_4px_18px_rgba(79,174,178,0.25)]"
           aria-hidden="true"
         >
-          {/* Cursor superior: apex hacia top-right (NE), base hacia centro */}
+          {/*
+            Cursor superior: silueta de "mouse pointer" apuntando NE.
+            Trazado (en viewBox 100):
+              · apex en (90, 8)
+              · cuerpo triangular cerrando contra el centro (50, 50)
+              · cola perpendicular saliendo hacia abajo-izquierda
+              · base inferior izquierda (44, 56) cierra el cursor
+
+            Construido a partir del path estándar de "mouse-pointer" de Lucide,
+            rotado para apuntar hacia top-right.
+          */}
           <path
-            d="M 14 18 L 50 50 L 92 6 Z"
+            d="
+              M 90 8
+              L 39 21
+              L 51 33
+              L 45 47
+              L 57 53
+              L 63 39
+              Z
+            "
             fill="#4FAEB2"
             className="zentra-cursor-ne origin-[50%_50%]"
           />
-          {/* Cursor inferior: apex hacia bottom-left (SW), base hacia centro */}
+
+          {/*
+            Cursor inferior: el mismo cursor rotado 180° (espejo punto-simétrico
+            respecto al centro 50,50). Apunta hacia SW. Está coloreado en el
+            tono turquesa más oscuro para distinguirlo en estado quieto.
+          */}
           <path
-            d="M 86 82 L 50 50 L 8 94 Z"
+            d="
+              M 10 92
+              L 61 79
+              L 49 67
+              L 55 53
+              L 43 47
+              L 37 61
+              Z
+            "
             fill="#3F8E91"
             className="zentra-cursor-sw origin-[50%_50%]"
           />
         </svg>
+
         {/* Halo turquesa suave detrás */}
         <span
           aria-hidden="true"
@@ -86,24 +117,22 @@ export default function ZentraLoader({
         .zentra-loader-dot {
           animation: zentraDot 1300ms ease-in-out infinite;
         }
-        /* Cursor superior: viaja hacia NE (top-right) y vuelve */
         @keyframes zentraCursorNE {
           0%,
           100% {
             transform: translate(0, 0);
           }
           50% {
-            transform: translate(10%, -10%);
+            transform: translate(12%, -12%);
           }
         }
-        /* Cursor inferior: viaja hacia SW (bottom-left) y vuelve */
         @keyframes zentraCursorSW {
           0%,
           100% {
             transform: translate(0, 0);
           }
           50% {
-            transform: translate(-10%, 10%);
+            transform: translate(-12%, 12%);
           }
         }
         @keyframes zentraHalo {
