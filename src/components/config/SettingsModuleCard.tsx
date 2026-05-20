@@ -6,29 +6,37 @@ import type { ComponentType } from "react";
 export type SettingsModuleBadgeTone = "active" | "inactive" | "neutral";
 
 function badgeClasses(tone: SettingsModuleBadgeTone): string {
-  if (tone === "active") return "bg-emerald-50 text-emerald-900 border-emerald-200";
-  if (tone === "inactive") return "bg-slate-100 text-slate-600 border-slate-200";
-  return "bg-slate-50 text-slate-600 border-slate-200";
+  if (tone === "active")
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (tone === "inactive")
+    return "border-slate-200 bg-slate-50 text-slate-500";
+  return "border-[#4FAEB2]/30 bg-[#4FAEB2]/10 text-[#3F8E91]";
+}
+
+function badgeDotClass(tone: SettingsModuleBadgeTone): string {
+  if (tone === "active") return "bg-emerald-500";
+  if (tone === "inactive") return "bg-slate-400";
+  return "bg-[#4FAEB2]";
 }
 
 export type SettingsModuleCardProps = {
   title: string;
-  /** Subtítulo tipo canal: línea superior en gris, uppercase */
   subtitle: string;
   icon: ComponentType<{ className?: string }>;
-  /** Texto secundario bajo el subtítulo (como “Sin configurar” en canales) */
   description: string;
   badge?: { label: string; tone: SettingsModuleBadgeTone };
   href?: string;
   disabled?: boolean;
   onSelect?: () => void;
-  /** Texto del botón inferior estilo “Editar” */
   actionLabel?: string;
 };
 
 /**
- * Misma jerarquía visual que {@link OmnichannelChannelCard}: cabecera con ícono en caja,
- * título, subtítulo, badge de estado y botón outline ancho completo abajo.
+ * Card uniforme para el centro de configuración. Mismo tamaño para todas:
+ * - description con `line-clamp-3` + `min-h-[3.75rem]` reserva el alto
+ * - footer pegado abajo via `mt-auto`
+ *
+ * Paleta: blanco + turquesa #4FAEB2.
  */
 export function SettingsModuleCard({
   title,
@@ -42,48 +50,88 @@ export function SettingsModuleCard({
   actionLabel = "Editar",
 }: SettingsModuleCardProps) {
   const shell =
-    "flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:border-slate-300 hover:shadow-md";
+    "group relative flex h-full flex-col rounded-2xl border border-[#4FAEB2]/45 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#4FAEB2]/70 hover:shadow-[0_8px_28px_rgba(79,174,178,0.10)]";
 
-  const footerClass =
-    "inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50 transition-colors";
+  const footerEnabledClass =
+    "inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#4FAEB2] px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-[#4FAEB2]/25 transition-colors hover:bg-[#3F8E91]";
+  const footerDisabledClass =
+    "inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-400 cursor-not-allowed";
 
   const header = (
     <>
       <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#4FAEB2]/30 bg-[#4FAEB2]/10 text-[#4FAEB2]">
             <Icon className="h-5 w-5" aria-hidden />
           </div>
           <div className="min-w-0">
-            <h2 className="truncate font-semibold text-slate-900">{title}</h2>
-            <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">{subtitle}</p>
+            <h2 className="truncate text-sm font-semibold tracking-tight text-slate-900">
+              {title}
+            </h2>
+            <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+              {subtitle}
+            </p>
           </div>
         </div>
         {badge ? (
           <span
-            className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${badgeClasses(badge.tone)}`}
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${badgeClasses(badge.tone)}`}
           >
+            <span
+              aria-hidden="true"
+              className={`h-1 w-1 rounded-full ${badgeDotClass(badge.tone)}`}
+            />
             {badge.label}
           </span>
         ) : null}
       </div>
-      <p className="mt-3 text-xs leading-relaxed text-slate-500">{description}</p>
+
+      <p className="mt-3 line-clamp-3 min-h-[3.75rem] text-xs leading-relaxed text-slate-500">
+        {description}
+      </p>
     </>
+  );
+
+  const arrow = (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-3.5 w-3.5"
+      aria-hidden="true"
+    >
+      <line x1="5" y1="12" x2="19" y2="12" />
+      <polyline points="12 5 19 12 12 19" />
+    </svg>
   );
 
   const footer =
     href && !disabled ? (
-      <Link href={href} className={footerClass}>
+      <Link href={href} className={footerEnabledClass}>
         {actionLabel}
+        {arrow}
       </Link>
-    ) : (
-      <button type="button" disabled={disabled} onClick={onSelect} className={`${footerClass} disabled:cursor-not-allowed disabled:opacity-50`}>
+    ) : disabled ? (
+      <button type="button" disabled className={footerDisabledClass}>
         {actionLabel}
+      </button>
+    ) : (
+      <button
+        type="button"
+        onClick={onSelect}
+        className={footerEnabledClass}
+      >
+        {actionLabel}
+        {arrow}
       </button>
     );
 
   return (
-    <article className={`${shell} ${disabled ? "opacity-[0.85]" : ""}`}>
+    <article className={`${shell} ${disabled ? "opacity-[0.65]" : ""}`}>
       {header}
       <div className="mt-auto pt-5">{footer}</div>
     </article>
