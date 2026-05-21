@@ -76,6 +76,7 @@ import { pgMarkConversationUnreadZero, pgReleaseConversationToBot } from "@/lib/
 import { isInvalidPostgrestSchemaError } from "@/lib/chat/postgrest-schema-error";
 import { normalizeChannelType } from "@/lib/chat/channel-type-utils";
 import { fetchChatConversationsFromTenantPg } from "@/lib/chat/chat-inbox-fetch-pg";
+import { withInboxLatencyMeasure } from "@/lib/chat/inbox-observability";
 import {
   pgConversationBelongsToEmpresa,
   pgFetchComprobanteValidacionesForConversation,
@@ -326,12 +327,27 @@ async function fetchChatConversationsUnsafe(
   });
 
   if (poolInbox && isLikelyUnexposedTenantChatSchema(dataSchema)) {
-    return fetchChatConversationsFromTenantPg(poolInbox, dataSchema, vista, filters, {
-      supabase,
-      catalogSr,
-      empresa_id,
-      usuario_id,
-    });
+    /**
+     * Observabilidad: `withInboxLatencyMeasure` mide la duración del fetch.
+     * Es no-op si `CHAT_INBOX_OBSERVABILITY` no está activo, así que el
+     * comportamiento productivo actual queda intacto. El `logPgPoolStats`
+     * posterior emite snapshot del pool solo cuando el flag está activo.
+     */
+    const result = await withInboxLatencyMeasure(
+      "fetchChatConversationsFromTenantPg",
+      () =>
+        fetchChatConversationsFromTenantPg(poolInbox, dataSchema, vista, filters, {
+          supabase,
+          catalogSr,
+          empresa_id,
+          usuario_id,
+        }),
+      { schema: dataSchema, vista },
+    );
+    if (process.env.CHAT_INBOX_OBSERVABILITY?.trim().toLowerCase() === "true") {
+      logPgPoolStats("inbox_list_after_fetch", poolInbox, { schema: dataSchema, vista });
+    }
+    return result;
   }
 
   const { data: activeFlowRows, error: activeFlowsErr } = await supabase

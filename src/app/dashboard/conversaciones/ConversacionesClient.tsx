@@ -4,6 +4,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import {
+  trackInboxPollingList,
+  trackInboxPollingThread,
+  trackInboxRealtimeEvent,
+  logRealtimeChannelState,
+  logInboxFlagsBoot,
+} from "@/lib/chat/inbox-observability";
+import { getInboxFlagsSnapshot } from "@/lib/chat/inbox-feature-flags";
 import type { ComprobanteValidacionListRow } from "@/lib/chat/comprobante-validation-types";
 import {
   approveComprobanteValidacion,
@@ -326,6 +334,11 @@ export function ConversacionesClient({
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
+
+  /** Boot log: snapshot de flags de Inbox. No-op si CHAT_INBOX_OBSERVABILITY=false. */
+  useEffect(() => {
+    logInboxFlagsBoot(getInboxFlagsSnapshot());
+  }, []);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -989,11 +1002,20 @@ export function ConversacionesClient({
       .on(
         "postgres_changes",
         { event: "*", schema: chatDataSchema, table: "chat_conversations" },
-        () => {
+        (payload) => {
+          trackInboxRealtimeEvent("conversation", { event: payload.eventType });
           void loadConversationsRef.current?.({ silent: true });
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        logRealtimeChannelState({
+          channel_name: "conversaciones-inbox-list",
+          schema: chatDataSchema,
+          table: "chat_conversations",
+          status,
+          error_message: err instanceof Error ? err.message : err ? String(err) : null,
+        });
+      });
 
     return () => {
       void supabaseChat.removeChannel(channel);
@@ -1008,6 +1030,7 @@ export function ConversacionesClient({
         "postgres_changes",
         { event: "INSERT", schema: chatDataSchema, table: "chat_messages" },
         (payload) => {
+          trackInboxRealtimeEvent("message_list", { event: payload.eventType });
           void loadConversationsRef.current?.({ silent: true });
           const row = payload.new as Record<string, unknown>;
           const convId = typeof row?.conversation_id === "string" ? row.conversation_id : "";
@@ -1027,7 +1050,15 @@ export function ConversacionesClient({
           }
         }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        logRealtimeChannelState({
+          channel_name: "conversaciones-inbox-inbound-messages",
+          schema: chatDataSchema,
+          table: "chat_messages",
+          status,
+          error_message: err instanceof Error ? err.message : err ? String(err) : null,
+        });
+      });
 
     return () => {
       void supabaseChat.removeChannel(channel);
@@ -1038,6 +1069,7 @@ export function ConversacionesClient({
   useEffect(() => {
     const id = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
+      trackInboxPollingList({ visibility: "visible" });
       void loadConversationsRef.current?.({ silent: true });
     }, 2800);
     return () => window.clearInterval(id);
@@ -1060,6 +1092,7 @@ export function ConversacionesClient({
     if (!selectedId) return;
     const id = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
+      trackInboxPollingThread({ has_selected: true });
       void loadMessagesRef.current(selectedId, { silent: true });
     }, 2800);
     return () => window.clearInterval(id);
@@ -1098,7 +1131,10 @@ export function ConversacionesClient({
           table: "chat_messages",
           filter: `conversation_id=eq.${selectedId}`,
         },
-        (payload) => mergeRow(payload.new as Record<string, unknown>)
+        (payload) => {
+          trackInboxRealtimeEvent("message_thread", { event: "INSERT" });
+          mergeRow(payload.new as Record<string, unknown>);
+        }
       )
       .on(
         "postgres_changes",
@@ -1108,9 +1144,20 @@ export function ConversacionesClient({
           table: "chat_messages",
           filter: `conversation_id=eq.${selectedId}`,
         },
-        (payload) => mergeRow(payload.new as Record<string, unknown>)
+        (payload) => {
+          trackInboxRealtimeEvent("message_thread", { event: "UPDATE" });
+          mergeRow(payload.new as Record<string, unknown>);
+        }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        logRealtimeChannelState({
+          channel_name: `conversaciones-msg-${selectedId}`,
+          schema: chatDataSchema,
+          table: "chat_messages",
+          status,
+          error_message: err instanceof Error ? err.message : err ? String(err) : null,
+        });
+      });
 
     return () => {
       void supabaseChat.removeChannel(channel);
