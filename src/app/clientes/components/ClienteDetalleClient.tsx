@@ -61,7 +61,7 @@ import { ClienteDatosSifenReceptorForm } from "@/components/clientes/ClienteDato
 // ── Estilos ────────────────────────────────────────────────────────────────────
 
 const inputClass =
-  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
+  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#4FAEB2] focus:outline-none bg-white text-sm";
 const labelClass = "block text-xs font-medium text-slate-500 mb-1";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -925,7 +925,7 @@ export default function ClienteDetalleClient({
         <h1 className="text-xl font-bold text-gray-800">No se pudo cargar el cliente</h1>
         <p className="text-sm text-red-600">{errorCarga}</p>
         <p className="text-xs font-mono text-gray-400 break-all">ID: {id}</p>
-        <button type="button" onClick={() => void cargar()} className="text-sm text-[#0EA5E9] underline">
+        <button type="button" onClick={() => void cargar()} className="text-sm text-[#4FAEB2] underline">
           Reintentar
         </button>
         <button type="button" onClick={() => closeOrBack()} className="ml-4 text-sm text-gray-500 underline">
@@ -961,55 +961,79 @@ export default function ClienteDetalleClient({
       </button>
 
       {/* ── Panel resumen ─────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-[#0EA5E9] to-[#0284C7] px-6 py-5">
+      <div className="overflow-hidden rounded-2xl border border-[#4FAEB2]/45 bg-white shadow-sm">
+        <div className="bg-gradient-to-br from-white via-white to-[#4FAEB2]/8 px-6 py-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               {/* Avatar */}
-              <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-xl font-bold text-white shrink-0 ${
-                cliente.tipo_cliente === "empresa" ? "bg-blue-500/80" : "bg-violet-500/80"
-              }`}>
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-[#4FAEB2]/30 bg-[#4FAEB2]/12 text-lg font-semibold tracking-tight text-[#3F8E91] shadow-sm">
                 {nombre.slice(0, 2).toUpperCase()}
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-white leading-tight">{nombre}</h1>
-                <div className="flex items-center gap-3 mt-1 flex-wrap">
-                  <span className="text-gray-300 font-mono text-xs">{cliente.codigo_cliente}</span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span
+                    aria-hidden="true"
+                    className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#4FAEB2]"
+                  />
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#4FAEB2]">
+                    Cliente
+                  </p>
+                </div>
+                <h1 className="mt-1 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+                  {nombre}
+                </h1>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 font-mono text-[11px] font-medium text-slate-600">
+                    {cliente.codigo_cliente}
+                  </span>
                   {cliente.ruc && (
-                    <span className="text-gray-300 text-xs">RUC: {cliente.ruc}</span>
+                    <span className="text-[11px] text-slate-500">
+                      <span className="font-medium text-slate-400">RUC:</span> {cliente.ruc}
+                    </span>
                   )}
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                    cliente.estado === "activo"
-                      ? "bg-green-500/20 text-green-300"
-                      : "bg-gray-500/30 text-gray-300"
-                  }`}>
-                    ● {cliente.estado === "activo" ? "Activo" : "Inactivo"}
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                      cliente.estado === "activo"
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-slate-200 bg-slate-50 text-slate-500"
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        cliente.estado === "activo" ? "bg-emerald-500" : "bg-slate-400"
+                      }`}
+                    />
+                    {cliente.estado === "activo" ? "Activo" : "Inactivo"}
                   </span>
                   {cliente.perfil_tributario_activo && (
-                    <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-white/15 text-white border border-white/25">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
                       Tributario
                     </span>
                   )}
-                  <span className="text-xs text-gray-400">
-                    Cliente desde {formatFecha(cliente.created_at)}
+                  <span className="text-[11px] text-slate-500">
+                    Cliente desde{" "}
+                    <span className="font-medium text-slate-700">
+                      {formatFecha(cliente.created_at)}
+                    </span>
                   </span>
                 </div>
               </div>
             </div>
             {/* Acciones del header */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex shrink-0 items-center gap-2">
               {cliente.estado === "activo" ? (
                 esAdmin ? (
                   <button
                     onClick={abrirModalBajaOperativa}
-                    className="text-xs font-medium border border-amber-400/60 text-amber-200 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition-colors"
+                    className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 shadow-sm transition-colors hover:bg-amber-100"
                   >
-                    Dar de baja cliente
+                    Dar de baja
                   </button>
                 ) : (
                   <button
                     onClick={handleToggleEstado}
-                    className="text-xs font-medium border border-white/20 text-white/80 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:text-[#3F8E91]"
                   >
                     Desactivar
                   </button>
@@ -1017,7 +1041,7 @@ export default function ClienteDetalleClient({
               ) : (
                 <button
                   onClick={handleToggleEstado}
-                  className="text-xs font-medium border border-white/20 text-white/80 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors"
+                  className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm transition-colors hover:bg-emerald-100"
                 >
                   Reactivar
                 </button>
@@ -1026,18 +1050,28 @@ export default function ClienteDetalleClient({
                 <button
                   type="button"
                   onClick={() => void abrirModalEliminar()}
-                  className="text-red-200 hover:text-white hover:bg-red-900/40 border border-red-400/40 flex items-center gap-1.5 px-2 py-1.5 rounded-lg transition-colors text-xs font-medium"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 shadow-sm transition-colors hover:bg-rose-50"
                   title="Eliminar cliente (baja lógica)"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0" aria-hidden>
-                    <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className="h-3.5 w-3.5 shrink-0"
+                    aria-hidden
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193V3.75A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z"
+                      clipRule="evenodd"
+                    />
                   </svg>
                   Eliminar
                 </button>
               )}
             </div>
           </div>
-          <div className="mt-4 pt-4 border-t border-white/15 flex flex-wrap gap-2">
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-200/70 pt-4">
             <button
               type="button"
               onClick={() => {
@@ -1052,8 +1086,21 @@ export default function ClienteDetalleClient({
                 });
                 setModalSuscripcion(true);
               }}
-              className="text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#4FAEB2] px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-[#4FAEB2]/25 transition-colors hover:bg-[#3F8E91]"
             >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-3.5 w-3.5"
+                aria-hidden="true"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
               Nueva suscripción
             </button>
             <button
@@ -1063,14 +1110,14 @@ export default function ClienteDetalleClient({
                 setErrorFacturaContado(null);
                 setModalFacturaContado(true);
               }}
-              className="text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-colors"
+              className="rounded-xl border border-[#4FAEB2]/30 bg-[#4FAEB2]/8 px-3 py-1.5 text-xs font-semibold text-[#3F8E91] transition-colors hover:bg-[#4FAEB2]/15"
             >
               Factura al contado
             </button>
             <button
               type="button"
               onClick={abrirRegistrarPago}
-              className="text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 px-3 py-1.5 rounded-lg transition-colors"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:text-[#3F8E91]"
             >
               Registrar pago
             </button>
@@ -1078,7 +1125,7 @@ export default function ClienteDetalleClient({
         </div>
 
         {/* Estadísticas rápidas */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 divide-x divide-gray-100 border-t border-gray-100">
+        <div className="grid grid-cols-2 divide-x divide-slate-100 border-t border-slate-100 bg-slate-50/40 sm:grid-cols-4 lg:grid-cols-7">
           {(
             [
               { label: "Origen", value: cliente.origen },
@@ -1116,9 +1163,11 @@ export default function ClienteDetalleClient({
               { label: "Creado por", value: cliente.created_by_nombre?.trim() || "—" },
             ] as { label: string; value: ReactNode }[]
           ).map((item) => (
-            <div key={item.label} className="px-5 py-3">
-              <p className="text-xs text-gray-400">{item.label}</p>
-              <div className="text-sm font-semibold text-gray-700 mt-0.5">{item.value}</div>
+            <div key={item.label} className="px-5 py-3.5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                {item.label}
+              </p>
+              <div className="mt-1 truncate text-sm font-semibold text-slate-900">{item.value}</div>
             </div>
           ))}
         </div>
@@ -1478,7 +1527,7 @@ export default function ClienteDetalleClient({
                         type="button"
                         onClick={() => setForm((prev) => ({ ...prev, tipo_cliente: t }))}
                         className={`px-4 py-2 text-sm font-medium transition-colors ${
-                          form.tipo_cliente === t ? "bg-[#0EA5E9] text-white" : "bg-white text-slate-600 hover:bg-slate-50"
+                          form.tipo_cliente === t ? "bg-[#4FAEB2] text-white" : "bg-white text-slate-600 hover:bg-slate-50"
                         }`}
                       >
                         {t === "empresa" ? "Empresa" : "Persona"}
@@ -1933,7 +1982,7 @@ export default function ClienteDetalleClient({
               <div className="flex gap-3">
                 <button
                   type="submit"
-                  className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm active:scale-95"
+                  className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm active:scale-95"
                 >
                   Guardar cambios
                 </button>
@@ -1973,7 +2022,7 @@ export default function ClienteDetalleClient({
                       });
                       setModalPago(true);
                     }}
-                    className="text-sm font-medium text-[#0EA5E9] hover:text-[#0284C7]"
+                    className="text-sm font-medium text-[#4FAEB2] hover:text-[#3F8E91]"
                   >
                     Registrar pago
                   </button>
@@ -1996,7 +2045,7 @@ export default function ClienteDetalleClient({
                       {facturas.map((f) => (
                         <tr key={f.id} className="hover:bg-slate-50">
                           <td className="px-4 py-3 font-mono text-slate-800">
-                            <Link href={`/facturas/${f.id}`} className="text-[#0EA5E9] hover:underline font-semibold">
+                            <Link href={`/facturas/${f.id}`} className="text-[#4FAEB2] hover:underline font-semibold">
                               {f.numero_factura}
                             </Link>
                           </td>
@@ -2023,14 +2072,14 @@ export default function ClienteDetalleClient({
                               <button
                                 type="button"
                                 onClick={() => { setFacturaPago(f); setFormPago({ factura_id: f.id, monto: String(f.saldo), fecha_pago: new Date().toISOString().slice(0, 10), metodo_pago: "efectivo", referencia: "" }); setModalPago(true); }}
-                                className="text-xs font-medium text-[#0EA5E9] hover:underline"
+                                className="text-xs font-medium text-[#4FAEB2] hover:underline"
                               >
                                 Registrar pago
                               </button>
                             )}
                             <Link
                               href={`/facturas/${f.id}`}
-                              className="text-xs font-medium text-slate-500 hover:text-[#0EA5E9] hover:underline ml-2"
+                              className="text-xs font-medium text-slate-500 hover:text-[#4FAEB2] hover:underline ml-2"
                             >
                               Ver
                             </Link>
@@ -2052,7 +2101,7 @@ export default function ClienteDetalleClient({
                 <button
                   type="button"
                   onClick={() => { setFormSusc({ plan_id: "", precio: "", fecha_inicio: new Date().toISOString().slice(0, 10), duracion_meses: "12", dia_facturacion: "1", dia_vencimiento: "10", generar_factura_este_mes: false }); setModalSuscripcion(true); }}
-                  className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium"
+                  className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium"
                 >
                   Nueva suscripción
                 </button>
@@ -2107,7 +2156,7 @@ export default function ClienteDetalleClient({
                     setErrorTarea(null);
                     setModalNuevaTarea(true);
                   }}
-                  className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium"
+                  className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium"
                 >
                   Nueva tarea
                 </button>
@@ -2200,12 +2249,12 @@ export default function ClienteDetalleClient({
                   }}
                   rows={3}
                   placeholder="Escribí una nota interna (Ctrl+Enter para guardar)..."
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm resize-none mb-3"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#4FAEB2] focus:outline-none bg-white text-sm resize-none mb-3"
                 />
 <button
                 type="submit"
                 disabled={!nuevaNota.trim() || guardandoNota}
-                className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
+                className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
               >
                   Agregar nota
                 </button>
@@ -2306,7 +2355,7 @@ export default function ClienteDetalleClient({
                 <button
                   type="submit"
                   disabled={guardandoFacturaContado || !formFacturaContado.monto.trim()}
-                  className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-40"
+                  className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-40"
                 >
                   {guardandoFacturaContado ? "Guardando…" : "Emitir factura"}
                 </button>
@@ -2384,7 +2433,7 @@ export default function ClienteDetalleClient({
                 <label htmlFor="gen_fact" className="text-sm text-slate-600">Emitir factura este mes</label>
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="submit" disabled={guardandoSusc} className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                <button type="submit" disabled={guardandoSusc} className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
                   Guardar
                 </button>
                 <button type="button" onClick={() => setModalSuscripcion(false)} className="border border-slate-200 px-4 py-2 rounded-lg text-sm hover:bg-slate-50">
@@ -2462,7 +2511,7 @@ export default function ClienteDetalleClient({
                 <p className="text-sm text-red-600">{errorTarea}</p>
               )}
               <div className="flex gap-3 pt-2">
-                <button type="submit" disabled={guardandoTarea} className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                <button type="submit" disabled={guardandoTarea} className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
                   Guardar
                 </button>
                 <button type="button" onClick={() => setModalNuevaTarea(false)} className="border border-slate-200 px-4 py-2 rounded-lg text-sm hover:bg-slate-50">
@@ -2538,7 +2587,7 @@ export default function ClienteDetalleClient({
                 <input type="text" value={formPago.referencia} onChange={(e) => setFormPago((p) => ({ ...p, referencia: e.target.value }))} className={inputClass} placeholder="Nº de comprobante" />
               </div>
               <div className="flex gap-3 pt-2">
-                <button type="submit" disabled={guardandoPago} className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
+                <button type="submit" disabled={guardandoPago} className="bg-[#4FAEB2] hover:bg-[#3F8E91] text-white px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50">
                   Guardar
                 </button>
                 <button type="button" onClick={() => setModalPago(false)} className="border border-slate-200 px-4 py-2 rounded-lg text-sm hover:bg-slate-50">
