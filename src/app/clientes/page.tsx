@@ -182,8 +182,8 @@ function VendedorResponsableCell({ cliente }: { cliente: Cliente }) {
 
 function buildClienteColumns(mapNombreTipo: Record<string, string>): ClienteColumnDef[] {
   const th =
-    "text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 px-5 py-3 whitespace-nowrap";
-  const td = "px-5 py-4";
+    "text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 px-3 py-2 whitespace-nowrap";
+  const td = "px-3 py-2.5";
   return [
     {
       key: "codigo",
@@ -208,9 +208,9 @@ function buildClienteColumns(mapNombreTipo: Record<string, string>): ClienteColu
         const nombre = clienteNombre(c);
         const tone = avatarToneFor(nombre);
         return (
-          <div className="flex min-w-56 items-center gap-3">
+          <div className="flex min-w-56 items-center gap-2.5">
             <div
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold ${tone}`}
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${tone}`}
             >
               {avatarInitial(nombre)}
             </div>
@@ -461,12 +461,12 @@ export default function ClientesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
 
       {/* Mensaje de éxito baja operativa */}
       {bajaOk && (
-        <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-green-800">
-          <span className="text-xl">✓</span>
+        <div className="flex items-center gap-3 bg-green-50 border border-green-200 rounded-xl px-3 py-2.5 text-green-800">
+          <span className="text-lg">✓</span>
           <p className="text-sm font-medium">Baja procesada correctamente</p>
         </div>
       )}
@@ -477,19 +477,19 @@ export default function ClientesPage() {
           <div className="flex items-center gap-2">
             <span
               aria-hidden="true"
-              className="inline-block h-2 w-2 shrink-0 rounded-full bg-[#4FAEB2] shadow-[0_0_0_3px_rgba(79,174,178,0.18)]"
+              className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#4FAEB2] shadow-[0_0_0_3px_rgba(79,174,178,0.18)]"
             />
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#4FAEB2]">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#4FAEB2]">
               Base
             </p>
           </div>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">Clientes</h1>
-          <p className="mt-1 text-sm text-slate-500">Base de clientes activos de la empresa</p>
+          <h1 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-900">Clientes</h1>
+          <p className="text-xs text-slate-500">Base de clientes activos de la empresa</p>
         </div>
         <button
           type="button"
           onClick={() => setNuevoOpen(true)}
-          className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-[#4FAEB2] px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-[#4FAEB2]/20 transition-colors hover:bg-[#3F8E91]"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#4FAEB2] px-3 py-1.5 text-xs font-semibold text-white shadow-sm shadow-[#4FAEB2]/20 transition-colors hover:bg-[#3F8E91]"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -499,7 +499,7 @@ export default function ClientesPage() {
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className="h-4 w-4"
+            className="h-3.5 w-3.5"
             aria-hidden="true"
           >
             <path d="M12 5v14M5 12h14" />
@@ -509,8 +509,8 @@ export default function ClientesPage() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="relative min-w-[220px] flex-1">
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
+        <div className="relative min-w-[200px] flex-1">
           <span
             aria-hidden="true"
             className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[#4FAEB2]"
@@ -534,11 +534,12 @@ export default function ClientesPage() {
             placeholder="Buscar por nombre, código, email, RUC…"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm text-slate-900 shadow-sm transition-colors placeholder:text-slate-400 hover:border-[#4FAEB2]/60 focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/20"
+            className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-9 pr-3 text-xs text-slate-900 shadow-sm transition-colors placeholder:text-slate-400 hover:border-[#4FAEB2]/60 focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/20"
           />
         </div>
         <FancySelect
-          className="min-w-[170px] shrink-0"
+          size="sm"
+          className="min-w-[150px] shrink-0"
           ariaLabel="Filtrar por estado"
           placeholder="Todos los estados"
           value={filtroEstado}
@@ -550,7 +551,8 @@ export default function ClientesPage() {
           ]}
         />
         <FancySelect
-          className="min-w-[160px] shrink-0"
+          size="sm"
+          className="min-w-[140px] shrink-0"
           ariaLabel="Filtrar por tipo"
           placeholder="Todos los tipos"
           value={filtroTipo}
@@ -562,7 +564,8 @@ export default function ClientesPage() {
           ]}
         />
         <FancySelect
-          className="min-w-[180px] shrink-0"
+          size="sm"
+          className="min-w-[160px] shrink-0"
           ariaLabel="Filtrar por origen"
           placeholder="Todos los orígenes"
           value={filtroOrigen}
@@ -575,7 +578,8 @@ export default function ClientesPage() {
           ]}
         />
         <FancySelect
-          className="min-w-[180px] shrink-0"
+          size="sm"
+          className="min-w-[160px] shrink-0"
           ariaLabel="Filtrar por tipo de servicio"
           placeholder="Tipo servicio"
           value={filtroTipoServicio}
@@ -598,7 +602,7 @@ export default function ClientesPage() {
               setFiltroTipo("");
               setFiltroTipoServicio("");
             }}
-            className="shrink-0 rounded-xl border border-transparent px-3 py-2.5 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            className="shrink-0 rounded-lg border border-transparent px-2.5 py-1.5 text-[11px] font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
             Limpiar filtros
           </button>
@@ -606,13 +610,13 @@ export default function ClientesPage() {
       </div>
 
       {/* Contador */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-slate-500">
           <span className="font-semibold text-slate-800 tabular-nums">{filtrados.length}</span> de{" "}
           <span className="font-semibold text-slate-800 tabular-nums">{clientes.length}</span> clientes
         </p>
-        <div className="flex items-center gap-3">
-          <div className="hidden gap-3 text-xs text-slate-500 sm:flex">
+        <div className="flex items-center gap-2.5">
+          <div className="hidden gap-2.5 text-[11px] text-slate-500 sm:flex">
             <span className="inline-flex items-center gap-1.5">
               <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
               <span className="tabular-nums">
@@ -633,7 +637,7 @@ export default function ClientesPage() {
             <button
               type="button"
               onClick={() => setColumnasOpen((v) => !v)}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:text-[#3F8E91]"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:text-[#3F8E91]"
               aria-expanded={columnasOpen}
             >
               <span>Columnas</span>
