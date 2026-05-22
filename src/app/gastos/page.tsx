@@ -6,7 +6,7 @@ import type { Gasto } from "@/lib/gastos/actions";
 import GastoModal from "./components/GastoModal";
 
 function formatGs(valor: number) {
-  return `${valor.toLocaleString("es-PY")} ₲`;
+  return `${Math.round(valor).toLocaleString("es-PY")} ₲`;
 }
 
 function formatFecha(fecha: string) {
@@ -20,6 +20,35 @@ function formatFecha(fecha: string) {
   } catch {
     return fecha;
   }
+}
+
+function formatMontoNumero(n: number): string {
+  return Math.round(n).toLocaleString("es-PY");
+}
+
+// ── Color del avatar de categoría según hash estable ─────────────────────────
+
+const CAT_TONES = [
+  "bg-[#4FAEB2]/12 text-[#3F8E91] border-[#4FAEB2]/30",
+  "bg-violet-50 text-violet-700 border-violet-200",
+  "bg-amber-50 text-amber-700 border-amber-200",
+  "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "bg-rose-50 text-rose-700 border-rose-200",
+  "bg-sky-50 text-sky-700 border-sky-200",
+  "bg-indigo-50 text-indigo-700 border-indigo-200",
+  "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200",
+];
+
+function categoriaTone(label: string): string {
+  let hash = 0;
+  for (let i = 0; i < label.length; i++) hash = (hash * 31 + label.charCodeAt(i)) | 0;
+  return CAT_TONES[Math.abs(hash) % CAT_TONES.length];
+}
+
+function categoriaInitial(label: string): string {
+  const cleaned = label.replace(/^[^A-Za-z0-9]+/, "");
+  const m = cleaned.match(/[A-Za-z0-9]/);
+  return (m?.[0] ?? "?").toUpperCase();
 }
 
 type ModalState =
@@ -182,54 +211,146 @@ export default function GastosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {gastos.map((g) => (
-                  <tr key={g.id} className="group transition-colors hover:bg-[#4FAEB2]/[0.04]">
-                    <td className="px-5 py-3.5 text-xs tabular-nums text-slate-600 whitespace-nowrap">
-                      {formatFecha(g.fecha)}
-                    </td>
-                    <td className="px-5 py-3.5 text-sm font-semibold text-slate-900 whitespace-nowrap">
-                      {g.categoria || "—"}
-                    </td>
-                    <td className="px-5 py-3.5 text-sm text-slate-600 max-w-[260px] truncate">
-                      {g.descripcion || "—"}
-                    </td>
-                    <td className="px-5 py-3.5 text-sm font-semibold tabular-nums text-slate-900 whitespace-nowrap">
-                      {formatGs(g.monto)}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      {g.tipo === "fijo" ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4FAEB2]/30 bg-[#4FAEB2]/10 px-2 py-0.5 text-[11px] font-semibold text-[#3F8E91]">
-                          <span aria-hidden="true" className="h-1 w-1 rounded-full bg-[#4FAEB2]" />
-                          Fijo
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                          <span aria-hidden="true" className="h-1 w-1 rounded-full bg-slate-400" />
-                          Variable
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setModal({ mode: "editar", gasto: g })}
-                          className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:text-[#3F8E91]"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleEliminar(g)}
-                          disabled={eliminando === g.id}
-                          className="rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-rose-600 shadow-sm transition-colors hover:bg-rose-50 disabled:opacity-50"
-                        >
-                          {eliminando === g.id ? "…" : "Eliminar"}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {gastos.map((g) => {
+                  const cat = g.categoria || "Sin categoría";
+                  const tone = categoriaTone(cat);
+                  return (
+                    <tr key={g.id} className="group transition-colors hover:bg-[#4FAEB2]/[0.04]">
+                      {/* Fecha con icono calendar */}
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <span
+                            aria-hidden="true"
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-400"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-3 w-3"
+                            >
+                              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                              <line x1="16" y1="2" x2="16" y2="6" />
+                              <line x1="8" y1="2" x2="8" y2="6" />
+                              <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
+                          </span>
+                          <span className="text-xs font-medium tabular-nums text-slate-700">
+                            {formatFecha(g.fecha)}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Categoría con avatar */}
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <div className="flex items-center gap-2.5">
+                          <span
+                            aria-hidden="true"
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-xs font-semibold ${tone}`}
+                          >
+                            {categoriaInitial(cat)}
+                          </span>
+                          <span className="text-sm font-semibold uppercase tracking-tight text-slate-900">
+                            {g.categoria || "—"}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Descripción */}
+                      <td className="max-w-[280px] truncate px-5 py-3.5 text-sm text-slate-700">
+                        {g.descripcion?.trim() ? (
+                          <span>{g.descripcion}</span>
+                        ) : (
+                          <span className="italic text-slate-400">Sin descripción</span>
+                        )}
+                      </td>
+
+                      {/* Monto */}
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-sm font-semibold tabular-nums text-slate-900">
+                            {formatMontoNumero(g.monto)}
+                          </span>
+                          <span className="text-[11px] font-medium text-slate-400">₲</span>
+                        </div>
+                      </td>
+
+                      {/* Tipo */}
+                      <td className="px-5 py-3.5">
+                        {g.tipo === "fijo" ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4FAEB2]/30 bg-[#4FAEB2]/10 px-2 py-0.5 text-[11px] font-semibold text-[#3F8E91]">
+                            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-[#4FAEB2]" />
+                            Fijo
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                            Variable
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Acciones */}
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setModal({ mode: "editar", gasto: g })}
+                            title="Editar gasto"
+                            aria-label="Editar gasto"
+                            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/8 hover:text-[#3F8E91]"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-3 w-3"
+                              aria-hidden="true"
+                            >
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEliminar(g)}
+                            disabled={eliminando === g.id}
+                            title="Eliminar gasto"
+                            aria-label="Eliminar gasto"
+                            className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-rose-600 shadow-sm transition-colors hover:bg-rose-50 disabled:opacity-50"
+                          >
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              className="h-3 w-3"
+                              aria-hidden="true"
+                            >
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
+                              <path d="M10 11v6M14 11v6" />
+                              <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                            </svg>
+                            {eliminando === g.id ? "…" : "Eliminar"}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
