@@ -77,16 +77,25 @@ function formatDate(iso: string | null): string {
 }
 
 const TAG_COLOR: Record<string, string> = {
-  compro_varias: "bg-emerald-700/30 text-emerald-200 ring-1 ring-emerald-500/40",
-  compro_boleta: "bg-emerald-700/20 text-emerald-200 ring-1 ring-emerald-500/30",
-  comprobante_pendiente: "bg-amber-700/30 text-amber-200 ring-1 ring-amber-500/40",
-  datos_incompletos: "bg-slate-700/40 text-slate-200 ring-1 ring-slate-500/40",
-  no_compro: "bg-rose-700/30 text-rose-200 ring-1 ring-rose-500/40",
+  compro_varias: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+  compro_boleta: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+  comprobante_pendiente: "bg-amber-50 text-amber-800 ring-1 ring-amber-200",
+  datos_incompletos: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
+  no_compro: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
 };
 
 function tagPillClass(code: string): string {
-  return TAG_COLOR[code] ?? "bg-slate-700/30 text-slate-200 ring-1 ring-slate-500/30";
+  return TAG_COLOR[code] ?? "bg-slate-100 text-slate-700 ring-1 ring-slate-200";
 }
+
+const INPUT_CN =
+  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors placeholder:text-slate-400 hover:border-[#4FAEB2]/60 focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/20";
+const SELECT_CN =
+  "w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2 pr-8 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/20";
+const BTN_PRIMARY_CN =
+  "inline-flex items-center gap-1.5 rounded-xl bg-[#4FAEB2] px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-[#4FAEB2]/25 transition-colors hover:bg-[#3F8E91] disabled:opacity-50";
+const BTN_SECONDARY_CN =
+  "inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91] disabled:opacity-50";
 
 export default function EtiquetasClient() {
   // Filtros
@@ -195,171 +204,207 @@ export default function EtiquetasClient() {
   const grandTotal = useMemo(() => byTag.reduce((acc, r) => acc + r.n, 0), [byTag]);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6">
-      <header className="mb-4 flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-semibold">Etiquetas Automáticas</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Visualización read-only del snapshot shadow. La configuración de
-            reglas vive en Configuración → Canales → WhatsApp.
-          </p>
+    <div className="min-h-screen bg-slate-50 p-6">
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span aria-hidden="true" className="block h-7 w-1.5 rounded-full bg-[#4FAEB2]" />
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">Etiquetas Automáticas</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Visualización read-only del snapshot shadow. La configuración de
+              reglas vive en Configuración → Canales → WhatsApp.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 rounded-md bg-amber-900/30 ring-1 ring-amber-500/30 px-3 py-2 text-amber-200 text-xs">
-          <AlertTriangle size={14} />
-          <span>Modo shadow/read-only. No oculta conversaciones.</span>
+        <div className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 shadow-sm">
+          <AlertTriangle size={14} className="text-amber-600" />
+          <span>Modo shadow / read-only. No oculta conversaciones.</span>
         </div>
       </header>
 
       {/* Cards por etiqueta */}
-      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-        <div className="rounded-md bg-slate-900 ring-1 ring-slate-700 p-3">
-          <div className="text-xs text-slate-400">Total snapshot</div>
-          <div className="text-2xl font-semibold mt-1">{grandTotal.toLocaleString("es-PY")}</div>
+      <section className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+        <div className="rounded-2xl border border-[#4FAEB2]/45 bg-white p-4 shadow-sm">
+          <div className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Total snapshot</div>
+          <div className="mt-1.5 text-2xl font-semibold text-slate-900">
+            {grandTotal.toLocaleString("es-PY")}
+          </div>
         </div>
-        {byTag.map((t) => (
-          <button
-            key={t.tag_code}
-            onClick={() => { setTagCode(t.tag_code === tagCode ? "" : t.tag_code); setOffset(0); }}
-            className={`rounded-md p-3 text-left transition ring-1 ${
-              tagCode === t.tag_code
-                ? "bg-slate-800 ring-emerald-500/60"
-                : "bg-slate-900 ring-slate-700 hover:ring-slate-500"
-            }`}
-            type="button"
-          >
-            <div className="text-xs uppercase tracking-wide text-slate-400">{t.tag_label || t.tag_code}</div>
-            <div className="text-2xl font-semibold mt-1">{t.n.toLocaleString("es-PY")}</div>
-            <div className={`inline-block mt-2 px-2 py-0.5 rounded text-[10px] ${tagPillClass(t.tag_code)}`}>
-              {t.tag_code}
-            </div>
-          </button>
-        ))}
+        {byTag.map((t) => {
+          const active = tagCode === t.tag_code;
+          return (
+            <button
+              key={t.tag_code}
+              onClick={() => {
+                setTagCode(t.tag_code === tagCode ? "" : t.tag_code);
+                setOffset(0);
+              }}
+              className={`rounded-2xl border bg-white p-4 text-left shadow-sm transition-colors ${
+                active
+                  ? "border-[#4FAEB2] ring-2 ring-[#4FAEB2]/25"
+                  : "border-slate-200 hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5"
+              }`}
+              type="button"
+            >
+              <div className="text-[11px] uppercase tracking-[0.1em] text-slate-500">
+                {t.tag_label || t.tag_code}
+              </div>
+              <div className="mt-1.5 text-2xl font-semibold text-slate-900">
+                {t.n.toLocaleString("es-PY")}
+              </div>
+              <div className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] ${tagPillClass(t.tag_code)}`}>
+                {t.tag_code}
+              </div>
+            </button>
+          );
+        })}
       </section>
 
       {/* Filtros */}
-      <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-2 mb-4">
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">Etiqueta</label>
-          <select
-            value={tagCode}
-            onChange={(e) => { setTagCode(e.target.value); setOffset(0); }}
-            className="w-full rounded-md bg-slate-900 ring-1 ring-slate-700 px-2 py-1.5 text-sm"
-          >
-            <option value="">Todas</option>
-            {byTag.map((t) => (
-              <option key={t.tag_code} value={t.tag_code}>{t.tag_label || t.tag_code}</option>
-            ))}
-          </select>
+      <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex items-center gap-2">
+          <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-[#4FAEB2]" />
+          <h2 className="text-sm font-semibold text-slate-700">Filtros</h2>
         </div>
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">Teléfono (parcial)</label>
-          <input
-            value={phone}
-            onChange={(e) => { setPhone(e.target.value); setOffset(0); }}
-            placeholder="ej. 280911"
-            className="w-full rounded-md bg-slate-900 ring-1 ring-slate-700 px-2 py-1.5 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">Desde</label>
-          <input
-            type="datetime-local"
-            value={dateFrom}
-            onChange={(e) => { setDateFrom(e.target.value); setOffset(0); }}
-            className="w-full rounded-md bg-slate-900 ring-1 ring-slate-700 px-2 py-1.5 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">Hasta</label>
-          <input
-            type="datetime-local"
-            value={dateTo}
-            onChange={(e) => { setDateTo(e.target.value); setOffset(0); }}
-            className="w-full rounded-md bg-slate-900 ring-1 ring-slate-700 px-2 py-1.5 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">Nodo actual</label>
-          <input
-            value={currentNode}
-            onChange={(e) => { setCurrentNode(e.target.value); setOffset(0); }}
-            placeholder="ej. compra_realizada"
-            className="w-full rounded-md bg-slate-900 ring-1 ring-slate-700 px-2 py-1.5 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-slate-400 mb-1">run_key</label>
-          <input
-            value={runKey}
-            onChange={(e) => { setRunKey(e.target.value); setOffset(0); }}
-            placeholder="opcional"
-            className="w-full rounded-md bg-slate-900 ring-1 ring-slate-700 px-2 py-1.5 text-sm font-mono"
-          />
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-6">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Etiqueta</label>
+            <select
+              value={tagCode}
+              onChange={(e) => { setTagCode(e.target.value); setOffset(0); }}
+              className={SELECT_CN}
+            >
+              <option value="">Todas</option>
+              {byTag.map((t) => (
+                <option key={t.tag_code} value={t.tag_code}>{t.tag_label || t.tag_code}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Teléfono (parcial)</label>
+            <input
+              value={phone}
+              onChange={(e) => { setPhone(e.target.value); setOffset(0); }}
+              placeholder="ej. 280911"
+              className={INPUT_CN}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Desde</label>
+            <input
+              type="datetime-local"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setOffset(0); }}
+              className={INPUT_CN}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Hasta</label>
+            <input
+              type="datetime-local"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setOffset(0); }}
+              className={INPUT_CN}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Nodo actual</label>
+            <input
+              value={currentNode}
+              onChange={(e) => { setCurrentNode(e.target.value); setOffset(0); }}
+              placeholder="ej. compra_realizada"
+              className={INPUT_CN}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">run_key</label>
+            <input
+              value={runKey}
+              onChange={(e) => { setRunKey(e.target.value); setOffset(0); }}
+              placeholder="opcional"
+              className={`${INPUT_CN} font-mono`}
+            />
+          </div>
         </div>
       </section>
 
-      <div className="flex items-center gap-2 mb-3">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <button
           onClick={() => load()}
-          className="inline-flex items-center gap-1.5 rounded-md bg-emerald-700 hover:bg-emerald-600 px-3 py-1.5 text-sm"
+          className={BTN_PRIMARY_CN}
           type="button"
+          disabled={loading}
         >
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           Recargar
         </button>
         <button
           onClick={resetFilters}
-          className="rounded-md bg-slate-800 hover:bg-slate-700 ring-1 ring-slate-700 px-3 py-1.5 text-sm"
+          className={BTN_SECONDARY_CN}
           type="button"
         >
           Limpiar filtros
         </button>
-        <div className="ml-auto text-xs text-slate-400">
-          {loading ? "Cargando…" : `Mostrando ${rows.length} de ${total.toLocaleString("es-PY")}`}
+        <div className="ml-auto text-xs text-slate-500">
+          {loading
+            ? "Cargando…"
+            : `Mostrando ${rows.length} de ${total.toLocaleString("es-PY")}`}
         </div>
       </div>
 
       {error && (
-        <div className="rounded-md bg-rose-900/30 ring-1 ring-rose-500/40 p-3 mb-3 text-sm text-rose-200">{error}</div>
+        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+          {error}
+        </div>
       )}
 
       {/* Tabla */}
-      <div className="overflow-x-auto rounded-md ring-1 ring-slate-800">
+      <div className="overflow-x-auto rounded-2xl border border-[#4FAEB2]/45 bg-white shadow-sm">
         <table className="w-full text-sm">
-          <thead className="bg-slate-900/80 text-slate-400 text-xs uppercase tracking-wide">
+          <thead className="bg-slate-50/80 text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">
             <tr>
-              <th className="text-left px-3 py-2">Etiqueta</th>
-              <th className="text-left px-3 py-2">Contacto</th>
-              <th className="text-left px-3 py-2">Teléfono</th>
-              <th className="text-left px-3 py-2">Nodo</th>
-              <th className="text-left px-3 py-2">Días inactivo</th>
-              <th className="text-left px-3 py-2">Último msg</th>
-              <th className="text-left px-3 py-2">Snapshot</th>
-              <th className="text-right px-3 py-2">Acción</th>
+              <th className="px-4 py-3">Etiqueta</th>
+              <th className="px-4 py-3">Contacto</th>
+              <th className="px-4 py-3">Teléfono</th>
+              <th className="px-4 py-3">Nodo</th>
+              <th className="px-4 py-3">Días inactivo</th>
+              <th className="px-4 py-3">Último msg</th>
+              <th className="px-4 py-3">Snapshot</th>
+              <th className="px-4 py-3 text-right">Acción</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100">
             {rows.length === 0 && !loading && (
-              <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">Sin resultados.</td></tr>
+              <tr>
+                <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                  Sin resultados.
+                </td>
+              </tr>
             )}
             {rows.map((r) => (
-              <tr key={r.history_id} className="border-t border-slate-800 hover:bg-slate-900/40">
-                <td className="px-3 py-2">
-                  <span className={`px-2 py-0.5 rounded text-xs ${tagPillClass(r.tag_code)}`}>
+              <tr key={r.history_id} className="transition-colors hover:bg-[#4FAEB2]/5">
+                <td className="px-4 py-2.5">
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${tagPillClass(r.tag_code)}`}>
                     {r.tag_label || r.tag_code}
                   </span>
                 </td>
-                <td className="px-3 py-2">{r.contact_name || <span className="text-slate-500">—</span>}</td>
-                <td className="px-3 py-2 font-mono text-xs">{r.phone_masked || "—"}</td>
-                <td className="px-3 py-2 text-slate-300">{r.current_node_code || "—"}</td>
-                <td className="px-3 py-2">{r.days_idle != null ? `${r.days_idle}d` : "—"}</td>
-                <td className="px-3 py-2 text-slate-400">{formatDate(r.last_message_at)}</td>
-                <td className="px-3 py-2 text-slate-400">{formatDate(r.created_at)}</td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-4 py-2.5 text-slate-700">
+                  {r.contact_name || <span className="text-slate-400">—</span>}
+                </td>
+                <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
+                  {r.phone_masked || "—"}
+                </td>
+                <td className="px-4 py-2.5 text-slate-700">{r.current_node_code || "—"}</td>
+                <td className="px-4 py-2.5 text-slate-700">
+                  {r.days_idle != null ? `${r.days_idle}d` : "—"}
+                </td>
+                <td className="px-4 py-2.5 text-slate-500">{formatDate(r.last_message_at)}</td>
+                <td className="px-4 py-2.5 text-slate-500">{formatDate(r.created_at)}</td>
+                <td className="px-4 py-2.5 text-right">
                   <button
                     type="button"
                     onClick={() => openModal(r.conversation_id)}
-                    className="inline-flex items-center justify-center rounded-md bg-slate-800 hover:bg-slate-700 ring-1 ring-slate-700 p-1.5"
+                    className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91]"
                     title="Ver últimos mensajes"
                   >
                     <Search size={14} />
@@ -372,14 +417,14 @@ export default function EtiquetasClient() {
       </div>
 
       {/* Paginación simple */}
-      <div className="flex items-center justify-between mt-3 text-xs text-slate-400">
+      <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
         <span>Offset: {offset}</span>
         <div className="flex gap-2">
           <button
             type="button"
             disabled={offset === 0 || loading}
             onClick={() => setOffset(Math.max(0, offset - limit))}
-            className="rounded-md bg-slate-800 hover:bg-slate-700 px-3 py-1 disabled:opacity-40"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91] disabled:opacity-40"
           >
             Anterior
           </button>
@@ -387,7 +432,7 @@ export default function EtiquetasClient() {
             type="button"
             disabled={offset + limit >= total || loading}
             onClick={() => setOffset(offset + limit)}
-            className="rounded-md bg-slate-800 hover:bg-slate-700 px-3 py-1 disabled:opacity-40"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91] disabled:opacity-40"
           >
             Siguiente
           </button>
@@ -397,64 +442,70 @@ export default function EtiquetasClient() {
       {/* Modal */}
       {modalConvId && (
         <div
-          className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm"
           onClick={closeModal}
           role="dialog"
           aria-modal="true"
         >
           <div
-            className="bg-slate-900 ring-1 ring-slate-700 rounded-lg w-full max-w-2xl max-h-[85vh] flex flex-col"
+            className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-[#4FAEB2]/45 bg-white shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <header className="flex items-center justify-between gap-3 p-4 border-b border-slate-800">
-              <div>
-                <div className="text-sm font-semibold">
+            <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white p-4">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-slate-900">
                   {modalData?.conversation?.contact?.name || "Conversación"}
                 </div>
-                <div className="text-xs text-slate-400 font-mono">
+                <div className="truncate font-mono text-xs text-slate-500">
                   {modalData?.conversation?.contact?.phone_masked || modalConvId.slice(0, 8)}
-                  {modalData?.conversation?.flow_current_node ? ` · nodo: ${modalData.conversation.flow_current_node}` : ""}
+                  {modalData?.conversation?.flow_current_node
+                    ? ` · nodo: ${modalData.conversation.flow_current_node}`
+                    : ""}
                 </div>
               </div>
               <button
                 onClick={closeModal}
-                className="rounded-md bg-slate-800 hover:bg-slate-700 p-1.5"
+                className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91]"
                 type="button"
                 aria-label="Cerrar"
               >
                 <X size={16} />
               </button>
             </header>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {modalLoading && <div className="text-center text-slate-400 text-sm">Cargando últimos 50 mensajes…</div>}
+            <div className="flex-1 space-y-2 overflow-y-auto bg-slate-50 p-4">
+              {modalLoading && (
+                <div className="text-center text-sm text-slate-500">
+                  Cargando últimos 50 mensajes…
+                </div>
+              )}
               {modalError && (
-                <div className="rounded-md bg-rose-900/30 ring-1 ring-rose-500/40 p-3 text-sm text-rose-200">
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
                   {modalError}
                 </div>
               )}
               {modalData?.messages?.length === 0 && !modalLoading && (
-                <div className="text-center text-slate-500 text-sm">Sin mensajes.</div>
+                <div className="text-center text-sm text-slate-500">Sin mensajes.</div>
               )}
               {modalData?.messages?.map((m) => (
                 <div
                   key={m.id}
-                  className={`max-w-[80%] rounded-lg px-3 py-2 ${
+                  className={`max-w-[80%] rounded-2xl border px-3 py-2 shadow-sm ${
                     m.from_me
-                      ? "ml-auto bg-emerald-700/30 ring-1 ring-emerald-500/40"
-                      : "mr-auto bg-slate-800 ring-1 ring-slate-700"
+                      ? "ml-auto border-[#4FAEB2]/30 bg-[#4FAEB2]/10 text-slate-800"
+                      : "mr-auto border-slate-200 bg-white text-slate-800"
                   }`}
                 >
-                  <div className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">
+                  <div className="mb-0.5 text-[10px] uppercase tracking-wide text-slate-500">
                     {m.from_me ? "Saliente" : "Entrante"} · {m.message_type || "text"}
                   </div>
-                  <div className="text-sm whitespace-pre-wrap break-words">
-                    {m.content || <span className="text-slate-500 italic">(sin contenido)</span>}
+                  <div className="whitespace-pre-wrap break-words text-sm">
+                    {m.content || <span className="italic text-slate-400">(sin contenido)</span>}
                   </div>
-                  <div className="text-[10px] text-slate-500 mt-1">{formatDate(m.created_at)}</div>
+                  <div className="mt-1 text-[10px] text-slate-400">{formatDate(m.created_at)}</div>
                 </div>
               ))}
             </div>
-            <footer className="p-3 border-t border-slate-800 text-[11px] text-slate-500">
+            <footer className="border-t border-slate-200 bg-white p-3 text-[11px] text-slate-500">
               Vista read-only. No envía mensajes ni modifica el chat.
             </footer>
           </div>

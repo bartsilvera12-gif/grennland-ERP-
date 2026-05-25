@@ -487,7 +487,7 @@ export function WhatsAppTagRulesPanel({ channelId: _channelId }: { channelId?: s
               type="button"
               onClick={() => void saveAll()}
               disabled={!anyDirty || !!savingId}
-              className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#4FAEB2] px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-[#4FAEB2]/25 transition-colors hover:bg-[#3F8E91] disabled:opacity-40"
             >
               <Save size={13} />
               Guardar todos los cambios
