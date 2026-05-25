@@ -73,10 +73,24 @@ export function extractExternalMessageId(msg: Record<string, unknown>): string {
   return mid || `ycloud-${Date.now()}`;
 }
 
+function looksLikePhoneName(value: string, from?: string): boolean {
+  const v = value.trim();
+  if (!v) return true;
+  if (!/\p{L}/u.test(v)) return true;
+  if (from) {
+    const digits = (s: string) => s.replace(/\D+/g, "");
+    if (digits(v) && digits(v) === digits(from)) return true;
+  }
+  return false;
+}
+
 export function extractDisplayName(msg: Record<string, unknown>): string | null {
   const cp = msg.customerProfile as Record<string, unknown> | undefined;
-  if (cp && typeof cp.name === "string" && cp.name.trim()) return cp.name.trim();
-  return null;
+  const raw = cp && typeof cp.name === "string" ? cp.name.trim() : "";
+  if (!raw) return null;
+  const from = typeof msg.from === "string" ? msg.from : undefined;
+  if (looksLikePhoneName(raw, from)) return null;
+  return raw;
 }
 
 export function extractSendTimeIso(msg: Record<string, unknown>): string | undefined {

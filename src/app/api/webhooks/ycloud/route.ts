@@ -160,7 +160,7 @@ export async function POST(request: NextRequest) {
       channel_id: resolved.channel_id,
       external_id: externalId,
       contact_phone_normalized: normalizeWaPhone(ids.from),
-      contact_display_name: displayName?.trim() || normalizeWaPhone(ids.from),
+      contact_display_name: displayName?.trim() || null,
       message_type,
       content,
       raw_payload: env as unknown as Record<string, unknown>,

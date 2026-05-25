@@ -248,21 +248,20 @@ export async function saveIncomingMessage(params: SaveIncomingMessageParams): Pr
   const address = normalizeContactAddress(channel.type, contact_data.address);
   if (!address) return { ok: false, error: "contact_data.address inválido" };
 
-  const displayName = contact_data.display_name?.trim() || address;
+  const displayName = contact_data.display_name?.trim() || null;
   const empresaId = channel.empresa_id;
   const channelId = channel.id;
 
+  const upsertPayload: Record<string, unknown> = {
+    empresa_id: empresaId,
+    phone_number: address,
+    phone_normalized: address,
+  };
+  if (displayName) upsertPayload.name = displayName;
+
   const { data: contact, error: cErr } = await supabase
     .from("chat_contacts")
-    .upsert(
-      {
-        empresa_id: empresaId,
-        phone_number: address,
-        phone_normalized: address,
-        name: displayName,
-      },
-      { onConflict: "empresa_id,phone_number" }
-    )
+    .upsert(upsertPayload, { onConflict: "empresa_id,phone_number" })
     .select("id, name, crm_prospecto_id")
     .single();
 
@@ -271,7 +270,11 @@ export async function saveIncomingMessage(params: SaveIncomingMessageParams): Pr
   }
 
   const contactId = contact.id as string;
-  if (displayName && displayName !== contact.name) {
+  const existingLooksLikePhone =
+    !contact.name ||
+    !/\p{L}/u.test(String(contact.name)) ||
+    String(contact.name).replace(/\D+/g, "") === address.replace(/\D+/g, "");
+  if (displayName && displayName !== contact.name && existingLooksLikePhone) {
     await supabase
       .from("chat_contacts")
       .update({ name: displayName, updated_at: new Date().toISOString() })

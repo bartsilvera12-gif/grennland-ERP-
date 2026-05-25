@@ -12,7 +12,7 @@ export type YCloudPersistPgInput = {
   channel_id: string;
   external_id: string;
   contact_phone_normalized: string;
-  contact_display_name: string;
+  contact_display_name: string | null;
   message_type: string;
   content: string | null;
   raw_payload: Record<string, unknown>;
@@ -100,7 +100,7 @@ export async function persistYCloudInboundMessagePg(input: YCloudPersistPgInput)
          name = COALESCE(NULLIF(btrim(EXCLUDED.name), ''), chat_contacts.name),
          updated_at = now()
        RETURNING id::text`,
-      [input.empresa_id, phone, input.contact_display_name.trim() || phone]
+      [input.empresa_id, phone, input.contact_display_name?.trim() || null]
     );
     const contactId = (cIns.rows[0] as { id: string }).id;
 

@@ -73,6 +73,18 @@ type ChatMessage = {
   raw_payload?: Record<string, unknown> | null;
 };
 
+function isHumanContactName(name: string | null | undefined, phone?: string | null): boolean {
+  const v = (name ?? "").trim();
+  if (!v) return false;
+  if (!/\p{L}/u.test(v)) return false;
+  if (phone) {
+    const dn = v.replace(/\D+/g, "");
+    const dp = String(phone).replace(/\D+/g, "");
+    if (dn && dn === dp) return false;
+  }
+  return true;
+}
+
 function formatTime(iso: string) {
   try {
     return new Date(iso).toLocaleString("es-PY", {
@@ -2332,13 +2344,13 @@ export function ConversacionesClient({
               </div>
             ) : (
               visibleConversations.map((c) => {
-                const cardName = c.contact.name?.trim() ? c.contact.name.trim() : "Sin nombre";
+                const hasNameInCard = isHumanContactName(c.contact.name, c.contact.phone_number);
+                const cardName = hasNameInCard ? c.contact.name!.trim() : "Sin nombre";
                 const cardInitial = (() => {
                   const cleaned = cardName.replace(/^[^A-Za-z0-9]+/, "");
                   const m = cleaned.match(/[A-Za-z0-9]/);
                   return (m?.[0] ?? "?").toUpperCase();
                 })();
-                const hasNameInCard = Boolean(c.contact.name?.trim());
                 const isSelected = selectedId === c.id;
                 return (
                 <button
@@ -2463,15 +2475,13 @@ export function ConversacionesClient({
               <div className="px-4 py-3 border-b border-slate-200 bg-white shrink-0">
                 {selected ? (
                   (() => {
-                    const contactDisplayName = selected.contact.name?.trim()
-                      ? selected.contact.name.trim()
-                      : "Sin nombre";
+                    const hasName = isHumanContactName(selected.contact.name, selected.contact.phone_number);
+                    const contactDisplayName = hasName ? selected.contact.name!.trim() : "Sin nombre";
                     const contactInitial = (() => {
                       const n = contactDisplayName.replace(/^[^A-Za-z0-9]+/, "");
                       const first = n.match(/[A-Za-z0-9]/);
                       return (first?.[0] ?? "?").toUpperCase();
                     })();
-                    const hasName = Boolean(selected.contact.name?.trim());
                     return (
                       <div className="flex flex-col gap-2.5 min-w-0 w-full">
                         {/* Row 1: identidad + acciones primarias */}
