@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, X, RefreshCw, AlertTriangle } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { Search, X, RefreshCw, AlertTriangle, Filter } from "lucide-react";
 
 interface ByTagRow {
   tag_code: string;
@@ -115,6 +115,14 @@ export default function EtiquetasClient() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // FASE 4E: no cargar al entrar. Solo cuando el usuario aplica filtros.
+  const [hasSearched, setHasSearched] = useState(false);
+  // Filtros efectivamente aplicados (los que viajan a la API).
+  // Se actualizan recien al presionar "Buscar", para que cambiar un input no dispare fetch.
+  const [appliedFilters, setAppliedFilters] = useState<{
+    tagCode: string; phone: string; dateFrom: string; dateTo: string;
+    currentNode: string; runKey: string;
+  } | null>(null);
 
   // Modal
   const [modalConvId, setModalConvId] = useState<string | null>(null);
@@ -122,45 +130,99 @@ export default function EtiquetasClient() {
   const [modalError, setModalError] = useState<string | null>(null);
   const [modalData, setModalData] = useState<ConversationPreviewResponse | null>(null);
 
-  const queryString = useMemo(() => {
-    const sp = new URLSearchParams();
-    if (tagCode) sp.set("tag_code", tagCode);
-    if (phone) sp.set("phone", phone);
-    if (dateFrom) sp.set("date_from", dateFrom);
-    if (dateTo) sp.set("date_to", dateTo);
-    if (currentNode) sp.set("current_node_code", currentNode);
-    if (runKey) sp.set("run_key", runKey);
-    sp.set("limit", String(limit));
-    sp.set("offset", String(offset));
-    return sp.toString();
-  }, [tagCode, phone, dateFrom, dateTo, currentNode, runKey, limit, offset]);
+  // Cuántos filtros tiene actualmente seleccionados el usuario (sin aplicarlos aun).
+  const filtersActiveCount = useMemo(() => {
+    let n = 0;
+    if (tagCode) n++;
+    if (phone) n++;
+    if (dateFrom) n++;
+    if (dateTo) n++;
+    if (currentNode) n++;
+    if (runKey) n++;
+    return n;
+  }, [tagCode, phone, dateFrom, dateTo, currentNode, runKey]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/chat/tags/snapshot?${queryString}`, { cache: "no-store" });
-      const json: SnapshotResponse = await res.json();
-      if (!json.ok) {
-        setError(json.error || "Error al cargar");
-        setRows([]);
-        setByTag([]);
-        setTotal(0);
-        return;
+  // Helper: construye la querystring a partir de un set de filtros aplicados y offset.
+  const buildQuery = useCallback(
+    (
+      f: { tagCode: string; phone: string; dateFrom: string; dateTo: string; currentNode: string; runKey: string },
+      off: number
+    ) => {
+      const sp = new URLSearchParams();
+      if (f.tagCode) sp.set("tag_code", f.tagCode);
+      if (f.phone) sp.set("phone", f.phone);
+      if (f.dateFrom) sp.set("date_from", f.dateFrom);
+      if (f.dateTo) sp.set("date_to", f.dateTo);
+      if (f.currentNode) sp.set("current_node_code", f.currentNode);
+      if (f.runKey) sp.set("run_key", f.runKey);
+      sp.set("limit", String(limit));
+      sp.set("offset", String(off));
+      return sp.toString();
+    },
+    [limit]
+  );
+
+  const fetchSnapshot = useCallback(
+    async (
+      f: { tagCode: string; phone: string; dateFrom: string; dateTo: string; currentNode: string; runKey: string },
+      off: number
+    ) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const qs = buildQuery(f, off);
+        const res = await fetch(`/api/chat/tags/snapshot?${qs}`, { cache: "no-store" });
+        const json: SnapshotResponse = await res.json();
+        if (!json.ok) {
+          setError(json.error || "Error al cargar");
+          setRows([]);
+          setByTag([]);
+          setTotal(0);
+          return;
+        }
+        setRows(json.rows ?? []);
+        setByTag(json.by_tag ?? []);
+        setTotal(json.pagination?.total ?? 0);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Error inesperado");
+      } finally {
+        setLoading(false);
       }
-      setRows(json.rows ?? []);
-      setByTag(json.by_tag ?? []);
-      setTotal(json.pagination?.total ?? 0);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Error inesperado");
-    } finally {
-      setLoading(false);
-    }
-  }, [queryString]);
+    },
+    [buildQuery]
+  );
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  // Buscar: valida que haya al menos un filtro y dispara fetch con offset=0.
+  const handleSearch = useCallback(() => {
+    if (filtersActiveCount === 0) {
+      setError("Elegí al menos un filtro para consultar.");
+      return;
+    }
+    const next = { tagCode, phone, dateFrom, dateTo, currentNode, runKey };
+    setAppliedFilters(next);
+    setOffset(0);
+    setHasSearched(true);
+    void fetchSnapshot(next, 0);
+  }, [filtersActiveCount, tagCode, phone, dateFrom, dateTo, currentNode, runKey, fetchSnapshot]);
+
+  // Recargar: solo tiene sentido si ya hubo búsqueda con filtros aplicados.
+  const handleReload = useCallback(() => {
+    if (!appliedFilters) {
+      setError("Aplicá un filtro primero.");
+      return;
+    }
+    void fetchSnapshot(appliedFilters, offset);
+  }, [appliedFilters, offset, fetchSnapshot]);
+
+  // Paginación: solo si ya hay filtros aplicados.
+  const handlePage = useCallback(
+    (newOffset: number) => {
+      if (!appliedFilters) return;
+      setOffset(newOffset);
+      void fetchSnapshot(appliedFilters, newOffset);
+    },
+    [appliedFilters, fetchSnapshot]
+  );
 
   const openModal = useCallback(async (conversationId: string) => {
     setModalConvId(conversationId);
@@ -199,6 +261,13 @@ export default function EtiquetasClient() {
     setCurrentNode("");
     setRunKey("");
     setOffset(0);
+    // FASE 4E: limpiar tambien el snapshot ya cargado y la marca de busqueda.
+    setAppliedFilters(null);
+    setRows([]);
+    setByTag([]);
+    setTotal(0);
+    setHasSearched(false);
+    setError(null);
   }, []);
 
   const grandTotal = useMemo(() => byTag.reduce((acc, r) => acc + r.n, 0), [byTag]);
@@ -216,16 +285,17 @@ export default function EtiquetasClient() {
             </p>
           </div>
         </div>
-        <div className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 shadow-sm">
-          <AlertTriangle size={14} className="text-amber-600" />
-          <span>Modo shadow / read-only. No oculta conversaciones.</span>
+        <div className="inline-flex max-w-md items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 shadow-sm">
+          <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+          <span>Modo shadow / read-only. Son sugerencias calculadas; no ocultan conversaciones.</span>
         </div>
       </header>
 
-      {/* Cards por etiqueta */}
+      {/* Cards por etiqueta - solo despues de la primera busqueda */}
+      {hasSearched && byTag.length > 0 && (
       <section className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-2xl border border-[#4FAEB2]/45 bg-white p-4 shadow-sm">
-          <div className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Total snapshot</div>
+          <div className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Total filtrado</div>
           <div className="mt-1.5 text-2xl font-semibold text-slate-900">
             {grandTotal.toLocaleString("es-PY")}
           </div>
@@ -236,8 +306,14 @@ export default function EtiquetasClient() {
             <button
               key={t.tag_code}
               onClick={() => {
-                setTagCode(t.tag_code === tagCode ? "" : t.tag_code);
-                setOffset(0);
+                const next = t.tag_code === tagCode ? "" : t.tag_code;
+                setTagCode(next);
+                if (appliedFilters) {
+                  const applied = { ...appliedFilters, tagCode: next };
+                  setAppliedFilters(applied);
+                  setOffset(0);
+                  void fetchSnapshot(applied, 0);
+                }
               }}
               className={`rounded-2xl border bg-white p-4 text-left shadow-sm transition-colors ${
                 active
@@ -259,6 +335,7 @@ export default function EtiquetasClient() {
           );
         })}
       </section>
+      )}
 
       {/* Filtros */}
       <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -271,7 +348,7 @@ export default function EtiquetasClient() {
             <label className="mb-1 block text-xs font-medium text-slate-600">Etiqueta</label>
             <select
               value={tagCode}
-              onChange={(e) => { setTagCode(e.target.value); setOffset(0); }}
+              onChange={(e) => setTagCode(e.target.value)}
               className={SELECT_CN}
             >
               <option value="">Todas</option>
@@ -281,11 +358,11 @@ export default function EtiquetasClient() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Teléfono (parcial)</label>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Teléfono / Número (parcial)</label>
             <input
               value={phone}
-              onChange={(e) => { setPhone(e.target.value); setOffset(0); }}
-              placeholder="ej. 280911"
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Ej. 2713"
               className={INPUT_CN}
             />
           </div>
@@ -294,7 +371,7 @@ export default function EtiquetasClient() {
             <input
               type="datetime-local"
               value={dateFrom}
-              onChange={(e) => { setDateFrom(e.target.value); setOffset(0); }}
+              onChange={(e) => setDateFrom(e.target.value)}
               className={INPUT_CN}
             />
           </div>
@@ -303,7 +380,7 @@ export default function EtiquetasClient() {
             <input
               type="datetime-local"
               value={dateTo}
-              onChange={(e) => { setDateTo(e.target.value); setOffset(0); }}
+              onChange={(e) => setDateTo(e.target.value)}
               className={INPUT_CN}
             />
           </div>
@@ -311,7 +388,7 @@ export default function EtiquetasClient() {
             <label className="mb-1 block text-xs font-medium text-slate-600">Nodo actual</label>
             <input
               value={currentNode}
-              onChange={(e) => { setCurrentNode(e.target.value); setOffset(0); }}
+              onChange={(e) => setCurrentNode(e.target.value)}
               placeholder="ej. compra_realizada"
               className={INPUT_CN}
             />
@@ -320,7 +397,7 @@ export default function EtiquetasClient() {
             <label className="mb-1 block text-xs font-medium text-slate-600">run_key</label>
             <input
               value={runKey}
-              onChange={(e) => { setRunKey(e.target.value); setOffset(0); }}
+              onChange={(e) => setRunKey(e.target.value)}
               placeholder="opcional"
               className={`${INPUT_CN} font-mono`}
             />
@@ -330,10 +407,21 @@ export default function EtiquetasClient() {
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <button
-          onClick={() => load()}
+          onClick={handleSearch}
           className={BTN_PRIMARY_CN}
           type="button"
-          disabled={loading}
+          disabled={loading || filtersActiveCount === 0}
+          title={filtersActiveCount === 0 ? "Elegí al menos un filtro para consultar." : undefined}
+        >
+          <Filter size={14} />
+          Buscar
+        </button>
+        <button
+          onClick={handleReload}
+          className={BTN_SECONDARY_CN}
+          type="button"
+          disabled={loading || !appliedFilters}
+          title={!appliedFilters ? "Aplicá un filtro primero." : undefined}
         >
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           Recargar
@@ -348,7 +436,11 @@ export default function EtiquetasClient() {
         <div className="ml-auto text-xs text-slate-500">
           {loading
             ? "Cargando…"
-            : `Mostrando ${rows.length} de ${total.toLocaleString("es-PY")}`}
+            : !hasSearched
+              ? filtersActiveCount === 0
+                ? "Elegí al menos un filtro y presioná Buscar."
+                : `${filtersActiveCount} filtro(s) listos. Presioná Buscar.`
+              : `Mostrando ${rows.length} de ${total.toLocaleString("es-PY")}`}
         </div>
       </div>
 
@@ -359,13 +451,23 @@ export default function EtiquetasClient() {
       )}
 
       {/* Tabla */}
+      {!hasSearched ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+          <Filter className="mx-auto mb-3 h-8 w-8 text-[#4FAEB2]" />
+          <h3 className="text-base font-semibold text-slate-800">Aplicá un filtro para consultar etiquetas.</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Las sugerencias son livianas y se calculan a pedido. Elegí una etiqueta, número o rango de fechas y presioná
+            <span className="mx-1 font-medium text-slate-700">Buscar</span>.
+          </p>
+        </div>
+      ) : (
       <div className="overflow-x-auto rounded-2xl border border-[#4FAEB2]/45 bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-slate-50/80 text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">
             <tr>
-              <th className="px-4 py-3">Etiqueta</th>
+              <th className="px-4 py-3">Etiqueta sugerida</th>
               <th className="px-4 py-3">Contacto</th>
-              <th className="px-4 py-3">Teléfono</th>
+              <th className="px-4 py-3">Teléfono / Número</th>
               <th className="px-4 py-3">Nodo</th>
               <th className="px-4 py-3">Días inactivo</th>
               <th className="px-4 py-3">Último msg</th>
@@ -377,7 +479,7 @@ export default function EtiquetasClient() {
             {rows.length === 0 && !loading && (
               <tr>
                 <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
-                  Sin resultados.
+                  Sin resultados para los filtros seleccionados.
                 </td>
               </tr>
             )}
@@ -391,7 +493,7 @@ export default function EtiquetasClient() {
                 <td className="px-4 py-2.5 text-slate-700">
                   {r.contact_name || <span className="text-slate-400">—</span>}
                 </td>
-                <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
+                <td className="px-4 py-2.5 font-mono text-sm font-semibold text-slate-800 tracking-wider">
                   {r.phone_masked || "—"}
                 </td>
                 <td className="px-4 py-2.5 text-slate-700">{r.current_node_code || "—"}</td>
@@ -415,15 +517,17 @@ export default function EtiquetasClient() {
           </tbody>
         </table>
       </div>
+      )}
 
-      {/* Paginación simple */}
+      {/* Paginación simple - solo si hay busqueda activa */}
+      {hasSearched && (
       <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
         <span>Offset: {offset}</span>
         <div className="flex gap-2">
           <button
             type="button"
             disabled={offset === 0 || loading}
-            onClick={() => setOffset(Math.max(0, offset - limit))}
+            onClick={() => handlePage(Math.max(0, offset - limit))}
             className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91] disabled:opacity-40"
           >
             Anterior
@@ -431,13 +535,14 @@ export default function EtiquetasClient() {
           <button
             type="button"
             disabled={offset + limit >= total || loading}
-            onClick={() => setOffset(offset + limit)}
+            onClick={() => handlePage(offset + limit)}
             className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91] disabled:opacity-40"
           >
             Siguiente
           </button>
         </div>
       </div>
+      )}
 
       {/* Modal */}
       {modalConvId && (
@@ -506,7 +611,8 @@ export default function EtiquetasClient() {
               ))}
             </div>
             <footer className="border-t border-slate-200 bg-white p-3 text-[11px] text-slate-500">
-              Vista read-only. No envía mensajes ni modifica el chat.
+              Vista de conversación. Esta etiqueta es una sugerencia del snapshot, no una clasificación definitiva.
+              No envía mensajes ni modifica el chat.
             </footer>
           </div>
         </div>
