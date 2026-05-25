@@ -455,11 +455,11 @@ function ProspectoCard({
               : "border-[#4FAEB2]/30 bg-[#4FAEB2]/8 text-[#3F8E91] hover:border-[#4FAEB2]/50 hover:bg-[#4FAEB2]/12"
           }`}
         >
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className={phoneCopied ? "text-emerald-600" : "text-[#4FAEB2]"}>
+          <span className="flex min-w-0 flex-1 items-center gap-1.5">
+            <span className={`shrink-0 ${phoneCopied ? "text-emerald-600" : "text-[#4FAEB2]"}`}>
               <IconPhone />
             </span>
-            <span className="truncate font-mono font-medium tabular-nums">
+            <span className="min-w-0 flex-1 break-all font-mono font-medium tabular-nums">
               {telefonoDisplay}
             </span>
           </span>
