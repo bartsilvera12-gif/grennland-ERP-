@@ -939,16 +939,24 @@ async function fetchChatConversationsUnsafe(
   ];
   let byId: Record<string, Record<string, unknown>> = {};
   if (contactIds.length > 0) {
-    const { data: contacts, error: e2 } = await supabase
-      .from("chat_contacts")
-      .select("id, name, phone_number, cliente_id, crm_prospecto_id")
-      .eq("empresa_id", empresa_id)
-      .in("id", contactIds);
-
-    if (e2) {
-      console.warn("[fetchChatConversations] chat_contacts:", e2.message);
-    } else {
-      byId = Object.fromEntries((contacts ?? []).map((c) => [c.id, c as Record<string, unknown>]));
+    const cchunk = 80;
+    for (let i = 0; i < contactIds.length; i += cchunk) {
+      const part = contactIds.slice(i, i + cchunk);
+      const { data: contacts, error: e2 } = await supabase
+        .from("chat_contacts")
+        .select("id, name, phone_number, cliente_id, crm_prospecto_id")
+        .eq("empresa_id", empresa_id)
+        .in("id", part);
+      if (e2) {
+        console.warn("[fetchChatConversations] chat_contacts:", e2.message, {
+          chunk_index: i,
+          chunk_size: part.length,
+        });
+        continue;
+      }
+      for (const c of contacts ?? []) {
+        byId[c.id as string] = c as Record<string, unknown>;
+      }
     }
   }
 
