@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { createBrowserClientForSchema } from "@/lib/supabase";
 import {
   ProyectoModuloSelector,
   type ProyectoModuloCatalogo as ModuloCatalogo,
@@ -195,6 +196,7 @@ export type ProyectoDetalleInnerProps = {
   onClose?: () => void;
   onProjectUpdated?: () => void;
   onDirtyChange?: (dirty: boolean) => void;
+  dataSchema: string;
 };
 
 export default function ProyectoDetalleInner({
@@ -203,6 +205,7 @@ export default function ProyectoDetalleInner({
   onClose,
   onProjectUpdated,
   onDirtyChange,
+  dataSchema,
 }: ProyectoDetalleInnerProps) {
   const router = useRouter();
   const sp = useSearchParams();
@@ -275,6 +278,54 @@ export default function ProyectoDetalleInner({
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Mantengo una ref a `load` para que las suscripciones de Realtime no se re-creen
+  // en cada render. El callback estable adentro del channel siempre llama al último.
+  const loadRef = useRef(load);
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
+
+  // Realtime: cualquier cambio en las 5 tablas del proyecto dispara re-fetch.
+  // Filtramos por proyecto_id para no recibir eventos de otros proyectos.
+  useEffect(() => {
+    if (!projectId || !dataSchema) return;
+    const sb = createBrowserClientForSchema(dataSchema);
+    const filtro = `proyecto_id=eq.${projectId}`;
+
+    const channel = sb
+      .channel(`proyecto-detalle:${projectId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: dataSchema, table: "proyectos", filter: `id=eq.${projectId}` },
+        () => void loadRef.current?.()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: dataSchema, table: "proyecto_tareas", filter: filtro },
+        () => void loadRef.current?.()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: dataSchema, table: "proyecto_comentarios", filter: filtro },
+        () => void loadRef.current?.()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: dataSchema, table: "proyecto_archivos", filter: filtro },
+        () => void loadRef.current?.()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: dataSchema, table: "proyecto_estado_historial", filter: filtro },
+        () => void loadRef.current?.()
+      )
+      .subscribe();
+
+    return () => {
+      void sb.removeChannel(channel);
+    };
+  }, [projectId, dataSchema]);
 
   useEffect(() => {
     if (variant !== "page" || !projectId) return;

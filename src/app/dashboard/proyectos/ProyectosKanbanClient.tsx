@@ -14,8 +14,9 @@ import {
 } from "@dnd-kit/core";
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { createBrowserClientForSchema } from "@/lib/supabase";
 import { readSaasBriefData } from "@/lib/proyectos/brief-data";
 import ProyectoDetalleModal from "./components/ProyectoDetalleModal";
 import ProyectoNuevoModal from "./components/ProyectoNuevoModal";
@@ -195,7 +196,7 @@ function saasModuleCountLabel(p: ProyectoCard): string | null {
   return count === 1 ? "1 módulo" : `${count} módulos`;
 }
 
-export default function ProyectosKanbanClient() {
+export default function ProyectosKanbanClient({ dataSchema }: { dataSchema: string }) {
   const [estados, setEstados] = useState<EstadoRow[]>([]);
   const [proyectos, setProyectos] = useState<ProyectoCard[]>([]);
   const [prioridadesConfig, setPrioridadesConfig] = useState<PrioridadConfig[]>([]);
@@ -276,6 +277,36 @@ export default function ProyectosKanbanClient() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Realtime: cualquier cambio en proyectos del tenant refresca el Kanban.
+  // proyecto_tareas también dispara re-fetch porque afecta el avance %.
+  const loadRef = useRef(load);
+  useEffect(() => {
+    loadRef.current = load;
+  }, [load]);
+
+  useEffect(() => {
+    if (!dataSchema) return;
+    const sb = createBrowserClientForSchema(dataSchema);
+
+    const channel = sb
+      .channel("proyectos-kanban")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: dataSchema, table: "proyectos" },
+        () => void loadRef.current?.()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: dataSchema, table: "proyecto_tareas" },
+        () => void loadRef.current?.()
+      )
+      .subscribe();
+
+    return () => {
+      void sb.removeChannel(channel);
+    };
+  }, [dataSchema]);
 
   const estadoActivoIds = useMemo(() => new Set(estados.map((e) => e.id)), [estados]);
 
@@ -627,6 +658,7 @@ export default function ProyectosKanbanClient() {
         open={modalProjectId != null}
         onClose={() => setModalProjectId(null)}
         onUpdated={() => void load()}
+        dataSchema={dataSchema}
       />
 
       <ProyectoNuevoModal

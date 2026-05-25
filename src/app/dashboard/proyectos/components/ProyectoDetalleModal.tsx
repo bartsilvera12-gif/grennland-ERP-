@@ -8,11 +8,13 @@ export default function ProyectoDetalleModal({
   open,
   onClose,
   onUpdated,
+  dataSchema,
 }: {
   projectId: string | null;
   open: boolean;
   onClose: () => void;
   onUpdated: () => void;
+  dataSchema: string;
 }) {
   const [dirty, setDirty] = useState(false);
 
@@ -72,6 +74,7 @@ export default function ProyectoDetalleModal({
           onClose={requestClose}
           onProjectUpdated={onUpdated}
           onDirtyChange={setDirty}
+          dataSchema={dataSchema}
         />
       </div>
     </div>
