@@ -49,11 +49,36 @@ export async function GET(request: NextRequest) {
            WHERE empresa_id=$1 AND action='cleared')::int AS reactivated_total,
          (SELECT count(*) FROM "${schema}".chat_conversations
            WHERE empresa_id=$1 AND hidden_by_tag=true)::int AS hidden_by_tag_total,
+         (SELECT count(*) FROM "${schema}".chat_conversations
+           WHERE empresa_id=$1 AND current_tag_id IS NOT NULL)::int AS current_tag_total,
          (SELECT count(*) FROM "${schema}".chat_conversation_tag_history
            WHERE empresa_id=$1 AND action='replaced')::int AS replaced_total`,
       [auth.empresa_id]
     );
     const c = restRes.rows[0];
+
+    // FASE 6D: distribución vigente por tag (fuente: chat_conversations.current_tag_id).
+    // Esta es la fuente productiva — NO se basa en snapshots dry_run.
+    const byCurrentTagRes = await pool.query(
+      `SELECT COALESCE(t.code, 'sin_tag') AS tag_code,
+              COALESCE(t.label, '') AS tag_label,
+              count(*)::int AS n
+         FROM "${schema}".chat_conversations c
+         LEFT JOIN "${schema}".chat_conversation_tags t ON t.id = c.current_tag_id
+        WHERE c.empresa_id = $1 AND c.current_tag_id IS NOT NULL
+        GROUP BY t.code, t.label
+        ORDER BY n DESC`,
+      [auth.empresa_id]
+    );
+
+    // FASE 6D: catálogo de tags disponibles (para poblar dropdowns aunque hoy no haya etiquetadas).
+    const availableTagsRes = await pool.query(
+      `SELECT code AS tag_code, label AS tag_label, color, sort_order
+         FROM "${schema}".chat_conversation_tags
+        WHERE empresa_id = $1 AND is_active = true
+        ORDER BY sort_order ASC, label ASC`,
+      [auth.empresa_id]
+    );
 
     return NextResponse.json({
       ok: true,
@@ -66,7 +91,10 @@ export async function GET(request: NextRequest) {
         cleared_total: c.reactivated_total,
         reactivated_total: c.reactivated_total,
         hidden_by_tag_total: c.hidden_by_tag_total,
+        current_tag_total: c.current_tag_total,
       },
+      by_current_tag: byCurrentTagRes.rows,
+      available_tags: availableTagsRes.rows,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Error interno";

@@ -1,61 +1,54 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, X, RefreshCw, AlertTriangle, Filter, Copy, Sparkles, Tag as TagIcon, EyeOff, ArrowLeftCircle } from "lucide-react";
+import { Search, X, RefreshCw, Filter, Copy, Tag as TagIcon } from "lucide-react";
 
-interface ByTagRow {
+/**
+ * Etiquetas Automáticas - Pantalla productiva.
+ * Fuente única: conversaciones con `current_tag_id` vigente (estado real).
+ * No expone snapshots, dry_run, run_keys, batches ni acciones técnicas.
+ */
+
+interface AvailableTag {
+  tag_code: string;
+  tag_label: string;
+  color: string | null;
+  sort_order: number;
+}
+
+interface ByCurrentTagRow {
   tag_code: string;
   tag_label: string;
   n: number;
 }
 
-interface SnapshotRow {
-  history_id: string;
+interface CountersResponse {
+  ok: boolean;
+  counters?: {
+    hidden_by_tag_total: number;
+    current_tag_total: number;
+  };
+  by_current_tag?: ByCurrentTagRow[];
+  available_tags?: AvailableTag[];
+}
+
+interface CurrentTagRow {
   conversation_id: string;
   contact_id: string | null;
   tag_code: string;
   tag_label: string;
-  /** FASE 5B-UX: numero completo (sin espacios). `phone_masked` se mantiene por compat y trae el mismo valor. */
   phone: string | null;
-  phone_masked: string | null;
   contact_name: string | null;
   last_message_at: string | null;
-  current_node_code: string | null;
+  last_tagged_at: string | null;
   days_idle: number | null;
-  purchase_condition: string | null;
-  category: string | null;
-  run_key: string | null;
-  applied_batch_id: string | null;
-  action: string | null;
-  created_at: string | null;
 }
 
-interface CountersResponse {
-  ok: boolean;
-  counters?: {
-    suggested_latest_snapshot: number;
-    latest_run_key: string | null;
-    applied_total: number;
-    replaced_total: number;
-    cleared_total: number;
-    reactivated_total: number;
-    hidden_by_tag_total: number;
-  };
-}
-
-type EtiquetasView = "suggested" | "applied";
-
-const PILOT_5B_BATCH_ID = "637dd1da-9c88-4d51-a917-797b45533cb3";
-
-interface SnapshotResponse {
+interface CurrentResponse {
   ok: boolean;
   error?: string;
-  dry_run_only?: boolean;
-  wrote_changes?: false;
-  filters?: Record<string, unknown>;
   pagination?: { limit: number; offset: number; total: number };
-  by_tag?: ByTagRow[];
-  rows?: SnapshotRow[];
+  rows?: CurrentTagRow[];
 }
 
 interface ConversationPreviewMessage {
@@ -74,12 +67,8 @@ interface ConversationPreviewResponse {
   conversation?: {
     conversation_id: string;
     status: string | null;
-    flow_status: string | null;
     flow_current_node: string | null;
-    human_taken_over: boolean;
     last_message_at: string | null;
-    hidden_by_tag: boolean;
-    current_tag_id: string | null;
     contact: {
       contact_id: string | null;
       name: string | null;
@@ -88,7 +77,6 @@ interface ConversationPreviewResponse {
     };
   };
   messages?: ConversationPreviewMessage[];
-  message_count?: number;
 }
 
 function formatDate(iso: string | null): string {
@@ -104,6 +92,8 @@ const TAG_COLOR: Record<string, string> = {
   comprobante_pendiente: "bg-amber-50 text-amber-800 ring-1 ring-amber-200",
   datos_incompletos: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
   no_compro: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
+  recomprador: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+  abandonado: "bg-slate-100 text-slate-700 ring-1 ring-slate-200",
 };
 
 function tagPillClass(code: string): string {
@@ -120,38 +110,28 @@ const BTN_SECONDARY_CN =
   "inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91] disabled:opacity-50";
 
 export default function EtiquetasClient() {
-  // Filtros
+  // Filtros (estado de inputs).
   const [tagCode, setTagCode] = useState("");
   const [phone, setPhone] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [currentNode, setCurrentNode] = useState("");
-  const [runKey, setRunKey] = useState("");
 
   const [limit] = useState(50);
   const [offset, setOffset] = useState(0);
 
   // Data
-  const [byTag, setByTag] = useState<ByTagRow[]>([]);
-  const [rows, setRows] = useState<SnapshotRow[]>([]);
+  const [availableTags, setAvailableTags] = useState<AvailableTag[]>([]);
+  const [byCurrentTag, setByCurrentTag] = useState<ByCurrentTagRow[]>([]);
+  const [totalEtiquetadas, setTotalEtiquetadas] = useState(0);
+  const [rows, setRows] = useState<CurrentTagRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // FASE 4E: no cargar al entrar. Solo cuando el usuario aplica filtros.
+
   const [hasSearched, setHasSearched] = useState(false);
-  // Filtros efectivamente aplicados (los que viajan a la API).
-  // Se actualizan recien al presionar "Buscar", para que cambiar un input no dispare fetch.
   const [appliedFilters, setAppliedFilters] = useState<{
     tagCode: string; phone: string; dateFrom: string; dateTo: string;
-    currentNode: string; runKey: string; view: EtiquetasView; appliedBatchId: string;
   } | null>(null);
-
-  // FASE 5B-FIX: vista del modulo (sugeridas vs aplicadas reales).
-  const [view, setView] = useState<EtiquetasView>("suggested");
-  const [appliedBatchId, setAppliedBatchId] = useState("");
-
-  // Counters de las 4 cards superiores (siempre visibles, se cargan al montar).
-  const [counters, setCounters] = useState<CountersResponse["counters"] | null>(null);
 
   // Modal
   const [modalConvId, setModalConvId] = useState<string | null>(null);
@@ -159,41 +139,40 @@ export default function EtiquetasClient() {
   const [modalError, setModalError] = useState<string | null>(null);
   const [modalData, setModalData] = useState<ConversationPreviewResponse | null>(null);
 
-  // Cuántos filtros tiene actualmente seleccionados el usuario (sin aplicarlos aun).
-  // En vista "applied" la mera seleccion de vista ya cuenta como filtro implicito,
-  // ya que es un universo acotado (solo 10 hoy en Papu).
   const filtersActiveCount = useMemo(() => {
     let n = 0;
     if (tagCode) n++;
     if (phone) n++;
     if (dateFrom) n++;
     if (dateTo) n++;
-    if (currentNode) n++;
-    if (runKey) n++;
-    if (appliedBatchId) n++;
-    if (view === "applied") n++;
     return n;
-  }, [tagCode, phone, dateFrom, dateTo, currentNode, runKey, appliedBatchId, view]);
+  }, [tagCode, phone, dateFrom, dateTo]);
 
-  // Helper: construye la querystring a partir de un set de filtros aplicados y offset.
+  // Counters (live)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/chat/tags/counters`, { cache: "no-store" });
+        const json: CountersResponse = await res.json();
+        if (cancelled || !json.ok) return;
+        setAvailableTags(json.available_tags ?? []);
+        setByCurrentTag(json.by_current_tag ?? []);
+        setTotalEtiquetadas(json.counters?.current_tag_total ?? json.counters?.hidden_by_tag_total ?? 0);
+      } catch {
+        /* counters opcionales */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const buildQuery = useCallback(
-    (
-      f: {
-        tagCode: string; phone: string; dateFrom: string; dateTo: string;
-        currentNode: string; runKey: string;
-        view: EtiquetasView; appliedBatchId: string;
-      },
-      off: number
-    ) => {
+    (f: { tagCode: string; phone: string; dateFrom: string; dateTo: string }, off: number) => {
       const sp = new URLSearchParams();
       if (f.tagCode) sp.set("tag_code", f.tagCode);
       if (f.phone) sp.set("phone", f.phone);
       if (f.dateFrom) sp.set("date_from", f.dateFrom);
       if (f.dateTo) sp.set("date_to", f.dateTo);
-      if (f.currentNode) sp.set("current_node_code", f.currentNode);
-      if (f.runKey) sp.set("run_key", f.runKey);
-      sp.set("action", f.view === "applied" ? "applied" : "dry_run");
-      if (f.appliedBatchId) sp.set("applied_batch_id", f.appliedBatchId);
       sp.set("limit", String(limit));
       sp.set("offset", String(off));
       return sp.toString();
@@ -201,30 +180,20 @@ export default function EtiquetasClient() {
     [limit]
   );
 
-  const fetchSnapshot = useCallback(
-    async (
-      f: {
-        tagCode: string; phone: string; dateFrom: string; dateTo: string;
-        currentNode: string; runKey: string;
-        view: EtiquetasView; appliedBatchId: string;
-      },
-      off: number
-    ) => {
+  const fetchData = useCallback(
+    async (f: { tagCode: string; phone: string; dateFrom: string; dateTo: string }, off: number) => {
       setLoading(true);
       setError(null);
       try {
-        const qs = buildQuery(f, off);
-        const res = await fetch(`/api/chat/tags/snapshot?${qs}`, { cache: "no-store" });
-        const json: SnapshotResponse = await res.json();
+        const res = await fetch(`/api/chat/tags/current?${buildQuery(f, off)}`, { cache: "no-store" });
+        const json: CurrentResponse = await res.json();
         if (!json.ok) {
           setError(json.error || "Error al cargar");
           setRows([]);
-          setByTag([]);
           setTotal(0);
           return;
         }
         setRows(json.rows ?? []);
-        setByTag(json.by_tag ?? []);
         setTotal(json.pagination?.total ?? 0);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Error inesperado");
@@ -235,85 +204,47 @@ export default function EtiquetasClient() {
     [buildQuery]
   );
 
-  // Buscar: valida que haya al menos un filtro y dispara fetch con offset=0.
   const handleSearch = useCallback(() => {
     if (filtersActiveCount === 0) {
       setError("Elegí al menos un filtro para consultar.");
       return;
     }
-    const next = { tagCode, phone, dateFrom, dateTo, currentNode, runKey, view, appliedBatchId };
+    const next = { tagCode, phone, dateFrom, dateTo };
     setAppliedFilters(next);
     setOffset(0);
     setHasSearched(true);
-    void fetchSnapshot(next, 0);
-  }, [filtersActiveCount, tagCode, phone, dateFrom, dateTo, currentNode, runKey, view, appliedBatchId, fetchSnapshot]);
+    void fetchData(next, 0);
+  }, [filtersActiveCount, tagCode, phone, dateFrom, dateTo, fetchData]);
 
-  // FASE 5B-FIX: shortcut "Ver piloto 5B"
-  const handleViewPilot5B = useCallback(() => {
-    setView("applied");
-    setAppliedBatchId(PILOT_5B_BATCH_ID);
-    setTagCode("");
-    setPhone("");
-    setDateFrom("");
-    setDateTo("");
-    setCurrentNode("");
-    setRunKey("");
-    const next = {
-      tagCode: "", phone: "", dateFrom: "", dateTo: "", currentNode: "", runKey: "",
-      view: "applied" as EtiquetasView, appliedBatchId: PILOT_5B_BATCH_ID,
-    };
-    setAppliedFilters(next);
-    setOffset(0);
-    setHasSearched(true);
-    setError(null);
-    void fetchSnapshot(next, 0);
-  }, [fetchSnapshot]);
-
-  // FASE 5B-FIX: cambiar vista resetea resultados y filtros aplicados (el usuario debe presionar Buscar).
-  const switchView = useCallback((v: EtiquetasView) => {
-    setView(v);
-    setHasSearched(false);
-    setAppliedFilters(null);
-    setRows([]);
-    setByTag([]);
-    setTotal(0);
-    setOffset(0);
-    setError(null);
-  }, []);
-
-  // Counters
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/chat/tags/counters`, { cache: "no-store" });
-        const json: CountersResponse = await res.json();
-        if (!cancelled && json.ok && json.counters) setCounters(json.counters);
-      } catch {
-        /* counters opcionales; ignorar errores */
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
-  // Recargar: solo tiene sentido si ya hubo búsqueda con filtros aplicados.
   const handleReload = useCallback(() => {
     if (!appliedFilters) {
       setError("Aplicá un filtro primero.");
       return;
     }
-    void fetchSnapshot(appliedFilters, offset);
-  }, [appliedFilters, offset, fetchSnapshot]);
+    void fetchData(appliedFilters, offset);
+  }, [appliedFilters, offset, fetchData]);
 
-  // Paginación: solo si ya hay filtros aplicados.
   const handlePage = useCallback(
     (newOffset: number) => {
       if (!appliedFilters) return;
       setOffset(newOffset);
-      void fetchSnapshot(appliedFilters, newOffset);
+      void fetchData(appliedFilters, newOffset);
     },
-    [appliedFilters, fetchSnapshot]
+    [appliedFilters, fetchData]
   );
+
+  const resetFilters = useCallback(() => {
+    setTagCode("");
+    setPhone("");
+    setDateFrom("");
+    setDateTo("");
+    setOffset(0);
+    setAppliedFilters(null);
+    setRows([]);
+    setTotal(0);
+    setHasSearched(false);
+    setError(null);
+  }, []);
 
   const openModal = useCallback(async (conversationId: string) => {
     setModalConvId(conversationId);
@@ -326,11 +257,8 @@ export default function EtiquetasClient() {
         { cache: "no-store" }
       );
       const json: ConversationPreviewResponse = await res.json();
-      if (!json.ok) {
-        setModalError(json.error || "Error al cargar conversación");
-      } else {
-        setModalData(json);
-      }
+      if (!json.ok) setModalError(json.error || "Error al cargar conversación");
+      else setModalData(json);
     } catch (e) {
       setModalError(e instanceof Error ? e.message : "Error inesperado");
     } finally {
@@ -344,25 +272,23 @@ export default function EtiquetasClient() {
     setModalError(null);
   }, []);
 
-  const resetFilters = useCallback(() => {
-    setTagCode("");
-    setPhone("");
-    setDateFrom("");
-    setDateTo("");
-    setCurrentNode("");
-    setRunKey("");
-    setAppliedBatchId("");
-    setOffset(0);
-    // FASE 4E: limpiar tambien el snapshot ya cargado y la marca de busqueda.
-    setAppliedFilters(null);
-    setRows([]);
-    setByTag([]);
-    setTotal(0);
-    setHasSearched(false);
-    setError(null);
-  }, []);
-
-  const grandTotal = useMemo(() => byTag.reduce((acc, r) => acc + r.n, 0), [byTag]);
+  // Conteo por tag para cards (merge con catálogo).
+  const cardData = useMemo(() => {
+    const byCode = new Map(byCurrentTag.map((r) => [r.tag_code, r]));
+    const cards: Array<{ tag_code: string; tag_label: string; n: number }> = [];
+    // Orden estable según availableTags (sort_order del catálogo).
+    for (const t of availableTags) {
+      const found = byCode.get(t.tag_code);
+      cards.push({ tag_code: t.tag_code, tag_label: t.tag_label, n: found?.n ?? 0 });
+    }
+    // Tags vigentes sin entrada en availableTags (raro): agregar al final.
+    for (const r of byCurrentTag) {
+      if (!availableTags.find((t) => t.tag_code === r.tag_code)) {
+        cards.push(r);
+      }
+    }
+    return cards;
+  }, [byCurrentTag, availableTags]);
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -372,132 +298,39 @@ export default function EtiquetasClient() {
           <div>
             <h1 className="text-2xl font-semibold text-slate-900">Etiquetas Automáticas</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Visualización read-only del snapshot shadow. La configuración de
-              reglas vive en Configuración → Canales → WhatsApp.
+              Consultá las conversaciones clasificadas automáticamente según el estado del WhatsApp.
             </p>
           </div>
         </div>
-        <div className="inline-flex max-w-md items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 shadow-sm">
-          <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+        <div className="inline-flex max-w-md items-start gap-2 rounded-xl border border-[#4FAEB2]/30 bg-[#4FAEB2]/5 px-3 py-2 text-xs font-medium text-slate-700 shadow-sm">
+          <TagIcon size={14} className="mt-0.5 shrink-0 text-[#4FAEB2]" />
           <span>
-            {view === "applied"
-              ? "Etiquetas aplicadas reales: ocultan la conversación de Conversaciones."
-              : "Sugeridas en modo shadow / read-only. No ocultan conversaciones."}
+            Las conversaciones etiquetadas salen de Conversaciones. Si el cliente vuelve a escribir, reaparecen automáticamente.
           </span>
         </div>
       </header>
 
-      {/* FASE 5B-FIX: cards de cabecera */}
-      <section className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.1em] text-slate-500">
-            <Sparkles size={12} className="text-[#4FAEB2]" />
-            Sugeridas del snapshot vigente
-          </div>
-          <div className="mt-1.5 text-2xl font-semibold text-slate-900">
-            {counters ? counters.suggested_latest_snapshot.toLocaleString("es-PY") : "—"}
-          </div>
-          <div className="mt-1 text-[10px] text-slate-400">action=dry_run</div>
-        </div>
-        <div className="rounded-2xl border border-[#4FAEB2]/45 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.1em] text-slate-500">
-            <TagIcon size={12} className="text-emerald-600" />
-            Aplicadas reales
-          </div>
-          <div className="mt-1.5 text-2xl font-semibold text-slate-900">
-            {counters ? counters.applied_total.toLocaleString("es-PY") : "—"}
-          </div>
-          <div className="mt-1 text-[10px] text-slate-400">history.action=applied</div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.1em] text-slate-500">
-            <EyeOff size={12} className="text-slate-500" />
-            Ocultas por etiqueta
-          </div>
-          <div className="mt-1.5 text-2xl font-semibold text-slate-900">
-            {counters ? counters.hidden_by_tag_total.toLocaleString("es-PY") : "—"}
-          </div>
-          <div className="mt-1 text-[10px] text-slate-400">chat_conversations.hidden_by_tag=true</div>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.1em] text-slate-500">
-            <ArrowLeftCircle size={12} className="text-amber-600" />
-            Reactivadas (cliente respondió)
-          </div>
-          <div className="mt-1.5 text-2xl font-semibold text-slate-900">
-            {counters ? counters.reactivated_total.toLocaleString("es-PY") : "—"}
-          </div>
-          <div className="mt-1 text-[10px] text-slate-400">history.action=cleared</div>
-        </div>
-      </section>
-
-      {/* FASE 5B-FIX: toggle Sugeridas / Aplicadas + shortcut piloto */}
-      <section className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          <button
-            type="button"
-            onClick={() => switchView("suggested")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-              view === "suggested"
-                ? "bg-[#4FAEB2] text-white shadow-sm shadow-[#4FAEB2]/25"
-                : "text-slate-600 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91]"
-            }`}
-          >
-            <Sparkles size={14} />
-            Sugeridas
-          </button>
-          <button
-            type="button"
-            onClick={() => switchView("applied")}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-              view === "applied"
-                ? "bg-emerald-600 text-white shadow-sm shadow-emerald-600/25"
-                : "text-slate-600 hover:bg-emerald-50 hover:text-emerald-700"
-            }`}
-          >
-            <TagIcon size={14} />
-            Aplicadas reales
-          </button>
-        </div>
-        {counters && counters.applied_total > 0 && (
-          <button
-            type="button"
-            onClick={handleViewPilot5B}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800 shadow-sm transition-colors hover:bg-emerald-100"
-          >
-            <TagIcon size={13} />
-            Ver piloto 5B (10)
-          </button>
-        )}
-        <p className="text-xs text-slate-500">
-          {view === "suggested"
-            ? "Estas son sugerencias calculadas. No todas están aplicadas."
-            : "Estas conversaciones tienen una etiqueta aplicada y están ocultas del inbox."}
-        </p>
-      </section>
-
-      {/* Cards por etiqueta - solo despues de la primera busqueda */}
-      {hasSearched && byTag.length > 0 && (
+      {/* Cards: total + por etiqueta */}
       <section className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-2xl border border-[#4FAEB2]/45 bg-white p-4 shadow-sm">
-          <div className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Total filtrado</div>
+          <div className="text-[11px] uppercase tracking-[0.1em] text-slate-500">Total etiquetadas</div>
           <div className="mt-1.5 text-2xl font-semibold text-slate-900">
-            {grandTotal.toLocaleString("es-PY")}
+            {totalEtiquetadas.toLocaleString("es-PY")}
           </div>
         </div>
-        {byTag.map((t) => {
-          const active = tagCode === t.tag_code;
+        {cardData.map((c) => {
+          const active = tagCode === c.tag_code;
           return (
             <button
-              key={t.tag_code}
+              key={c.tag_code}
               onClick={() => {
-                const nextTag = t.tag_code === tagCode ? "" : t.tag_code;
-                setTagCode(nextTag);
+                const next = c.tag_code === tagCode ? "" : c.tag_code;
+                setTagCode(next);
                 if (appliedFilters) {
-                  const applied = { ...appliedFilters, tagCode: nextTag };
+                  const applied = { ...appliedFilters, tagCode: next };
                   setAppliedFilters(applied);
                   setOffset(0);
-                  void fetchSnapshot(applied, 0);
+                  void fetchData(applied, 0);
                 }
               }}
               className={`rounded-2xl border bg-white p-4 text-left shadow-sm transition-colors ${
@@ -508,19 +341,15 @@ export default function EtiquetasClient() {
               type="button"
             >
               <div className="text-[11px] uppercase tracking-[0.1em] text-slate-500">
-                {t.tag_label || t.tag_code}
+                {c.tag_label || c.tag_code}
               </div>
               <div className="mt-1.5 text-2xl font-semibold text-slate-900">
-                {t.n.toLocaleString("es-PY")}
-              </div>
-              <div className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] ${tagPillClass(t.tag_code)}`}>
-                {t.tag_code}
+                {c.n.toLocaleString("es-PY")}
               </div>
             </button>
           );
         })}
       </section>
-      )}
 
       {/* Filtros */}
       <section className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -528,7 +357,7 @@ export default function EtiquetasClient() {
           <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-[#4FAEB2]" />
           <h2 className="text-sm font-semibold text-slate-700">Filtros</h2>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Etiqueta</label>
             <select
@@ -536,9 +365,9 @@ export default function EtiquetasClient() {
               onChange={(e) => setTagCode(e.target.value)}
               className={SELECT_CN}
             >
-              <option value="">Todas</option>
-              {byTag.map((t) => (
-                <option key={t.tag_code} value={t.tag_code}>{t.tag_label || t.tag_code}</option>
+              <option value="">Todas las etiquetas</option>
+              {availableTags.map((t) => (
+                <option key={t.tag_code} value={t.tag_code}>{t.tag_label}</option>
               ))}
             </select>
           </div>
@@ -569,42 +398,6 @@ export default function EtiquetasClient() {
               className={INPUT_CN}
             />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Nodo actual</label>
-            <input
-              value={currentNode}
-              onChange={(e) => setCurrentNode(e.target.value)}
-              placeholder="ej. compra_realizada"
-              className={INPUT_CN}
-            />
-          </div>
-          {view === "suggested" ? (
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Snapshot histórico</label>
-              <input
-                value={runKey}
-                onChange={(e) => setRunKey(e.target.value)}
-                placeholder="Opcional: ver snapshot anterior"
-                className={`${INPUT_CN} font-mono`}
-              />
-              <p className="mt-1 text-[11px] text-slate-500">
-                Por defecto se muestra el snapshot más reciente.
-              </p>
-            </div>
-          ) : (
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Batch ID aplicado</label>
-              <input
-                value={appliedBatchId}
-                onChange={(e) => setAppliedBatchId(e.target.value)}
-                placeholder="Opcional: filtrar por lote"
-                className={`${INPUT_CN} font-mono`}
-              />
-              <p className="mt-1 text-[11px] text-slate-500">
-                UUID del lote (ej. piloto 5B).
-              </p>
-            </div>
-          )}
         </div>
       </section>
 
@@ -648,9 +441,7 @@ export default function EtiquetasClient() {
       </div>
 
       {error && (
-        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-          {error}
-        </div>
+        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">{error}</div>
       )}
 
       {/* Tabla */}
@@ -659,133 +450,103 @@ export default function EtiquetasClient() {
           <Filter className="mx-auto mb-3 h-8 w-8 text-[#4FAEB2]" />
           <h3 className="text-base font-semibold text-slate-800">Aplicá un filtro para consultar etiquetas.</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Las sugerencias son livianas y se calculan a pedido. Elegí una etiqueta, número o rango de fechas y presioná
+            Elegí una etiqueta, número o rango de fechas y presioná
             <span className="mx-1 font-medium text-slate-700">Buscar</span>.
           </p>
         </div>
       ) : (
-      <div className="overflow-x-auto rounded-2xl border border-[#4FAEB2]/45 bg-white shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50/80 text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">
-            <tr>
-              <th className="px-4 py-3">{view === "applied" ? "Etiqueta aplicada" : "Etiqueta sugerida"}</th>
-              {view === "applied" && <th className="px-4 py-3">Estado</th>}
-              <th className="px-4 py-3">Contacto</th>
-              <th className="px-4 py-3">Teléfono / Número</th>
-              <th className="px-4 py-3">Conv ID</th>
-              <th className="px-4 py-3">Nodo</th>
-              <th className="px-4 py-3">Días inactivo</th>
-              <th className="px-4 py-3">Último msg</th>
-              {view === "applied" ? (
-                <>
-                  <th className="px-4 py-3">Batch</th>
-                  <th className="px-4 py-3">Fecha aplicada</th>
-                </>
-              ) : (
-                <th className="px-4 py-3">Snapshot</th>
-              )}
-              <th className="px-4 py-3 text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.length === 0 && !loading && (
+        <div className="overflow-x-auto rounded-2xl border border-[#4FAEB2]/45 bg-white shadow-sm">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50/80 text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">
               <tr>
-                <td colSpan={view === "applied" ? 11 : 9} className="px-4 py-8 text-center text-slate-500">
-                  Sin resultados para los filtros seleccionados.
-                </td>
+                <th className="px-4 py-3">Etiqueta</th>
+                <th className="px-4 py-3">Contacto</th>
+                <th className="px-4 py-3">Teléfono / Número</th>
+                <th className="px-4 py-3">Último mensaje</th>
+                <th className="px-4 py-3">Días inactivo</th>
+                <th className="px-4 py-3">Fecha etiquetada</th>
+                <th className="px-4 py-3 text-right">Acciones</th>
               </tr>
-            )}
-            {rows.map((r) => (
-              <tr key={r.history_id} className="transition-colors hover:bg-[#4FAEB2]/5">
-                <td className="px-4 py-2.5">
-                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${tagPillClass(r.tag_code)}`}>
-                    {r.tag_label || r.tag_code}
-                  </span>
-                </td>
-                {view === "applied" && (
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
+                    Sin resultados para los filtros seleccionados.
+                  </td>
+                </tr>
+              )}
+              {rows.map((r) => (
+                <tr key={r.conversation_id} className="transition-colors hover:bg-[#4FAEB2]/5">
                   <td className="px-4 py-2.5">
-                    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
-                      Aplicada
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${tagPillClass(r.tag_code)}`}>
+                      {r.tag_label || r.tag_code}
                     </span>
                   </td>
-                )}
-                <td className="px-4 py-2.5 text-slate-700">
-                  {r.contact_name || <span className="text-slate-400">—</span>}
-                </td>
-                <td className="px-4 py-2.5 font-mono text-sm font-semibold text-slate-800 tracking-wider">
-                  {r.phone || r.phone_masked || "—"}
-                </td>
-                <td className="px-4 py-2.5 font-mono text-xs text-slate-600" title={r.conversation_id}>
-                  {r.conversation_id.slice(0, 8)}…
-                </td>
-                <td className="px-4 py-2.5 text-slate-700">{r.current_node_code || "—"}</td>
-                <td className="px-4 py-2.5 text-slate-700">
-                  {r.days_idle != null ? `${r.days_idle}d` : "—"}
-                </td>
-                <td className="px-4 py-2.5 text-slate-500">{formatDate(r.last_message_at)}</td>
-                {view === "applied" ? (
-                  <>
-                    <td className="px-4 py-2.5 font-mono text-[11px] text-slate-500" title={r.applied_batch_id ?? ""}>
-                      {r.applied_batch_id ? `${r.applied_batch_id.slice(0, 8)}…` : "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-slate-500">{formatDate(r.created_at)}</td>
-                  </>
-                ) : (
-                  <td className="px-4 py-2.5 text-slate-500">{formatDate(r.created_at)}</td>
-                )}
-                <td className="px-4 py-2.5 text-right">
-                  <div className="inline-flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const full = (r.phone || r.phone_masked || "").replace(/\D+/g, "");
-                        if (full) void navigator.clipboard.writeText(full);
-                      }}
-                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91]"
-                      title="Copiar número completo"
-                    >
-                      <Copy size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openModal(r.conversation_id)}
-                      className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91]"
-                      title="Ver últimos mensajes"
-                    >
-                      <Search size={14} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  <td className="px-4 py-2.5 text-slate-700">
+                    {r.contact_name || <span className="text-slate-400">—</span>}
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-sm font-semibold text-slate-800 tracking-wider">
+                    {r.phone || "—"}
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-500">{formatDate(r.last_message_at)}</td>
+                  <td className="px-4 py-2.5 text-slate-700">
+                    {r.days_idle != null ? `${r.days_idle}d` : "—"}
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-500">{formatDate(r.last_tagged_at)}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <div className="inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const full = (r.phone || "").replace(/\D+/g, "");
+                          if (full) void navigator.clipboard.writeText(full);
+                        }}
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91]"
+                        title="Copiar número completo"
+                      >
+                        <Copy size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openModal(r.conversation_id)}
+                        className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91]"
+                        title="Ver últimos mensajes"
+                      >
+                        <Search size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
-      {/* Paginación simple - solo si hay busqueda activa */}
+      {/* Paginación */}
       {hasSearched && (
-      <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
-        <span>Offset: {offset}</span>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={offset === 0 || loading}
-            onClick={() => handlePage(Math.max(0, offset - limit))}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91] disabled:opacity-40"
-          >
-            Anterior
-          </button>
-          <button
-            type="button"
-            disabled={offset + limit >= total || loading}
-            onClick={() => handlePage(offset + limit)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91] disabled:opacity-40"
-          >
-            Siguiente
-          </button>
+        <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+          <span>Offset: {offset}</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={offset === 0 || loading}
+              onClick={() => handlePage(Math.max(0, offset - limit))}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91] disabled:opacity-40"
+            >
+              Anterior
+            </button>
+            <button
+              type="button"
+              disabled={offset + limit >= total || loading}
+              onClick={() => handlePage(offset + limit)}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91] disabled:opacity-40"
+            >
+              Siguiente
+            </button>
+          </div>
         </div>
-      </div>
       )}
 
       {/* Modal */}
@@ -807,9 +568,6 @@ export default function EtiquetasClient() {
                 </div>
                 <div className="truncate font-mono text-xs text-slate-500">
                   {modalData?.conversation?.contact?.phone || modalData?.conversation?.contact?.phone_masked || modalConvId.slice(0, 8)}
-                  {modalData?.conversation?.flow_current_node
-                    ? ` · nodo: ${modalData.conversation.flow_current_node}`
-                    : ""}
                 </div>
               </div>
               <button
@@ -855,8 +613,7 @@ export default function EtiquetasClient() {
               ))}
             </div>
             <footer className="border-t border-slate-200 bg-white p-3 text-[11px] text-slate-500">
-              Vista de conversación. Esta etiqueta es una sugerencia del snapshot, no una clasificación definitiva.
-              No envía mensajes ni modifica el chat.
+              Vista de conversación. No envía mensajes ni modifica el chat.
             </footer>
           </div>
         </div>
