@@ -367,18 +367,18 @@ export default function EtiquetasClient() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Desde</label>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Último mensaje desde</label>
             <input
-              type="datetime-local"
+              type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
               className={INPUT_CN}
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Hasta</label>
+            <label className="mb-1 block text-xs font-medium text-slate-600">Último mensaje hasta</label>
             <input
-              type="datetime-local"
+              type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
               className={INPUT_CN}

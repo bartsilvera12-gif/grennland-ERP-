@@ -25,9 +25,20 @@ function parseIntParam(value: string | null, fallback: number, max?: number): nu
   return n;
 }
 
-function parseDate(value: string | null): string | null {
+/**
+ * Parsea fecha del query string. Si el usuario envío solo "YYYY-MM-DD"
+ * (sin hora), `boundary` decide si lo interpretamos como inicio o fin de día.
+ * Si el valor incluye hora ("T"), respetamos esa hora literal.
+ */
+function parseDate(value: string | null, boundary: "start" | "end"): string | null {
   if (!value) return null;
-  const d = new Date(value);
+  const v = value.trim();
+  if (!v) return null;
+  // FASE 4G: si viene solo como fecha YYYY-MM-DD, ajustar al inicio o fin de día (UTC).
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    return boundary === "start" ? `${v}T00:00:00.000Z` : `${v}T23:59:59.999Z`;
+  }
+  const d = new Date(v);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
 }
@@ -56,8 +67,8 @@ export async function GET(request: NextRequest) {
     const runKey = (url.searchParams.get("run_key") || "").trim();
     const tagCode = (url.searchParams.get("tag_code") || "").trim();
     const phoneRaw = (url.searchParams.get("phone") || "").replace(/\D+/g, "");
-    const dateFromIso = parseDate(url.searchParams.get("date_from"));
-    const dateToIso = parseDate(url.searchParams.get("date_to"));
+    const dateFromIso = parseDate(url.searchParams.get("date_from"), "start");
+    const dateToIso = parseDate(url.searchParams.get("date_to"), "end");
     const currentNode = (url.searchParams.get("current_node_code") || "").trim();
     const limit = parseIntParam(url.searchParams.get("limit"), DEFAULT_LIMIT, MAX_LIMIT);
     const offset = Math.max(0, parseIntParam(url.searchParams.get("offset"), 0, 1_000_000));
@@ -80,13 +91,15 @@ export async function GET(request: NextRequest) {
       params.push(`%${phoneRaw}%`);
       where.push(`ct.phone_number LIKE $${params.length}`);
     }
+    // FASE 4G: el filtro Desde/Hasta ahora refiere a la última actividad del WhatsApp
+    // (chat_conversations.last_message_at) y no a la fecha del snapshot.
     if (dateFromIso) {
       params.push(dateFromIso);
-      where.push(`h.created_at >= $${params.length}::timestamptz`);
+      where.push(`c.last_message_at >= $${params.length}::timestamptz`);
     }
     if (dateToIso) {
       params.push(dateToIso);
-      where.push(`h.created_at <= $${params.length}::timestamptz`);
+      where.push(`c.last_message_at <= $${params.length}::timestamptz`);
     }
     if (currentNode) {
       params.push(currentNode);
@@ -94,11 +107,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Total
+    // FASE 4G: incluir LEFT JOIN chat_conversations c para que el filtro por
+    // last_message_at funcione tambien en total y by_tag (no solo en list).
     const totalSql = `
       SELECT count(*)::int AS n
         FROM "${schema}".chat_conversation_tag_history h
         LEFT JOIN "${schema}".chat_conversation_tags t ON t.id = h.new_tag_id
         LEFT JOIN "${schema}".chat_contacts ct ON ct.id = h.contact_id
+        LEFT JOIN "${schema}".chat_conversations c ON c.id = h.conversation_id
        WHERE ${where.join(" AND ")}
     `;
     const totalRes = await pool.query(totalSql, params);
@@ -112,6 +128,7 @@ export async function GET(request: NextRequest) {
         FROM "${schema}".chat_conversation_tag_history h
         LEFT JOIN "${schema}".chat_conversation_tags t ON t.id = h.new_tag_id
         LEFT JOIN "${schema}".chat_contacts ct ON ct.id = h.contact_id
+        LEFT JOIN "${schema}".chat_conversations c ON c.id = h.conversation_id
        WHERE ${where.join(" AND ")}
        GROUP BY t.code, t.label
        ORDER BY n DESC
