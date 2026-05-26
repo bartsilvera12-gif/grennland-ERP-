@@ -23,6 +23,7 @@ import {
 } from "@/lib/chat/omnicanal-scope";
 import { buildPgOmnicanalConversationScopeAndClause } from "@/lib/chat/omnicanal-scope-pg";
 import { pgSelectChatAgentIdsForUsuarios } from "@/lib/chat/omnicanal-scope-pg";
+import { schemaHasHiddenByTagColumn } from "@/lib/chat/tags/has-hidden-by-tag-column";
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
 import {
   isPgPoolExhaustionMessage,
@@ -303,6 +304,16 @@ export async function fetchChatConversationsFromTenantPg(
     whereParts.push(`status IN ('open','pending')`);
   } else if (vista === "historial") {
     whereParts.push(`status = 'closed'`);
+  }
+
+  // FASE 5B-INBOX: ocultar conversaciones con hidden_by_tag=true en inbox/bot.
+  // Guard multi-tenant: solo aplica el filtro si el schema tiene la columna
+  // (hoy únicamente erp_el_papu_store_5ad0bdda; otros tenants quedan intactos).
+  // Historial puede seguir mostrando ocultas-por-tag (no afecta la queja
+  // operativa del usuario), pero por simetría también las omitimos cuando
+  // la columna existe.
+  if (await schemaHasHiddenByTagColumn(pool, dataSchema)) {
+    whereParts.push(`COALESCE(hidden_by_tag, false) = false`);
   }
 
   const assignment = filters?.assignment ?? "all";
