@@ -43,11 +43,16 @@ function parseDate(value: string | null, boundary: "start" | "end"): string | nu
   return d.toISOString();
 }
 
-function maskPhone(p: string | null | undefined): string | null {
+/**
+ * FASE 5B-UX: el módulo Etiquetas necesita el número completo para validar
+ * contra Conversaciones y copiarlo. Devolvemos los dígitos normalizados
+ * (sin espacios ni símbolos) y mantenemos compatibilidad con el campo
+ * `phone_masked` que ahora también contiene el número completo.
+ */
+function normalizePhone(p: string | null | undefined): string | null {
   if (!p) return null;
   const digits = p.replace(/\D+/g, "");
-  if (digits.length <= 4) return digits;
-  return `***${digits.slice(-4)}`;
+  return digits || null;
 }
 
 export async function GET(request: NextRequest) {
@@ -201,7 +206,8 @@ export async function GET(request: NextRequest) {
         contact_id: r.contact_id,
         tag_code: r.tag_code,
         tag_label: r.tag_label,
-        phone_masked: maskPhone(r.phone_number),
+        phone: normalizePhone(r.phone_number),
+        phone_masked: normalizePhone(r.phone_number),
         contact_name: r.contact_name || null,
         last_message_at: r.last_message_at ? new Date(r.last_message_at).toISOString() : null,
         current_node_code: (meta.current_node_code as string) ?? r.flow_current_node ?? null,

@@ -15,6 +15,8 @@ interface SnapshotRow {
   contact_id: string | null;
   tag_code: string;
   tag_label: string;
+  /** FASE 5B-UX: numero completo (sin espacios). `phone_masked` se mantiene por compat y trae el mismo valor. */
+  phone: string | null;
   phone_masked: string | null;
   contact_name: string | null;
   last_message_at: string | null;
@@ -81,6 +83,7 @@ interface ConversationPreviewResponse {
     contact: {
       contact_id: string | null;
       name: string | null;
+      phone: string | null;
       phone_masked: string | null;
     };
   };
@@ -710,7 +713,7 @@ export default function EtiquetasClient() {
                   {r.contact_name || <span className="text-slate-400">—</span>}
                 </td>
                 <td className="px-4 py-2.5 font-mono text-sm font-semibold text-slate-800 tracking-wider">
-                  {r.phone_masked || "—"}
+                  {r.phone || r.phone_masked || "—"}
                 </td>
                 <td className="px-4 py-2.5 font-mono text-xs text-slate-600" title={r.conversation_id}>
                   {r.conversation_id.slice(0, 8)}…
@@ -735,12 +738,11 @@ export default function EtiquetasClient() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (!r.phone_masked) return;
-                        const last4 = r.phone_masked.replace(/\D+/g, "");
-                        if (last4) void navigator.clipboard.writeText(last4);
+                        const full = (r.phone || r.phone_masked || "").replace(/\D+/g, "");
+                        if (full) void navigator.clipboard.writeText(full);
                       }}
                       className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 shadow-sm transition-colors hover:border-[#4FAEB2]/60 hover:bg-[#4FAEB2]/5 hover:text-[#3F8E91]"
-                      title="Copiar últimos 4 dígitos"
+                      title="Copiar número completo"
                     >
                       <Copy size={14} />
                     </button>
@@ -804,7 +806,7 @@ export default function EtiquetasClient() {
                   {modalData?.conversation?.contact?.name || "Conversación"}
                 </div>
                 <div className="truncate font-mono text-xs text-slate-500">
-                  {modalData?.conversation?.contact?.phone_masked || modalConvId.slice(0, 8)}
+                  {modalData?.conversation?.contact?.phone || modalData?.conversation?.contact?.phone_masked || modalConvId.slice(0, 8)}
                   {modalData?.conversation?.flow_current_node
                     ? ` · nodo: ${modalData.conversation.flow_current_node}`
                     : ""}

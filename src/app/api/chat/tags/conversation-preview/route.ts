@@ -17,11 +17,16 @@ function isUuid(v: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v.trim());
 }
 
-function maskPhone(p: string | null | undefined): string | null {
+/**
+ * FASE 5B-UX: el módulo Etiquetas requiere el número completo. Devolvemos
+ * los dígitos normalizados (sin espacios/símbolos) y mantenemos el campo
+ * `phone_masked` por compatibilidad con clientes anteriores; ahora también
+ * contiene el número completo.
+ */
+function normalizePhone(p: string | null | undefined): string | null {
   if (!p) return null;
   const digits = p.replace(/\D+/g, "");
-  if (digits.length <= 4) return digits;
-  return `***${digits.slice(-4)}`;
+  return digits || null;
 }
 
 export async function GET(request: NextRequest) {
@@ -112,7 +117,8 @@ export async function GET(request: NextRequest) {
         contact: {
           contact_id: h.contact_id,
           name: h.contact_name ?? null,
-          phone_masked: maskPhone(h.phone_number),
+          phone: normalizePhone(h.phone_number),
+          phone_masked: normalizePhone(h.phone_number),
         },
       },
       messages,
