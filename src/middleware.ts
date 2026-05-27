@@ -5,7 +5,39 @@ import { NextResponse, type NextRequest } from "next/server";
  * Refresca la sesión Supabase en cookies antes de Route Handlers / RSC.
  * Solo NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY (sin db.schema en getUser).
  */
+/**
+ * Lista de hosts considerados "web pública AlquiloYa" (env-driven, sin hardcode).
+ * Formato: coma-separados, ej. "alquiloya.com.py,www.alquiloya.com.py".
+ */
+function getPublicHosts(): string[] {
+  const raw = process.env.NEURA_PUBLIC_HOSTS;
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter((h) => h.length > 0);
+}
+
+/** Hostname normalizado del request (sin puerto, lowercase). */
+function getRequestHostname(request: NextRequest): string {
+  const hostHeader = request.headers.get("host") ?? "";
+  return hostHeader.split(":")[0].trim().toLowerCase();
+}
+
 export async function middleware(request: NextRequest) {
+  // Host-aware: si el request viene de un dominio público configurado y apunta a la raíz,
+  // se reescribe a la web legacy estática. Solo afecta "/" (no /api, /_next, /dashboard, etc.).
+  const pathname = request.nextUrl.pathname;
+  const publicHosts = getPublicHosts();
+  if (publicHosts.length > 0 && (pathname === "/" || pathname === "")) {
+    const host = getRequestHostname(request);
+    if (publicHosts.includes(host)) {
+      const rewriteUrl = request.nextUrl.clone();
+      rewriteUrl.pathname = "/alquiloya-legacy/index.html";
+      return NextResponse.rewrite(rewriteUrl);
+    }
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -40,6 +72,6 @@ export async function middleware(request: NextRequest) {
  */
 export const config = {
   matcher: [
-    "/((?!api/webhooks|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api/webhooks|_next/static|_next/image|favicon.ico|alquiloya-legacy/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
