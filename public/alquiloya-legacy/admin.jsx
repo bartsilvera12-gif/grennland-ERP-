@@ -237,6 +237,39 @@ function Donut({ data }) {
 function AdminAgentPage({ route, onNav }) {
   const [impulsesFree, setImpulsesFree] = React.useState(7);   // 7 de 10 gratis disponibles
   const [impulsesPaid, setImpulsesPaid] = React.useState(5);   // 5 comprados
+
+  // Fase 9B: "Mis propiedades" desde API real. Si /api/agente/propiedades
+  // responde con un array, lo usamos; si falla / 401 / vacío, fallback a PROPERTIES mock.
+  const [myPropiedades, setMyPropiedades] = React.useState(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    fetch('/api/agente/propiedades', { cache: 'no-store', credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)))
+      .then(body => {
+        if (cancelled) return;
+        if (!body || !body.success || !Array.isArray(body.propiedades)) return;
+        // Normalizar al shape consumido por las cards legacy (p.title/p.cover/p.price).
+        const mapped = body.propiedades.map(p => ({
+          id: p.id,
+          title: p.titulo || 'Sin título',
+          cover: p.cover_url || (typeof photo === 'function' ? photo(0) : ''),
+          price: Number(p.precio) || 0,
+          city: p.ciudad || '',
+          neighborhood: p.barrio || '',
+          estado: p.estado || '',
+          activo: p.activo !== false,
+          visible_web: !!p.visible_web,
+          destacada: !!p.destacada,
+          fotos_count: p.fotos_count || 0,
+          _real: true,
+        }));
+        setMyPropiedades(mapped);
+      })
+      .catch(() => { /* fallback mock */ });
+    return () => { cancelled = true; };
+  }, []);
+  const propsForRender = (myPropiedades && myPropiedades.length > 0) ? myPropiedades : PROPERTIES;
+
   const [boostedIds, setBoostedIds] = React.useState({ [PROPERTIES[1].id]: true, [PROPERTIES[4].id]: true });
   const [buyOpen, setBuyOpen] = React.useState(false);
   const [verifyTarget, setVerifyTarget] = React.useState(null);
@@ -339,9 +372,12 @@ function AdminAgentPage({ route, onNav }) {
 
           {/* Lista de propiedades — cards individuales, no tabla */}
           <div className="col gap-8">
-            {PROPERTIES.slice(0, 6).map((p, i) => {
-              const isPaused = i === 2;
-              const isBoosted = !!boostedIds[p.id];
+            {propsForRender.slice(0, 6).map((p, i) => {
+              // Si es real: pausada = estado 'pausada' o activo=false. Mock: índice 2 para demo.
+              const isPaused = p._real
+                ? (p.estado === 'pausada' || p.activo === false)
+                : (i === 2);
+              const isBoosted = !!boostedIds[p.id] || !!p.destacada;
               const status = isPaused ? 'paused' : 'active';
               if (propFilter !== 'all' && propFilter !== status) return null;
               const vistas = 120 + i * 87;
@@ -414,7 +450,7 @@ function AdminAgentPage({ route, onNav }) {
 
           {/* Footer / ver todas */}
           <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
-            <span style={{ color: 'var(--ink-4)' }}>Mostrando 6 de 14</span>
+            <span style={{ color: 'var(--ink-4)' }}>Mostrando {Math.min(6, propsForRender.length)} de {propsForRender.length}</span>
             <button style={{ background: 'none', border: 'none', color: 'var(--blue)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12 }}>
               Ver todas →
             </button>
