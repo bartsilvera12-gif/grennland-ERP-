@@ -10,6 +10,13 @@ const nextConfig: NextConfig = {
         destination: "/alquiloya-legacy/index.html",
         permanent: false,
       },
+      // Portal público de acceso para agentes/publicadores. Es un HTML
+      // estático aislado del layout ERP (sin sidebar, sin auth).
+      {
+        source: "/portal-agentes",
+        destination: "/alquiloya-legacy/portal-agentes.html",
+        permanent: false,
+      },
     ];
   },
 };
