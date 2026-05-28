@@ -24,8 +24,8 @@ function Badge({ on, label }: { on: boolean | null; label: string }) {
     <span
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide ${
         isOn
-          ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/30"
-          : "bg-slate-500/10 text-slate-400 ring-1 ring-slate-500/20"
+          ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200"
+          : "bg-slate-100 text-slate-600 ring-1 ring-slate-200"
       }`}
     >
       {label}
@@ -45,32 +45,42 @@ export default async function PropiedadesPage() {
 
   return (
     <div className="px-6 py-6">
-      <header className="mb-6 flex items-end justify-between gap-4">
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-white">Propiedades</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Catálogo inmobiliario AlquiloYa — vista de solo lectura.
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Propiedades</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Catálogo inmobiliario AlquiloYa.
             {rows.length > 0 && (
-              <span className="ml-2 text-slate-500">
+              <span className="ml-2 text-slate-400">
                 · {rows.length} {rows.length === 1 ? "registro" : "registros"}
               </span>
             )}
           </p>
         </div>
+        <Link
+          href="/dashboard/propiedades/nueva"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-[#4FAEB2] px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#3F8E91] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/40"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Nueva propiedad
+        </Link>
       </header>
 
       {loadError ? (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           No se pudieron cargar las propiedades: {loadError}
         </div>
       ) : rows.length === 0 ? (
-        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-6 py-12 text-center text-sm text-slate-400">
+        <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
           No hay propiedades cargadas todavía.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-white/[0.08] bg-white/[0.02]">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="min-w-full text-sm">
-            <thead className="border-b border-white/[0.08] bg-white/[0.03] text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <thead className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
               <tr>
                 <th className="px-3 py-2.5">Foto</th>
                 <th className="px-3 py-2.5">Título</th>
@@ -87,45 +97,45 @@ export default async function PropiedadesPage() {
                 <th className="px-3 py-2.5 text-right">Acciones</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.05]">
+            <tbody className="divide-y divide-slate-100">
               {rows.map((p) => (
-                <tr key={p.id} className="hover:bg-white/[0.02]">
+                <tr key={p.id} className="hover:bg-slate-50">
                   <td className="px-3 py-2">
                     {p.cover_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={p.cover_url}
                         alt={p.titulo ?? ""}
-                        className="h-12 w-16 rounded-md object-cover ring-1 ring-white/[0.06]"
+                        className="h-12 w-16 rounded-md object-cover ring-1 ring-slate-200"
                       />
                     ) : (
-                      <div className="flex h-12 w-16 items-center justify-center rounded-md bg-white/[0.04] text-[10px] text-slate-500">
+                      <div className="flex h-12 w-16 items-center justify-center rounded-md bg-slate-100 text-[10px] text-slate-400">
                         s/foto
                       </div>
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <div className="font-medium text-white">{p.titulo ?? "—"}</div>
+                    <div className="font-medium text-slate-900">{p.titulo ?? "—"}</div>
                     {p.codigo ? (
-                      <div className="mt-0.5 text-[11px] text-slate-500">{p.codigo}</div>
+                      <div className="mt-0.5 text-[11px] text-slate-400">{p.codigo}</div>
                     ) : null}
                   </td>
-                  <td className="px-3 py-2 text-slate-300">{p.tipo ?? "—"}</td>
-                  <td className="px-3 py-2 text-slate-300">{p.ciudad ?? "—"}</td>
-                  <td className="px-3 py-2 text-slate-300">{p.barrio ?? "—"}</td>
-                  <td className="px-3 py-2 text-right font-medium text-slate-200">
+                  <td className="px-3 py-2 text-slate-700">{p.tipo ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-700">{p.ciudad ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-700">{p.barrio ?? "—"}</td>
+                  <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
                     {fmtPrecio(p.precio, p.moneda)}
                   </td>
-                  <td className="px-3 py-2 text-slate-300">{p.estado ?? "—"}</td>
-                  <td className="px-3 py-2 text-slate-300">{p.agente_nombre ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-700">{p.estado ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-700">{p.agente_nombre ?? "—"}</td>
                   <td className="px-3 py-2"><Badge on={p.activo} label={p.activo ? "Sí" : "No"} /></td>
                   <td className="px-3 py-2"><Badge on={p.visible_web} label={p.visible_web ? "Pub" : "Priv"} /></td>
-                  <td className="px-3 py-2 text-center text-slate-300">{p.fotos_count}</td>
-                  <td className="px-3 py-2 text-center text-slate-300">{p.caracteristicas_count}</td>
+                  <td className="px-3 py-2 text-center text-slate-700 tabular-nums">{p.fotos_count}</td>
+                  <td className="px-3 py-2 text-center text-slate-700 tabular-nums">{p.caracteristicas_count}</td>
                   <td className="px-3 py-2 text-right">
                     <Link
                       href={`/dashboard/propiedades/${p.id}`}
-                      className="inline-flex items-center rounded-md bg-[#7DCFD2]/10 px-2.5 py-1 text-xs font-medium text-[#7DCFD2] ring-1 ring-[#7DCFD2]/30 hover:bg-[#7DCFD2]/20"
+                      className="inline-flex items-center rounded-md bg-[#4FAEB2]/10 px-2.5 py-1 text-xs font-medium text-[#3F8E91] ring-1 ring-[#4FAEB2]/30 hover:bg-[#4FAEB2]/20"
                     >
                       Ver
                     </Link>

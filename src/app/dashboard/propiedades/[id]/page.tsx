@@ -21,9 +21,9 @@ function fmtPrecio(precio: number | null, moneda: string | null): string {
 
 function Row({ k, v }: { k: string; v: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-3 border-b border-white/[0.04] py-2 last:border-0">
+    <div className="flex items-start gap-3 border-b border-slate-100 py-2 last:border-0">
       <dt className="w-40 shrink-0 text-xs font-medium uppercase tracking-wider text-slate-500">{k}</dt>
-      <dd className="text-sm text-slate-200">{v ?? "—"}</dd>
+      <dd className="text-sm text-slate-800">{v ?? "—"}</dd>
     </div>
   );
 }
@@ -42,21 +42,21 @@ export default async function PropiedadDetallePage({
       <header className="mb-6">
         <Link
           href="/dashboard/propiedades"
-          className="mb-3 inline-flex items-center text-xs font-medium text-slate-400 hover:text-white"
+          className="mb-3 inline-flex items-center text-xs font-medium text-slate-500 hover:text-[#3F8E91]"
         >
           ← Volver al listado
         </Link>
-        <h1 className="text-2xl font-semibold text-white">{p.titulo ?? "Sin título"}</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          {p.codigo ? <span className="mr-2 text-slate-500">{p.codigo}</span> : null}
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{p.titulo ?? "Sin título"}</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          {p.codigo ? <span className="mr-2 text-slate-400">{p.codigo}</span> : null}
           {[p.tipo, p.operacion].filter(Boolean).join(" · ") || "—"}
         </p>
       </header>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Datos principales */}
-        <section className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 lg:col-span-2">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">Datos</h2>
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-600">Datos</h2>
           <dl>
             <Row k="Tipo" v={p.tipo} />
             <Row k="Operación" v={p.operacion} />
@@ -79,14 +79,14 @@ export default async function PropiedadDetallePage({
           {p.descripcion ? (
             <div className="mt-5">
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Descripción</h3>
-              <p className="whitespace-pre-line text-sm text-slate-300">{p.descripcion}</p>
+              <p className="whitespace-pre-line text-sm text-slate-700">{p.descripcion}</p>
             </div>
           ) : null}
         </section>
 
         {/* Agente */}
-        <aside className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">Agente</h2>
+        <aside className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-600">Agente</h2>
           {p.agente ? (
             <div className="space-y-3">
               <div className="flex items-center gap-3">
@@ -95,16 +95,16 @@ export default async function PropiedadDetallePage({
                   <img
                     src={p.agente.foto_url}
                     alt={p.agente.nombre ?? ""}
-                    className="h-14 w-14 rounded-full object-cover ring-1 ring-white/[0.08]"
+                    className="h-14 w-14 rounded-full object-cover ring-1 ring-slate-200"
                   />
                 ) : (
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.05] text-xs text-slate-500">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-400">
                     s/f
                   </div>
                 )}
                 <div>
-                  <div className="font-medium text-white">{p.agente.nombre ?? "—"}</div>
-                  {p.agente.cargo ? <div className="text-xs text-slate-400">{p.agente.cargo}</div> : null}
+                  <div className="font-medium text-slate-900">{p.agente.nombre ?? "—"}</div>
+                  {p.agente.cargo ? <div className="text-xs text-slate-500">{p.agente.cargo}</div> : null}
                 </div>
               </div>
               <dl className="text-sm">
@@ -113,7 +113,7 @@ export default async function PropiedadDetallePage({
                 <Row k="WhatsApp" v={p.agente.whatsapp} />
               </dl>
               {p.agente.bio ? (
-                <p className="whitespace-pre-line text-xs text-slate-400">{p.agente.bio}</p>
+                <p className="whitespace-pre-line text-xs text-slate-500">{p.agente.bio}</p>
               ) : null}
             </div>
           ) : (
@@ -122,20 +122,20 @@ export default async function PropiedadDetallePage({
         </aside>
 
         {/* Galería */}
-        <section className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 lg:col-span-2">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">
-            Galería <span className="ml-1 text-slate-500">({p.fotos.length})</span>
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-600">
+            Galería <span className="ml-1 text-slate-400">({p.fotos.length})</span>
           </h2>
           {p.fotos.length === 0 ? (
             <p className="text-sm text-slate-500">Sin fotos cargadas.</p>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {p.fotos.map((f) => (
-                <figure key={f.id} className="overflow-hidden rounded-lg ring-1 ring-white/[0.06]">
+                <figure key={f.id} className="overflow-hidden rounded-lg ring-1 ring-slate-200">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={f.url} alt={f.alt ?? ""} className="aspect-[4/3] w-full object-cover" />
                   {f.es_portada ? (
-                    <figcaption className="bg-[#7DCFD2]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#7DCFD2]">
+                    <figcaption className="bg-[#4FAEB2]/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[#3F8E91]">
                       Portada
                     </figcaption>
                   ) : null}
@@ -146,18 +146,18 @@ export default async function PropiedadDetallePage({
         </section>
 
         {/* Características */}
-        <aside className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-400">
-            Características <span className="ml-1 text-slate-500">({p.caracteristicas.length})</span>
+        <aside className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-600">
+            Características <span className="ml-1 text-slate-400">({p.caracteristicas.length})</span>
           </h2>
           {p.caracteristicas.length === 0 ? (
             <p className="text-sm text-slate-500">Sin características cargadas.</p>
           ) : (
             <ul className="space-y-2">
               {p.caracteristicas.map((c) => (
-                <li key={c.id} className="flex items-start justify-between gap-3 border-b border-white/[0.04] pb-2 last:border-0">
-                  <span className="text-sm text-slate-200">{c.nombre ?? "—"}</span>
-                  <span className="text-sm text-slate-400">{c.valor ?? ""}</span>
+                <li key={c.id} className="flex items-start justify-between gap-3 border-b border-slate-100 pb-2 last:border-0">
+                  <span className="text-sm text-slate-800">{c.nombre ?? "—"}</span>
+                  <span className="text-sm text-slate-500">{c.valor ?? ""}</span>
                 </li>
               ))}
             </ul>
