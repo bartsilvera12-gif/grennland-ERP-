@@ -1,0 +1,313 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import type { ErpPropiedadDetail } from "@/lib/alquiloya/erp-propiedades";
+
+type Agente = { id: string; nombre: string };
+type Foto = { url: string; alt: string; es_portada: boolean };
+type Caracteristica = { nombre: string; valor: string };
+
+const TIPOS = ["departamento", "casa", "duplex", "terreno", "local_comercial", "oficina", "deposito"];
+const OPERACIONES = ["alquiler", "venta", "alquiler_temporal"];
+const ESTADOS = ["disponible", "reservado", "alquilado", "vendido", "pausada"];
+const MONEDAS = ["PYG", "USD"];
+
+const inputCls =
+  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm transition-colors focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/30";
+const labelCls = "block text-xs font-semibold uppercase tracking-wider text-slate-600";
+const fieldCls = "space-y-1.5";
+
+function ensureOption(arr: string[], v: string | null): string[] {
+  if (!v || arr.includes(v)) return arr;
+  return [...arr, v];
+}
+
+export default function EditPropiedadClient({ initial }: { initial: ErpPropiedadDetail }) {
+  const router = useRouter();
+  const [agentes, setAgentes] = useState<Agente[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const tipos = ensureOption(TIPOS, initial.tipo);
+  const operaciones = ensureOption(OPERACIONES, initial.operacion);
+  const estados = ensureOption(ESTADOS, initial.estado);
+  const monedas = ensureOption(MONEDAS, initial.moneda);
+
+  const [form, setForm] = useState({
+    titulo: initial.titulo ?? "",
+    tipo: initial.tipo ?? TIPOS[0],
+    operacion: initial.operacion ?? OPERACIONES[0],
+    estado: initial.estado ?? ESTADOS[0],
+    ciudad: initial.ciudad ?? "",
+    barrio: initial.barrio ?? "",
+    direccion: initial.direccion ?? "",
+    descripcion: initial.descripcion ?? "",
+    precio: initial.precio == null ? "" : String(initial.precio),
+    moneda: initial.moneda ?? "PYG",
+    dormitorios: initial.dormitorios == null ? "" : String(initial.dormitorios),
+    banos: initial.banos == null ? "" : String(initial.banos),
+    cocheras: initial.cocheras == null ? "" : String(initial.cocheras),
+    superficie_m2: initial.superficie_m2 == null ? "" : String(initial.superficie_m2),
+    terreno_m2: initial.terreno_m2 == null ? "" : String(initial.terreno_m2),
+    codigo: initial.codigo ?? "",
+    agente_id: initial.agente_id ?? "",
+    activo: !!initial.activo,
+    visible_web: !!initial.visible_web,
+    destacada: !!initial.destacada,
+  });
+
+  const [fotos, setFotos] = useState<Foto[]>(
+    initial.fotos.length > 0
+      ? initial.fotos.map((f) => ({ url: f.url, alt: f.alt ?? "", es_portada: !!f.es_portada }))
+      : [{ url: "", alt: "", es_portada: true }]
+  );
+  const [cars, setCars] = useState<Caracteristica[]>(
+    initial.caracteristicas.length > 0
+      ? initial.caracteristicas.map((c) => ({ nombre: c.nombre ?? "", valor: c.valor ?? "" }))
+      : [{ nombre: "", valor: "" }]
+  );
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/public/alquiloya/agentes", { cache: "no-store" });
+        const body = (await res.json()) as { success?: boolean; data?: { agentes?: Agente[] } };
+        if (body?.success && body.data?.agentes) setAgentes(body.data.agentes);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
+
+  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    if (!form.titulo.trim()) { setErr("El título es obligatorio"); return; }
+    if (!form.tipo.trim()) { setErr("El tipo es obligatorio"); return; }
+    setSaving(true);
+    try {
+      const payload = {
+        ...form,
+        agente_id: form.agente_id || null,
+        precio: form.precio || null,
+        dormitorios: form.dormitorios || null,
+        banos: form.banos || null,
+        cocheras: form.cocheras || null,
+        superficie_m2: form.superficie_m2 || null,
+        terreno_m2: form.terreno_m2 || null,
+        codigo: form.codigo || null,
+        fotos: fotos.filter((f) => f.url.trim()),
+        caracteristicas: cars.filter((c) => c.nombre.trim()),
+      };
+      const res = await fetchWithSupabaseSession(`/api/dashboard/alquiloya-propiedades/${initial.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      if (!res.ok || !data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
+      router.push(`/dashboard/propiedades/${initial.id}`);
+      router.refresh();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error al guardar");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="px-6 py-6">
+      <header className="mb-6">
+        <Link
+          href={`/dashboard/propiedades/${initial.id}`}
+          className="mb-2 inline-flex text-xs font-medium text-slate-500 hover:text-[#3F8E91]"
+        >
+          ← Volver al detalle
+        </Link>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Editar propiedad</h1>
+        <p className="mt-1 text-sm text-slate-500">{initial.titulo ?? "Sin título"}</p>
+      </header>
+
+      <form onSubmit={onSubmit} className="space-y-6">
+        {err ? (
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{err}</div>
+        ) : null}
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-600">Datos generales</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className={fieldCls}>
+              <label className={labelCls}>Título *</label>
+              <input className={inputCls} value={form.titulo} onChange={(e) => set("titulo", e.target.value)} required />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Código interno</label>
+              <input className={inputCls} value={form.codigo} onChange={(e) => set("codigo", e.target.value)} placeholder="opcional" />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Tipo *</label>
+              <select className={inputCls} value={form.tipo} onChange={(e) => set("tipo", e.target.value)}>
+                {tipos.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}
+              </select>
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Operación</label>
+              <select className={inputCls} value={form.operacion} onChange={(e) => set("operacion", e.target.value)}>
+                {operaciones.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}
+              </select>
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Estado</label>
+              <select className={inputCls} value={form.estado} onChange={(e) => set("estado", e.target.value)}>
+                {estados.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Agente</label>
+              <select className={inputCls} value={form.agente_id} onChange={(e) => set("agente_id", e.target.value)}>
+                <option value="">— Sin asignar —</option>
+                {agentes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+              </select>
+            </div>
+            <div className={`${fieldCls} sm:col-span-2`}>
+              <label className={labelCls}>Descripción</label>
+              <textarea className={`${inputCls} min-h-[100px]`} value={form.descripcion} onChange={(e) => set("descripcion", e.target.value)} />
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-600">Ubicación</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className={fieldCls}>
+              <label className={labelCls}>Ciudad</label>
+              <input className={inputCls} value={form.ciudad} onChange={(e) => set("ciudad", e.target.value)} />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Barrio</label>
+              <input className={inputCls} value={form.barrio} onChange={(e) => set("barrio", e.target.value)} />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Dirección</label>
+              <input className={inputCls} value={form.direccion} onChange={(e) => set("direccion", e.target.value)} />
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-600">Precio y dimensiones</h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className={fieldCls}>
+              <label className={labelCls}>Precio</label>
+              <input className={inputCls} type="number" min="0" value={form.precio} onChange={(e) => set("precio", e.target.value)} />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Moneda</label>
+              <select className={inputCls} value={form.moneda} onChange={(e) => set("moneda", e.target.value)}>
+                {monedas.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Dormitorios</label>
+              <input className={inputCls} type="number" min="0" value={form.dormitorios} onChange={(e) => set("dormitorios", e.target.value)} />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Baños</label>
+              <input className={inputCls} type="number" min="0" value={form.banos} onChange={(e) => set("banos", e.target.value)} />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Cocheras</label>
+              <input className={inputCls} type="number" min="0" value={form.cocheras} onChange={(e) => set("cocheras", e.target.value)} />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Superficie m²</label>
+              <input className={inputCls} type="number" min="0" value={form.superficie_m2} onChange={(e) => set("superficie_m2", e.target.value)} />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Terreno m²</label>
+              <input className={inputCls} type="number" min="0" value={form.terreno_m2} onChange={(e) => set("terreno_m2", e.target.value)} />
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-600">Fotos por URL</h2>
+            <button type="button" onClick={() => setFotos((arr) => [...arr, { url: "", alt: "", es_portada: false }])}
+              className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">
+              + Agregar
+            </button>
+          </div>
+          <div className="space-y-3">
+            {fotos.map((f, idx) => (
+              <div key={idx} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_180px_auto_auto]">
+                <input className={inputCls} placeholder="https://..." value={f.url} onChange={(e) => setFotos((arr) => arr.map((x, i) => i === idx ? { ...x, url: e.target.value } : x))} />
+                <input className={inputCls} placeholder="Texto alternativo" value={f.alt} onChange={(e) => setFotos((arr) => arr.map((x, i) => i === idx ? { ...x, alt: e.target.value } : x))} />
+                <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-700">
+                  <input type="radio" name="portada" checked={f.es_portada} onChange={() => setFotos((arr) => arr.map((x, i) => ({ ...x, es_portada: i === idx })))} />
+                  Portada
+                </label>
+                <button type="button" onClick={() => setFotos((arr) => arr.filter((_, i) => i !== idx))} className="rounded-lg border border-rose-200 px-2 text-xs font-medium text-rose-600 hover:bg-rose-50">
+                  Eliminar
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-600">Características</h2>
+            <button type="button" onClick={() => setCars((arr) => [...arr, { nombre: "", valor: "" }])}
+              className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">
+              + Agregar
+            </button>
+          </div>
+          <div className="space-y-3">
+            {cars.map((c, idx) => (
+              <div key={idx} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <input className={inputCls} placeholder="Nombre (ej. Pileta)" value={c.nombre} onChange={(e) => setCars((arr) => arr.map((x, i) => i === idx ? { ...x, nombre: e.target.value } : x))} />
+                <input className={inputCls} placeholder="Valor (opcional)" value={c.valor} onChange={(e) => setCars((arr) => arr.map((x, i) => i === idx ? { ...x, valor: e.target.value } : x))} />
+                <button type="button" onClick={() => setCars((arr) => arr.filter((_, i) => i !== idx))} className="rounded-lg border border-rose-200 px-2 text-xs font-medium text-rose-600 hover:bg-rose-50">
+                  Eliminar
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-600">Publicación</h2>
+          <div className="flex flex-wrap gap-5">
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input type="checkbox" checked={form.activo} onChange={(e) => set("activo", e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-[#4FAEB2] focus:ring-[#4FAEB2]" />
+              Activo
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input type="checkbox" checked={form.visible_web} onChange={(e) => set("visible_web", e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-[#4FAEB2] focus:ring-[#4FAEB2]" />
+              Publicado en la web
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-800">
+              <input type="checkbox" checked={form.destacada} onChange={(e) => set("destacada", e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-[#4FAEB2] focus:ring-[#4FAEB2]" />
+              Destacada
+            </label>
+          </div>
+        </section>
+
+        <div className="flex items-center justify-end gap-3">
+          <Link href={`/dashboard/propiedades/${initial.id}`} className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            Cancelar
+          </Link>
+          <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-[#4FAEB2] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#3F8E91] disabled:opacity-50">
+            {saving ? "Guardando…" : "Guardar cambios"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

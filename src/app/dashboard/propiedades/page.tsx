@@ -133,12 +133,20 @@ export default async function PropiedadesPage() {
                   <td className="px-3 py-2 text-center text-slate-700 tabular-nums">{p.fotos_count}</td>
                   <td className="px-3 py-2 text-center text-slate-700 tabular-nums">{p.caracteristicas_count}</td>
                   <td className="px-3 py-2 text-right">
-                    <Link
-                      href={`/dashboard/propiedades/${p.id}`}
-                      className="inline-flex items-center rounded-md bg-[#4FAEB2]/10 px-2.5 py-1 text-xs font-medium text-[#3F8E91] ring-1 ring-[#4FAEB2]/30 hover:bg-[#4FAEB2]/20"
-                    >
-                      Ver
-                    </Link>
+                    <div className="inline-flex items-center gap-1.5">
+                      <Link
+                        href={`/dashboard/propiedades/${p.id}`}
+                        className="inline-flex items-center rounded-md bg-[#4FAEB2]/10 px-2.5 py-1 text-xs font-medium text-[#3F8E91] ring-1 ring-[#4FAEB2]/30 hover:bg-[#4FAEB2]/20"
+                      >
+                        Ver
+                      </Link>
+                      <Link
+                        href={`/dashboard/propiedades/${p.id}/editar`}
+                        className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-200"
+                      >
+                        Editar
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
