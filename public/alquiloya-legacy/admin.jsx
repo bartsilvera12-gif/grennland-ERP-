@@ -799,7 +799,29 @@ function CapturesSection() {
   const totalCommission = cerradas.reduce((s, c) => s + (c.commission || 0), 0);
   const pendingCommission = cerradas.filter(c => !c.paid).reduce((s, c) => s + (c.commission || 0), 0);
   const paidCommission = totalCommission - pendingCommission;
-  const me = AGENTS.find(a => a.id === 'AG-001');
+  // Si hay sesión real (Fase 9A), usar el perfil cacheado por el botón "Ingresar".
+  // Si no, fallback al mock AG-001 para preservar la demo.
+  const me = (function () {
+    try {
+      const raw = localStorage.getItem('alquiloya:agente');
+      if (raw) {
+        const real = JSON.parse(raw);
+        if (real && real.id) {
+          return Object.assign({}, AGENTS.find(a => a.id === 'AG-001') || {}, {
+            id: real.id,
+            slug: real.slug || (real.nombre || '').toLowerCase().replace(/\s+/g, '-'),
+            name: real.nombre || (real.email || 'Agente'),
+            phone: real.telefono || real.whatsapp || '',
+            avatar: undefined,
+            commissionRate: 5,
+            verified: !!real.activo,
+            _real: true,
+          });
+        }
+      }
+    } catch (_) {}
+    return AGENTS.find(a => a.id === 'AG-001');
+  })();
   return (
     <div style={{ marginTop: 28 }}>
       <div className="row between" style={{ marginBottom: 14, alignItems: 'flex-end' }}>

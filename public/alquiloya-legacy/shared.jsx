@@ -61,7 +61,34 @@ function Header({ route, onNav, onPublish }) {
         {/* Ingresar button */}
         <div style={{ flexShrink: 0, position: 'relative', zIndex: 2 }}>
           <button
-            onClick={() => onNav('admin-agent')}
+            onClick={() => {
+              // Auth real opt-in: si /api/agente/me responde 200 con agente,
+              // cacheamos el perfil y abrimos el panel. Si 401, mandamos a /login
+              // con next=/publico#admin-agent para volver tras autenticar.
+              // Cualquier otro error → fallback al panel demo con mock AG-001.
+              try {
+                fetch('/api/agente/me', { cache: 'no-store', credentials: 'include' })
+                  .then(r => {
+                    if (r.status === 401) {
+                      const next = encodeURIComponent('/publico#admin-agent');
+                      window.location.href = '/login?next=' + next;
+                      return;
+                    }
+                    if (!r.ok) { onNav('admin-agent'); return; }
+                    return r.json().then(body => {
+                      if (body && body.success && body.agente) {
+                        try { localStorage.setItem('alquiloya:agente', JSON.stringify(body.agente)); } catch (_) {}
+                      } else {
+                        try { localStorage.removeItem('alquiloya:agente'); } catch (_) {}
+                      }
+                      onNav('admin-agent');
+                    });
+                  })
+                  .catch(() => onNav('admin-agent'));
+              } catch (_) {
+                onNav('admin-agent');
+              }
+            }}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
               padding: '10px 22px',
