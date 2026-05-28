@@ -55,7 +55,12 @@ export default async function AgenteDetailPage({ params }: Props) {
           </dl>
         </section>
 
-        <AccesoBlock acceso={agente.acceso} />
+        <AccesoBlock
+          acceso={agente.acceso}
+          tipo="agente"
+          targetId={agente.id}
+          defaultEmail={agente.email}
+        />
       </div>
     </div>
   );

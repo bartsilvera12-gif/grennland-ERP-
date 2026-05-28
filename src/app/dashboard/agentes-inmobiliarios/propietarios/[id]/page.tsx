@@ -55,7 +55,12 @@ export default async function PropietarioDetailPage({ params }: Props) {
           </dl>
         </section>
 
-        <AccesoBlock acceso={p.acceso} />
+        <AccesoBlock
+          acceso={p.acceso}
+          tipo="propietario"
+          targetId={p.id}
+          defaultEmail={p.email}
+        />
       </div>
     </div>
   );
