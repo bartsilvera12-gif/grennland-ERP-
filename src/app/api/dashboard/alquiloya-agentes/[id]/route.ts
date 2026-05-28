@@ -1,0 +1,107 @@
+import { NextResponse } from "next/server";
+import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
+import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const ALQUILOYA_SCHEMA = "alquiloya";
+const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function t(table: string): string {
+  return `"${ALQUILOYA_SCHEMA}"."${table}"`;
+}
+function s(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const x = v.trim();
+  return x.length > 0 ? x : null;
+}
+function b(v: unknown): boolean | undefined {
+  if (typeof v === "boolean") return v;
+  if (v === "true") return true;
+  if (v === "false") return false;
+  return undefined;
+}
+function i(v: unknown): number | undefined {
+  if (v == null || v === "") return undefined;
+  const x = Number(v);
+  return Number.isFinite(x) ? Math.trunc(x) : undefined;
+}
+
+type Ctx = { params: Promise<{ id: string }> };
+
+export async function GET(_req: Request, ctx: Ctx) {
+  try {
+    const { id } = await ctx.params;
+    if (!uuidRe.test(id)) return NextResponse.json({ error: "id invalido" }, { status: 400 });
+    const pool = getChatPostgresPool();
+    if (!pool) return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
+    const { rows } = await queryWithRetry(
+      pool,
+      `SELECT id, nombre, email, telefono, whatsapp, cargo, bio, foto_url, orden, activo
+         FROM ${t("agentes")}
+        WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
+      [ALQUILOYA_EMPRESA_ID, id]
+    );
+    if (!rows || rows.length === 0) return NextResponse.json({ error: "no encontrado" }, { status: 404 });
+    return NextResponse.json({ success: true, data: rows[0] });
+  } catch (err) {
+    console.error("[api/dashboard/alquiloya-agentes/[id] GET]", err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Error" }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request, ctx: Ctx) {
+  try {
+    const user = await getAuthUserForApiRoute(request);
+    if (!user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    const { id } = await ctx.params;
+    if (!uuidRe.test(id)) return NextResponse.json({ error: "id invalido" }, { status: 400 });
+
+    const pool = getChatPostgresPool();
+    if (!pool) return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
+
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+
+    const sets: string[] = [];
+    const vals: unknown[] = [];
+    function push(col: string, val: unknown) {
+      vals.push(val);
+      sets.push(`${col} = $${vals.length}`);
+    }
+    if (typeof body.nombre === "string") {
+      const v = s(body.nombre);
+      if (!v) return NextResponse.json({ error: "nombre vacio" }, { status: 400 });
+      push("nombre", v);
+    }
+    if ("email" in body) push("email", s(body.email));
+    if ("telefono" in body) push("telefono", s(body.telefono));
+    if ("whatsapp" in body) push("whatsapp", s(body.whatsapp));
+    if ("cargo" in body) push("cargo", s(body.cargo));
+    if ("bio" in body) push("bio", s(body.bio));
+    if ("foto_url" in body) push("foto_url", s(body.foto_url));
+    if ("orden" in body) {
+      const x = i(body.orden);
+      if (x !== undefined) push("orden", x);
+    }
+    if ("activo" in body) {
+      const v = b(body.activo);
+      if (v !== undefined) push("activo", v);
+    }
+    if (sets.length === 0) return NextResponse.json({ error: "sin cambios" }, { status: 400 });
+
+    vals.push(ALQUILOYA_EMPRESA_ID);
+    vals.push(id);
+    const sql = `UPDATE ${t("agentes")} SET ${sets.join(", ")}, updated_at = now()
+                  WHERE empresa_id=$${vals.length - 1}::uuid AND id=$${vals.length}::uuid
+                  RETURNING id`;
+    const r = await queryWithRetry<{ id: string }>(pool, sql, vals);
+    if (!r.rows || r.rows.length === 0) return NextResponse.json({ error: "no encontrado" }, { status: 404 });
+    return NextResponse.json({ success: true, id: r.rows[0].id });
+  } catch (err) {
+    console.error("[api/dashboard/alquiloya-agentes/[id] PATCH]", err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Error" }, { status: 500 });
+  }
+}

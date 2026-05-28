@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import type {
   ErpAgenteInmobiliarioRow,
@@ -38,7 +39,7 @@ export function AgentesInmobiliariosClient({
 
   return (
     <div>
-      <div className="mb-4 border-b border-slate-200">
+      <div className="mb-4 flex items-end justify-between gap-4 border-b border-slate-200">
         <nav className="-mb-px flex gap-1" aria-label="Pestañas">
           <TabButton active={tab === "agentes"} onClick={() => setTab("agentes")}>
             Agentes inmobiliarios
@@ -53,6 +54,23 @@ export function AgentesInmobiliariosClient({
             </span>
           </TabButton>
         </nav>
+        <div className="mb-2 flex items-center gap-2">
+          {tab === "agentes" ? (
+            <Link
+              href="/dashboard/agentes-inmobiliarios/agentes/nuevo"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#4FAEB2] px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#3F8E91]"
+            >
+              + Nuevo agente
+            </Link>
+          ) : (
+            <Link
+              href="/dashboard/agentes-inmobiliarios/propietarios/nuevo"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#4FAEB2] px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#3F8E91]"
+            >
+              + Nuevo propietario
+            </Link>
+          )}
+        </div>
       </div>
 
       {tab === "agentes" ? (
@@ -120,6 +138,7 @@ function AgentesTab({
             <th className="px-3 py-2.5">Email</th>
             <th className="px-3 py-2.5 text-center">Propiedades</th>
             <th className="px-3 py-2.5">Activo</th>
+            <th className="px-3 py-2.5 text-right">Acciones</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -150,6 +169,22 @@ function AgentesTab({
               </td>
               <td className="px-3 py-2">
                 <Badge on={a.activo} label={a.activo ? "Sí" : "No"} />
+              </td>
+              <td className="px-3 py-2 text-right">
+                <div className="inline-flex items-center gap-1.5">
+                  <Link
+                    href={`/dashboard/agentes-inmobiliarios/agentes/${a.id}`}
+                    className="inline-flex items-center rounded-md bg-[#4FAEB2]/10 px-2.5 py-1 text-xs font-medium text-[#3F8E91] ring-1 ring-[#4FAEB2]/30 hover:bg-[#4FAEB2]/20"
+                  >
+                    Ver
+                  </Link>
+                  <Link
+                    href={`/dashboard/agentes-inmobiliarios/agentes/${a.id}/editar`}
+                    className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-200"
+                  >
+                    Editar
+                  </Link>
+                </div>
               </td>
             </tr>
           ))}
@@ -195,6 +230,7 @@ function PropietariosTab({
             <th className="px-3 py-2.5">Activo</th>
             <th className="px-3 py-2.5">Usuario</th>
             <th className="px-3 py-2.5">Plan</th>
+            <th className="px-3 py-2.5 text-right">Acciones</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -214,6 +250,22 @@ function PropietariosTab({
               </td>
               <td className="px-3 py-2 text-slate-500">
                 {p.plan_publicacion_id ? <span className="text-emerald-700">asignado</span> : "—"}
+              </td>
+              <td className="px-3 py-2 text-right">
+                <div className="inline-flex items-center gap-1.5">
+                  <Link
+                    href={`/dashboard/agentes-inmobiliarios/propietarios/${p.id}`}
+                    className="inline-flex items-center rounded-md bg-[#4FAEB2]/10 px-2.5 py-1 text-xs font-medium text-[#3F8E91] ring-1 ring-[#4FAEB2]/30 hover:bg-[#4FAEB2]/20"
+                  >
+                    Ver
+                  </Link>
+                  <Link
+                    href={`/dashboard/agentes-inmobiliarios/propietarios/${p.id}/editar`}
+                    className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-200"
+                  >
+                    Editar
+                  </Link>
+                </div>
               </td>
             </tr>
           ))}
