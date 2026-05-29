@@ -190,6 +190,13 @@ const MENU_STRUCTURE: MenuItem[] = [
     icon: Users,
   },
   {
+    key: "referidos",
+    slug: "referidos",
+    label: "Referidos",
+    href: "/dashboard/referidos",
+    icon: Sparkles,
+  },
+  {
     key: "sorteos",
     slug: "sorteos",
     label: "Sorteos",

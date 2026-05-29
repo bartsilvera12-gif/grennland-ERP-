@@ -30,6 +30,7 @@ const SIDEBAR_SLUG_HREF_ORDER: { slug: string; href: string }[] = [
   { slug: "proyectos", href: "/dashboard/proyectos" },
   { slug: "propiedades", href: "/dashboard/propiedades" },
   { slug: "agentes-inmobiliarios", href: "/dashboard/agentes-inmobiliarios" },
+  { slug: "referidos", href: "/dashboard/referidos" },
   { slug: "etiquetas", href: "/dashboard/etiquetas" },
 ];
 
@@ -101,6 +102,7 @@ export function pathRequiresModuleSlug(pathname: string): string | null {
     if (p.startsWith("/dashboard/proyectos")) return "proyectos";
     if (p.startsWith("/dashboard/propiedades")) return "propiedades";
     if (p.startsWith("/dashboard/agentes-inmobiliarios")) return "agentes-inmobiliarios";
+    if (p.startsWith("/dashboard/referidos")) return "referidos";
     if (p.startsWith("/dashboard/conversaciones-finalizadas")) return "conversaciones-finalizadas";
     if (p.startsWith("/dashboard/historial-omnicanal")) return "historial-omnicanal";
     if (p.startsWith("/dashboard/monitoreo")) return "monitoreo";
