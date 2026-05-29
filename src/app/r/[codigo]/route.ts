@@ -110,7 +110,19 @@ async function handleAlquiloyaReferralRedirect(
   }
 
   // Destino: /publico, preservando UTM si vino.
-  const dest = new URL("/publico", request.url);
+  // Reconstruimos el origin desde headers x-forwarded-* porque `request.url`
+  // detrás del reverse proxy de Coolify trae `localhost:3000` y romperíamos
+  // el redirect público.
+  const fwdProto =
+    request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
+    request.nextUrl.protocol.replace(":", "") ||
+    "https";
+  const fwdHost =
+    request.headers.get("x-forwarded-host")?.split(",")[0]?.trim() ||
+    request.headers.get("host") ||
+    request.nextUrl.host;
+  const publicOrigin = `${fwdProto}://${fwdHost}`;
+  const dest = new URL("/publico", publicOrigin);
   if (utmSource) dest.searchParams.set("utm_source", utmSource);
   if (utmMedium) dest.searchParams.set("utm_medium", utmMedium);
   if (utmCampaign) dest.searchParams.set("utm_campaign", utmCampaign);
