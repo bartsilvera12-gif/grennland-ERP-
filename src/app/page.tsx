@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { getConfig } from "@/lib/config/storage";
 import { getUsuarios } from "@/lib/usuarios/storage";
@@ -109,6 +109,13 @@ const Icon = {
       <path d="M3 21h18" />
       <path d="M5 21V7l8-4 8 4v14" />
       <path d="M9 9h1M9 13h1M9 17h1M14 9h1M14 13h1M14 17h1" />
+    </svg>
+  ),
+  Captaciones: ({ className = "h-4 w-4" }: IconProps) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="m22 11-3 3-2-2" />
     </svg>
   ),
   Target: ({ className = "h-4 w-4" }: IconProps) => (
@@ -2491,7 +2498,7 @@ const PERIODO_OPTS: { id: Periodo; label: string }[] = [
   { id: "anio", label: "Año"       },
 ];
 
-const TAB_VALID: TabDash[] = ["comercial", "financiero", "inventario", "ventas", "propiedades"];
+const TAB_VALID: TabDash[] = ["comercial", "financiero", "inventario", "ventas", "propiedades", "captaciones"];
 
 type DashScope =
   | { kind: "pending" }
@@ -2640,6 +2647,7 @@ export default function DashboardPage() {
     inventario: { label: "Inventario", Icon: Icon.Inventario },
     ventas: { label: "Ventas", Icon: Icon.Ventas },
     propiedades: { label: "Propiedades", Icon: Icon.Propiedades },
+    captaciones: { label: "Captaciones", Icon: Icon.Captaciones },
   };
 
   if (!config) {
@@ -2848,6 +2856,8 @@ export default function DashboardPage() {
       )}
 
       {tab === "propiedades" && <DashPropiedades />}
+
+      {tab === "captaciones" && <DashCaptaciones />}
 
     </div>
   );
@@ -3078,6 +3088,256 @@ function DashPropiedades() {
           </div>
         )}
       </motion.div>
+    </div>
+  );
+}
+
+// ── Dashboard Captaciones (AlquiloYa) ─────────────────────────────────────────
+type CaptResumen = {
+  success?: boolean;
+  cards?: {
+    total: number; nuevo: number; contacto: number; negocio_activo: number;
+    cerrado: number; rechazado: number; tasa_cierre: number; ult_7: number; ult_30: number;
+  };
+  by_agent?: Array<{
+    agente_id: string; agente_nombre: string | null;
+    total: number; nuevo: number; contacto: number; negocio_activo: number; cerrado: number; rechazado: number;
+  }>;
+  by_date?: Array<{ dia: string; total: number }>;
+  recent_items?: Array<{
+    id: string; propietario_nombre: string | null; propietario_email: string | null; propietario_telefono: string | null;
+    propiedad_titulo: string | null; ciudad: string | null; barrio: string | null;
+    etapa: string; created_at: string | null;
+    agente_id: string | null; agente_nombre: string | null;
+  }>;
+};
+
+const CAPT_ETAPAS = ["nuevo", "contacto", "negocio_activo", "cerrado", "rechazado"] as const;
+const CAPT_LABELS: Record<string, string> = {
+  nuevo: "Nuevo", contacto: "Contacto", negocio_activo: "Negocio activo",
+  cerrado: "Cerrado", rechazado: "Rechazado",
+};
+const CAPT_COLORS: Record<string, string> = {
+  nuevo: "bg-sky-100 text-sky-800 ring-sky-200",
+  contacto: "bg-amber-100 text-amber-800 ring-amber-200",
+  negocio_activo: "bg-violet-100 text-violet-800 ring-violet-200",
+  cerrado: "bg-emerald-100 text-emerald-800 ring-emerald-200",
+  rechazado: "bg-rose-100 text-rose-800 ring-rose-200",
+};
+
+function CardSt({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
+      <div className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{value}</div>
+      {sub ? <div className="mt-0.5 text-[11px] text-slate-400">{sub}</div> : null}
+    </div>
+  );
+}
+
+function DashCaptaciones() {
+  const [data, setData] = useState<CaptResumen | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await fetchWithSupabaseSession("/api/dashboard/alquiloya-captaciones/resumen", { cache: "no-store" });
+      const b = (await r.json().catch(() => ({}))) as CaptResumen & { error?: string };
+      if (!r.ok || !b.success) throw new Error((b as { error?: string }).error || `HTTP ${r.status}`);
+      setData(b);
+      setErr(null);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error");
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  async function changeEtapa(id: string, etapa: string) {
+    setBusyId(id);
+    try {
+      const r = await fetchWithSupabaseSession(`/api/dashboard/alquiloya-captaciones/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ etapa }),
+      });
+      const b = (await r.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      if (!r.ok || !b.success) throw new Error(b.error || `HTTP ${r.status}`);
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  if (err && !data) {
+    return (
+      <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        No se pudo cargar el dashboard de captaciones: {err}
+      </div>
+    );
+  }
+  if (!data || !data.cards) {
+    return <div className="mt-6 text-sm text-slate-500">Cargando captaciones…</div>;
+  }
+  const c = data.cards;
+  const byDate = data.by_date ?? [];
+  const byAgent = data.by_agent ?? [];
+  const recent = data.recent_items ?? [];
+
+  const max = Math.max(1, ...byDate.map((d) => d.total));
+  const W = 600, H = 60;
+  const step = W / Math.max(1, byDate.length - 1);
+  const path = byDate.map((v, i) => `${i === 0 ? "M" : "L"} ${(i * step).toFixed(1)} ${(H - (v.total / max) * (H - 6) - 3).toFixed(1)}`).join(" ");
+  const area = path + ` L ${W} ${H} L 0 ${H} Z`;
+
+  return (
+    <div className="mt-6 space-y-6">
+      {err ? (
+        <div className="rounded-md bg-rose-50 px-3 py-2 text-xs text-rose-700">{err}</div>
+      ) : null}
+
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <CardSt label="Total" value={String(c.total)} />
+        <CardSt label="Nuevas" value={String(c.nuevo)} />
+        <CardSt label="En contacto" value={String(c.contacto)} />
+        <CardSt label="Negocio activo" value={String(c.negocio_activo)} />
+        <CardSt label="Cerradas" value={String(c.cerrado)} />
+        <CardSt label="Rechazadas" value={String(c.rechazado)} />
+      </section>
+
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <CardSt label="Tasa de cierre" value={`${c.tasa_cierre}%`} sub="cerradas / (cerradas + rechazadas)" />
+        <CardSt label="Últimos 7 días" value={String(c.ult_7)} sub="nuevas captaciones" />
+        <CardSt label="Últimos 30 días" value={String(c.ult_30)} sub="nuevas captaciones" />
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-2 text-sm font-semibold text-slate-700">Captaciones por día (últimos 30)</h2>
+        {byDate.length === 0 || byDate.every((d) => d.total === 0) ? (
+          <div className="py-8 text-center text-sm text-slate-500">Sin captaciones en los últimos 30 días.</div>
+        ) : (
+          <>
+            <svg viewBox={`0 0 ${W} ${H}`} width="100%" preserveAspectRatio="none" className="block">
+              <defs>
+                <linearGradient id="capt-grad-tab" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#4FAEB2" stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="#4FAEB2" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path d={area} fill="url(#capt-grad-tab)" />
+              <path d={path} stroke="#3F8E91" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
+              <span>{byDate[0]?.dia}</span>
+              <span>{byDate[byDate.length - 1]?.dia}</span>
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h2 className="text-sm font-semibold text-slate-700">Captaciones por agente</h2>
+        </div>
+        {byAgent.length === 0 ? (
+          <div className="px-6 py-10 text-center text-sm text-slate-500">Sin datos.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="px-4 py-2.5">Agente</th>
+                  <th className="px-4 py-2.5 text-center">Total</th>
+                  <th className="px-4 py-2.5 text-center">Nuevo</th>
+                  <th className="px-4 py-2.5 text-center">Contacto</th>
+                  <th className="px-4 py-2.5 text-center">Negocio</th>
+                  <th className="px-4 py-2.5 text-center">Cerrado</th>
+                  <th className="px-4 py-2.5 text-center">Rechazado</th>
+                  <th className="px-4 py-2.5 text-right">Tasa cierre</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {byAgent.map((a) => {
+                  const den = a.cerrado + a.rechazado;
+                  const tasa = den > 0 ? Math.round((a.cerrado / den) * 1000) / 10 : 0;
+                  return (
+                    <tr key={a.agente_id} className="hover:bg-slate-50">
+                      <td className="px-4 py-2 font-medium text-slate-900">{a.agente_nombre ?? "—"}</td>
+                      <td className="px-4 py-2 text-center tabular-nums font-semibold">{a.total}</td>
+                      <td className="px-4 py-2 text-center tabular-nums">{a.nuevo}</td>
+                      <td className="px-4 py-2 text-center tabular-nums">{a.contacto}</td>
+                      <td className="px-4 py-2 text-center tabular-nums">{a.negocio_activo}</td>
+                      <td className="px-4 py-2 text-center tabular-nums">{a.cerrado}</td>
+                      <td className="px-4 py-2 text-center tabular-nums">{a.rechazado}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">{tasa}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <h2 className="text-sm font-semibold text-slate-700">Últimas captaciones</h2>
+        </div>
+        {recent.length === 0 ? (
+          <div className="px-6 py-10 text-center text-sm text-slate-500">Sin captaciones todavía.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                <tr>
+                  <th className="px-4 py-2.5">Propietario</th>
+                  <th className="px-4 py-2.5">Contacto</th>
+                  <th className="px-4 py-2.5">Propiedad</th>
+                  <th className="px-4 py-2.5">Ubicación</th>
+                  <th className="px-4 py-2.5">Agente</th>
+                  <th className="px-4 py-2.5">Estado</th>
+                  <th className="px-4 py-2.5">Fecha</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {recent.map((r) => {
+                  const cls = CAPT_COLORS[r.etapa] ?? "bg-slate-100 text-slate-700 ring-slate-200";
+                  return (
+                    <tr key={r.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-2 font-medium text-slate-900">{r.propietario_nombre ?? "—"}</td>
+                      <td className="px-4 py-2 text-xs text-slate-600">
+                        {r.propietario_email ? <div>{r.propietario_email}</div> : null}
+                        {r.propietario_telefono ? <div>{r.propietario_telefono}</div> : null}
+                        {!r.propietario_email && !r.propietario_telefono ? "—" : null}
+                      </td>
+                      <td className="px-4 py-2 text-slate-700">{r.propiedad_titulo ?? "—"}</td>
+                      <td className="px-4 py-2 text-xs text-slate-600">
+                        {[r.ciudad, r.barrio].filter(Boolean).join(" · ") || "—"}
+                      </td>
+                      <td className="px-4 py-2 text-slate-700">{r.agente_nombre ?? "—"}</td>
+                      <td className="px-4 py-2">
+                        <select
+                          value={r.etapa}
+                          disabled={busyId === r.id}
+                          onChange={(e) => changeEtapa(r.id, e.target.value)}
+                          className={`rounded-md border-transparent px-2 py-1 text-xs font-semibold ring-1 ${cls} focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/40`}
+                        >
+                          {CAPT_ETAPAS.map((e) => (
+                            <option key={e} value={e}>{CAPT_LABELS[e]}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-4 py-2 text-xs text-slate-500">{r.created_at?.slice(0, 10) ?? "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
     </div>
   );
 }

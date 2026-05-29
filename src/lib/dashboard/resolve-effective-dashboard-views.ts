@@ -10,13 +10,21 @@ export type DashboardViewRow = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySb = any;
 
-const DASH_SLUGS = new Set(["comercial", "financiero", "inventario", "ventas", "propiedades"]);
+const DASH_SLUGS = new Set([
+  "comercial",
+  "financiero",
+  "inventario",
+  "ventas",
+  "propiedades",
+  "captaciones",
+]);
 export type DashboardTabSlug =
   | "comercial"
   | "financiero"
   | "inventario"
   | "ventas"
-  | "propiedades";
+  | "propiedades"
+  | "captaciones";
 
 export function isDashboardTabSlug(s: string): s is DashboardTabSlug {
   return DASH_SLUGS.has(s);
