@@ -351,18 +351,22 @@ function StepManagement(props) {
     return () => { cancelled = true; };
   }, []);
 
-  // Normalizamos la fuente: real (API) tiene {id,nombre,telefono,whatsapp,foto_url,cargo,bio,activo}.
+  // Normalizamos la fuente: real (API) trae {id,nombre,telefono,whatsapp,foto_url,cargo,bio,activo,propiedades_count?}.
   // Si no hay datos reales, usamos el mock AGENTS para preservar la demo visual.
   const sourceList = apiAgents
     ? apiAgents.map(a => ({
         id: a.id,
         name: a.nombre || '—',
         zone: a.cargo || '',
+        cargo: a.cargo || null,
+        telefono: a.telefono || null,
+        whatsapp: a.whatsapp || null,
+        propiedades: typeof a.propiedades_count === 'number' ? a.propiedades_count : null,
         verified: !!a.activo,
         level: 'Pro',
         rating: 4.8,
         reviews: 0,
-        activeProperties: 0,
+        activeProperties: typeof a.propiedades_count === 'number' ? a.propiedades_count : 0,
         closedRentals: 0,
         commissionRate: 5,
         _real: true,
@@ -377,10 +381,11 @@ function StepManagement(props) {
 
   return (
     <div>
-      <div className="tag">Paso 4</div>
-      <h3 style={{ fontSize: 22, marginTop: 6 }}>¿Cómo querés gestionar la propiedad?</h3>
+      <div className="tag">Paso 4 — Gestión</div>
+      <h3 style={{ fontSize: 22, marginTop: 6 }}>¿Querés asesoría de un agente inmobiliario?</h3>
       <p className="muted" style={{ fontSize: 14, marginTop: 6 }}>
-        Podés publicarla vos mismo o cederle la gestión a un agente verificado. Si la captura un agente, él se encarga de visitas, consultas y cierre — y recibe una comisión solo si se concreta el alquiler.
+        Podés publicar tu propiedad por tu cuenta o pedir que te asesore un agente verificado.
+        Si elegís asesoría, el agente se contacta con vos para gestionar visitas, consultas y cierre — y recibe comisión solo si se concreta el alquiler.
       </p>
 
       <div className="row gap-14" style={{ marginTop: 22 }}>
@@ -394,7 +399,7 @@ function StepManagement(props) {
               <I.user s={18}/>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 14.5, lineHeight: 1.25 }}>Yo lo gestiono</div>
+              <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 14.5, lineHeight: 1.25 }}>No, quiero publicar por mi cuenta</div>
               <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 4, lineHeight: 1.45 }}>Atendés vos las consultas y visitas. Sin comisión.</div>
             </div>
           </div>
@@ -409,7 +414,7 @@ function StepManagement(props) {
               <I.shield s={18}/>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 14.5, lineHeight: 1.25 }}>Cederlo a un agente</div>
+              <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 14.5, lineHeight: 1.25 }}>Sí, quiero que me asesore un agente</div>
               <div style={{ fontSize: 12.5, color: 'var(--ink-3)', marginTop: 4, lineHeight: 1.45 }}>El agente gestiona todo. Comisión 4–5% solo si alquila.</div>
             </div>
           </div>
@@ -439,7 +444,15 @@ function StepManagement(props) {
                       <AgentLevelBadge level={a.level}/>
                     </div>
                     <div className="muted xs" style={{ marginTop: 2 }}>
-                      <I.pin s={11}/> {a.zone} · {a.activeProperties} activas · {a.closedRentals} cerradas
+                      {a._real ? (
+                        <span>
+                          {a.cargo ? <span>{a.cargo}</span> : null}
+                          {(a.telefono || a.whatsapp) ? <span> · <I.whats s={10}/> {a.telefono || a.whatsapp}</span> : null}
+                          {typeof a.propiedades === 'number' ? <span> · {a.propiedades} propiedad{a.propiedades === 1 ? '' : 'es'}</span> : null}
+                        </span>
+                      ) : (
+                        <span><I.pin s={11}/> {a.zone} · {a.activeProperties} activas · {a.closedRentals} cerradas</span>
+                      )}
                     </div>
                   </div>
                 </div>
