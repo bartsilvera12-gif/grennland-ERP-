@@ -65,17 +65,22 @@ async function load(id: string) {
     ),
     queryWithRetry<{ clicks: number; conversiones: number; pendiente: string; pagada: string }>(
       pool,
+      // Importante: cada $N debe usarse al menos una vez en contexto tipable,
+      // sino PG devuelve 42P18 ("could not determine data type of parameter").
+      // Por eso filtramos siempre por empresa_id ($1) en cada subselect.
       `SELECT
          (SELECT count(*)::int FROM alquiloya.referral_clicks
-           WHERE link_id IN (SELECT id FROM alquiloya.referral_links WHERE partner_id=$2::uuid))
-         AS clicks,
+           WHERE empresa_id=$1::uuid
+             AND link_id IN (
+               SELECT id FROM alquiloya.referral_links
+                WHERE empresa_id=$1::uuid AND partner_id=$2::uuid
+             )) AS clicks,
          (SELECT count(*)::int FROM alquiloya.referral_conversions
-           WHERE partner_id=$2::uuid) AS conversiones,
+           WHERE empresa_id=$1::uuid AND partner_id=$2::uuid) AS conversiones,
          (SELECT COALESCE(sum(monto_comision),0)::text FROM alquiloya.referral_commissions
-           WHERE partner_id=$2::uuid AND estado='pendiente') AS pendiente,
+           WHERE empresa_id=$1::uuid AND partner_id=$2::uuid AND estado='pendiente') AS pendiente,
          (SELECT COALESCE(sum(monto_comision),0)::text FROM alquiloya.referral_commissions
-           WHERE partner_id=$2::uuid AND estado='pagada') AS pagada
-       WHERE TRUE`,
+           WHERE empresa_id=$1::uuid AND partner_id=$2::uuid AND estado='pagada') AS pagada`,
       [ALQUILOYA_EMPRESA_ID, id]
     ),
     queryWithRetry<Commission>(
