@@ -4,7 +4,13 @@ import { usePathname } from "next/navigation";
 import Sidebar from "./layout/Sidebar";
 import Header from "./layout/Header";
 
-const STANDALONE_ROUTES = ["/login", "/portal-agentes/login"];
+const STANDALONE_ROUTES = [
+  "/login",
+  "/portal-agentes/login",
+  "/portal-referidos",
+  "/portal-referidos/login",
+  "/portal-referidos/dashboard",
+];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

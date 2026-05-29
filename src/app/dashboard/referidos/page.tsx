@@ -2,6 +2,7 @@ import "server-only";
 import Link from "next/link";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { CopySlugButton } from "./_components/CopySlugButton";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -241,6 +242,7 @@ export default async function ReferidosPage() {
                   <th className="px-4 py-2.5 text-center">Conversiones</th>
                   <th className="px-4 py-2.5 text-right">Comisión pendiente</th>
                   <th className="px-4 py-2.5">Activo</th>
+                  <th className="px-4 py-2.5 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -257,11 +259,14 @@ export default async function ReferidosPage() {
                     <td className="px-4 py-2 text-slate-700">{(p.tipo ?? "—").replace("_", " ")}</td>
                     <td className="px-4 py-2">
                       {p.primary_slug ? (
-                        <div>
-                          <span className="font-mono text-[12.5px] text-[#3F8E91]">/r/{p.primary_slug}</span>
-                          {p.primary_campania ? (
-                            <div className="text-[11px] text-slate-400">{p.primary_campania}</div>
-                          ) : null}
+                        <div className="flex items-center gap-2">
+                          <div className="min-w-0 flex-1">
+                            <span className="font-mono text-[12.5px] text-[#3F8E91]">/r/{p.primary_slug}</span>
+                            {p.primary_campania ? (
+                              <div className="text-[11px] text-slate-400">{p.primary_campania}</div>
+                            ) : null}
+                          </div>
+                          <CopySlugButton slug={p.primary_slug} />
                         </div>
                       ) : (
                         <span className="text-slate-400">—</span>
@@ -281,6 +286,14 @@ export default async function ReferidosPage() {
                       >
                         {p.activo ? "Sí" : "No"}
                       </span>
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <Link
+                        href={`/dashboard/referidos/partners/${p.id}`}
+                        className="inline-flex items-center rounded-md bg-[#4FAEB2]/10 px-2.5 py-1 text-xs font-medium text-[#3F8E91] ring-1 ring-[#4FAEB2]/30 hover:bg-[#4FAEB2]/20"
+                      >
+                        Ver
+                      </Link>
                     </td>
                   </tr>
                 ))}

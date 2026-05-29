@@ -13,7 +13,13 @@ import {
 import ZentraLoader from "@/components/ZentraLoader";
 import { BootProvider, useBoot } from "@/components/BootContext";
 
-const PUBLIC_ROUTES = ["/login", "/portal-agentes/login"];
+const PUBLIC_ROUTES = [
+  "/login",
+  "/portal-agentes/login",
+  "/portal-referidos",
+  "/portal-referidos/login",
+  "/portal-referidos/dashboard",
+];
 
 type ModuleAccess = { superAdmin: boolean; slugs: Set<string> };
 

@@ -42,6 +42,10 @@ export default function NuevoReferidoPage() {
     rule_moneda: "PYG" as (typeof MONEDAS)[number],
     rule_recurrente: false,
     rule_meses_recurrencia: 6,
+    crear_acceso: false,
+    acc_email: "",
+    acc_pass: "",
+    acc_pass2: "",
   });
 
   function set<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
@@ -65,6 +69,11 @@ export default function NuevoReferidoPage() {
     if (form.rule_recurrente && (!form.rule_meses_recurrencia || form.rule_meses_recurrencia < 1)) {
       setErr("Meses de recurrencia inválido");
       return;
+    }
+    if (form.crear_acceso) {
+      if (!form.acc_email.trim()) { setErr("Email de acceso requerido"); return; }
+      if (form.acc_pass.length < 8) { setErr("La contraseña debe tener al menos 8 caracteres"); return; }
+      if (form.acc_pass !== form.acc_pass2) { setErr("Las contraseñas no coinciden"); return; }
     }
     setSaving(true);
     try {
@@ -95,8 +104,36 @@ export default function NuevoReferidoPage() {
         slug?: string;
         error?: string;
       };
-      if (!res.ok || !data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
-      router.push("/dashboard/referidos");
+      if (!res.ok || !data.success || !data.id) throw new Error(data.error ?? `HTTP ${res.status}`);
+
+      // Opcional: crear acceso al portal en una segunda llamada (no transaccional).
+      // Si falla, el partner ya quedó creado y el admin puede reintentar desde el detalle.
+      if (form.crear_acceso) {
+        const accRes = await fetchWithSupabaseSession("/api/dashboard/alquiloya-accesos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tipo: "referido_partner",
+            id: data.id,
+            email: form.acc_email.trim(),
+            password: form.acc_pass,
+          }),
+        });
+        const accBody = (await accRes.json().catch(() => ({}))) as {
+          success?: boolean; error?: string;
+        };
+        if (!accRes.ok || !accBody.success) {
+          setErr(
+            `Referido creado, pero no se pudo crear el acceso: ${accBody.error ?? `HTTP ${accRes.status}`}. ` +
+            "Podés reintentar desde el detalle del referido."
+          );
+          router.push(`/dashboard/referidos/partners/${data.id}`);
+          router.refresh();
+          return;
+        }
+      }
+
+      router.push(`/dashboard/referidos/partners/${data.id}`);
       router.refresh();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Error al guardar");
@@ -274,6 +311,72 @@ export default function NuevoReferidoPage() {
               </div>
             )}
           </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-600">
+              Acceso al portal <span className="text-[10px] text-slate-400">(opcional)</span>
+            </h2>
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-[#4FAEB2] focus:ring-[#4FAEB2]"
+                checked={form.crear_acceso}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  set("crear_acceso", next);
+                  if (next && !form.acc_email && form.email) set("acc_email", form.email);
+                }}
+              />
+              Crear acceso ahora
+            </label>
+          </div>
+          {form.crear_acceso ? (
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className={fieldCls}>
+                <label className={labelCls}>Email *</label>
+                <input
+                  type="email"
+                  className={inputCls}
+                  value={form.acc_email}
+                  onChange={(e) => set("acc_email", e.target.value)}
+                  required={form.crear_acceso}
+                />
+              </div>
+              <div className={fieldCls}>
+                <label className={labelCls}>Contraseña *</label>
+                <input
+                  type="password"
+                  minLength={8}
+                  className={inputCls}
+                  value={form.acc_pass}
+                  onChange={(e) => set("acc_pass", e.target.value)}
+                  required={form.crear_acceso}
+                />
+              </div>
+              <div className={fieldCls}>
+                <label className={labelCls}>Confirmar contraseña *</label>
+                <input
+                  type="password"
+                  minLength={8}
+                  className={inputCls}
+                  value={form.acc_pass2}
+                  onChange={(e) => set("acc_pass2", e.target.value)}
+                  required={form.crear_acceso}
+                />
+              </div>
+              <div className="sm:col-span-2 text-[11px] text-slate-500">
+                El referido podrá ingresar en{" "}
+                <span className="font-mono">/portal-referidos/login</span> con este email y contraseña.
+                No queda almacenada en texto plano.
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 text-[12px] text-slate-500">
+              Si lo dejás sin marcar, podés crear el acceso más tarde desde el detalle del referido.
+            </div>
+          )}
         </section>
 
         <div className="flex items-center gap-3">

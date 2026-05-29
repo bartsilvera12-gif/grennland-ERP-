@@ -84,6 +84,80 @@ export async function GET(_req: Request, ctx: Ctx) {
   }
 }
 
+export async function DELETE(request: Request, ctx: Ctx) {
+  try {
+    const user = await getAuthUserForApiRoute(request);
+    if (!user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    const { id } = await ctx.params;
+    if (!uuidRe.test(id)) return NextResponse.json({ error: "id invalido" }, { status: 400 });
+
+    const pool = getChatPostgresPool();
+    if (!pool) return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
+
+    // Verificar actividad. Si hay clicks/conversiones/comisiones → soft delete (activo=false).
+    const activity = await queryWithRetry<{
+      clicks: number;
+      conversiones: number;
+      comisiones: number;
+    }>(
+      pool,
+      `SELECT
+         (SELECT count(*)::int FROM ${t("referral_clicks")}
+           WHERE link_id IN (SELECT id FROM ${t("referral_links")} WHERE partner_id=$2::uuid))
+         AS clicks,
+         (SELECT count(*)::int FROM ${t("referral_conversions")} WHERE partner_id=$2::uuid) AS conversiones,
+         (SELECT count(*)::int FROM ${t("referral_commissions")} WHERE partner_id=$2::uuid) AS comisiones
+       FROM ${t("referral_partners")} p
+        WHERE p.empresa_id=$1::uuid AND p.id=$2::uuid`,
+      [ALQUILOYA_EMPRESA_ID, id]
+    );
+    if (!activity.rows || activity.rows.length === 0) {
+      return NextResponse.json({ error: "no encontrado" }, { status: 404 });
+    }
+    const { clicks, conversiones, comisiones } = activity.rows[0];
+
+    if (clicks > 0 || conversiones > 0 || comisiones > 0) {
+      // Soft delete: marcar inactivo + desactivar links. Preserva historial.
+      await queryWithRetry(
+        pool,
+        `UPDATE ${t("referral_partners")} SET activo=false
+          WHERE empresa_id=$1::uuid AND id=$2::uuid`,
+        [ALQUILOYA_EMPRESA_ID, id]
+      );
+      await queryWithRetry(
+        pool,
+        `UPDATE ${t("referral_links")} SET activo=false
+          WHERE empresa_id=$1::uuid AND partner_id=$2::uuid AND activo=true`,
+        [ALQUILOYA_EMPRESA_ID, id]
+      );
+      return NextResponse.json({
+        success: true,
+        mode: "soft",
+        reason: `Tiene historial (clicks=${clicks}, conversiones=${conversiones}, comisiones=${comisiones}). Marcado inactivo en lugar de borrar.`,
+      });
+    }
+
+    // Hard delete seguro: borra partner; CASCADE limpia links + reglas (FK ON DELETE CASCADE).
+    const r = await queryWithRetry<{ id: string }>(
+      pool,
+      `DELETE FROM ${t("referral_partners")}
+        WHERE empresa_id=$1::uuid AND id=$2::uuid
+        RETURNING id`,
+      [ALQUILOYA_EMPRESA_ID, id]
+    );
+    if (!r.rows || r.rows.length === 0) {
+      return NextResponse.json({ error: "no encontrado" }, { status: 404 });
+    }
+    return NextResponse.json({ success: true, mode: "hard" });
+  } catch (err) {
+    console.error("[api alquiloya-referral-partners/[id] DELETE]", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Error" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PATCH(request: Request, ctx: Ctx) {
   try {
     const user = await getAuthUserForApiRoute(request);

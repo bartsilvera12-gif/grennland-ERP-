@@ -31,9 +31,12 @@ function generateTempPassword(): string {
 }
 
 type PostBody = {
-  tipo?: "agente" | "propietario";
+  tipo?: "agente" | "propietario" | "referido_partner";
   id?: string;
   email?: string;
+  // Para referido_partner el admin puede definir la contraseña.
+  // Si no se envía, se genera una temporal como en los otros flujos.
+  password?: string;
 };
 
 /**
@@ -78,12 +81,16 @@ export async function POST(request: Request) {
     const tipo = body.tipo;
     const targetId = s(body.id);
     const emailOverride = s(body.email);
+    const passwordOverride = s(body.password);
 
-    if (tipo !== "agente" && tipo !== "propietario") {
+    if (tipo !== "agente" && tipo !== "propietario" && tipo !== "referido_partner") {
       return NextResponse.json({ error: "tipo invalido" }, { status: 400 });
     }
     if (!targetId || !uuidRe.test(targetId)) {
       return NextResponse.json({ error: "id invalido" }, { status: 400 });
+    }
+    if (passwordOverride && passwordOverride.length < 8) {
+      return NextResponse.json({ error: "password debe tener al menos 8 caracteres" }, { status: 400 });
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -111,7 +118,7 @@ export async function POST(request: Request) {
       }
       email = email ?? r.rows[0].email;
       nombre = r.rows[0].nombre;
-    } else {
+    } else if (tipo === "propietario") {
       const r = await queryWithRetry<{ email: string | null; nombre: string | null; usuario_id: string | null }>(
         pool,
         `SELECT email, nombre, usuario_id FROM ${t("propietarios")}
@@ -120,6 +127,19 @@ export async function POST(request: Request) {
       );
       if (!r.rows || r.rows.length === 0) {
         return NextResponse.json({ error: "propietario no encontrado" }, { status: 404 });
+      }
+      email = email ?? r.rows[0].email;
+      nombre = r.rows[0].nombre;
+    } else {
+      // tipo === 'referido_partner'
+      const r = await queryWithRetry<{ email: string | null; nombre: string | null; usuario_id: string | null }>(
+        pool,
+        `SELECT email, nombre, usuario_id FROM ${t("referral_partners")}
+          WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
+        [ALQUILOYA_EMPRESA_ID, targetId]
+      );
+      if (!r.rows || r.rows.length === 0) {
+        return NextResponse.json({ error: "referido no encontrado" }, { status: 404 });
       }
       email = email ?? r.rows[0].email;
       nombre = r.rows[0].nombre;
@@ -134,13 +154,16 @@ export async function POST(request: Request) {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const tempPassword = generateTempPassword();
+    // Si el admin define password (caso típico de referido_partner) la usamos
+    // tal cual; si no, generamos una temporal. NUNCA se guarda en DB.
+    const passwordToUse = passwordOverride ?? generateTempPassword();
+    const passwordWasAdminProvided = !!passwordOverride;
     let authUserId: string | null = null;
     let createdNewAuthUser = false;
 
     const created = await supabaseAdmin.auth.admin.createUser({
       email,
-      password: tempPassword,
+      password: passwordToUse,
       email_confirm: true,
       user_metadata: { source: "alquiloya_portal", tipo, target_id: targetId },
     });
@@ -176,7 +199,12 @@ export async function POST(request: Request) {
     }
 
     // 3. Upsert en alquiloya.usuarios.
-    const rol = tipo === "agente" ? "agente_publicador" : "propietario_publicador";
+    const rol =
+      tipo === "agente"
+        ? "agente_publicador"
+        : tipo === "propietario"
+        ? "propietario_publicador"
+        : "referido_partner";
 
     // ¿Hay ya una fila en usuarios para este auth_user_id?
     const existsByAuth = await queryWithRetry<{ id: string }>(
@@ -243,11 +271,20 @@ export async function POST(request: Request) {
       usuarioErpId = r.rows[0].id;
     }
 
-    // 4. Para propietario: vincular usuario_id en alquiloya.propietarios.
+    // 4. Vincular usuario_id en la tabla del target (propietario / referral_partner).
     if (tipo === "propietario") {
       await queryWithRetry(
         pool,
         `UPDATE ${t("propietarios")}
+            SET usuario_id = $1::uuid, updated_at = now()
+          WHERE empresa_id = $2::uuid AND id = $3::uuid
+            AND (usuario_id IS NULL OR usuario_id <> $1::uuid)`,
+        [usuarioErpId, ALQUILOYA_EMPRESA_ID, targetId]
+      );
+    } else if (tipo === "referido_partner") {
+      await queryWithRetry(
+        pool,
+        `UPDATE ${t("referral_partners")}
             SET usuario_id = $1::uuid, updated_at = now()
           WHERE empresa_id = $2::uuid AND id = $3::uuid
             AND (usuario_id IS NULL OR usuario_id <> $1::uuid)`,
@@ -259,9 +296,10 @@ export async function POST(request: Request) {
       success: true,
       email,
       rol,
-      // Solo devolvemos contraseña si la generamos en esta llamada
-      // (cuando el auth user es nuevo). No la persistimos en DB.
-      temporary_password: createdNewAuthUser ? tempPassword : null,
+      // Si el admin definió el password, no lo devolvemos (lo conoce).
+      // Si lo generamos, lo devolvemos UNA vez para mostrar en modal.
+      temporary_password: createdNewAuthUser && !passwordWasAdminProvided ? passwordToUse : null,
+      password_was_admin_provided: passwordWasAdminProvided,
       reused_auth_user: !createdNewAuthUser,
     });
   } catch (err) {
