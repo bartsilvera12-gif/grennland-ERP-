@@ -312,6 +312,13 @@ function AdminAgentPage({ route, onNav }) {
     return () => { cancelled = true; };
   }, []);
   const propsForRender = (myPropiedades && myPropiedades.length > 0) ? myPropiedades : PROPERTIES;
+  // KPIs derivados de datos reales del ERP. Si no hay propiedades reales, mostramos guiones.
+  const hasRealProps = Array.isArray(myPropiedades);
+  const totalProps = hasRealProps ? myPropiedades.length : 0;
+  const destacadasCount = hasRealProps ? myPropiedades.filter(p => p.destacada).length : 0;
+  const cerradasCount = hasRealProps ? myPropiedades.filter(p => /alquilado|vendido|cerrad|finalizado/i.test(String(p.estado || ''))).length : 0;
+  const activasCount = hasRealProps ? myPropiedades.filter(p => p.activo).length : 0;
+  const tasaCierre = totalProps > 0 ? Math.round((cerradasCount / totalProps) * 100) : 0;
 
   const [boostedIds, setBoostedIds] = React.useState({ [PROPERTIES[1].id]: true, [PROPERTIES[4].id]: true });
   const [buyOpen, setBuyOpen] = React.useState(false);
@@ -406,10 +413,10 @@ function AdminAgentPage({ route, onNav }) {
       <div className="card" style={{ padding: 0, marginTop: 14, overflow: 'hidden' }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
           {[
-            { label: 'Mis propiedades',      value: '14',     sub: `${Object.keys(boostedIds).length} destacadas`,         icon: 'house', color: 'var(--blue)',       trend: 'up' },
-            { label: 'Visualizaciones (7d)', value: '2.184',  sub: '+22% vs semana pasada',                                icon: 'eye',   color: 'var(--green)',      trend: 'up' },
-            { label: 'Consultas WhatsApp',   value: '38',     sub: '12 sin responder',                                     icon: 'whats', color: 'var(--yellow-600)', trend: 'warn' },
-            { label: 'Tasa de cierre',       value: '18%',    sub: '2 cerrados este mes',                                  icon: 'trend', color: '#6e3ad1',           trend: 'up' },
+            { label: 'Mis propiedades',      value: hasRealProps ? String(totalProps) : '—', sub: hasRealProps ? `${destacadasCount} destacada${destacadasCount !== 1 ? 's' : ''}` : 'sin datos',         icon: 'house', color: 'var(--blue)',       trend: 'up' },
+            { label: 'Activas',              value: hasRealProps ? String(activasCount) : '—', sub: hasRealProps ? `${totalProps - activasCount} pausada${(totalProps - activasCount) !== 1 ? 's' : ''}` : 'sin datos', icon: 'eye',   color: 'var(--green)',      trend: 'up' },
+            { label: 'Cierres acumulados',   value: hasRealProps ? String(cerradasCount) : '—', sub: hasRealProps ? `sobre ${totalProps} publicaciones` : 'sin datos',                                                  icon: 'whats', color: 'var(--yellow-600)', trend: 'up' },
+            { label: 'Tasa de cierre',       value: hasRealProps && totalProps > 0 ? `${tasaCierre}%` : '—', sub: hasRealProps ? `${cerradasCount} cerrada${cerradasCount !== 1 ? 's' : ''}` : 'sin datos',           icon: 'trend', color: '#6e3ad1',           trend: 'up' },
           ].map((k, i) => (
             <div key={k.label} style={{ padding: '16px 18px', borderRight: i < 3 ? '1px solid var(--line-2)' : 'none' }}>
               <div className="row between" style={{ alignItems: 'flex-start' }}>
@@ -437,7 +444,7 @@ function AdminAgentPage({ route, onNav }) {
           <div className="row between" style={{ marginBottom: 12, alignItems: 'flex-end' }}>
             <div>
               <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 16 }}>Mis propiedades</div>
-              <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 2 }}>14 publicadas · {Object.keys(boostedIds).length} destacadas</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 2 }}>{propsForRender.length} publicada{propsForRender.length !== 1 ? 's' : ''} · {destacadasCount} destacada{destacadasCount !== 1 ? 's' : ''}</div>
             </div>
             <div style={{ display: 'inline-flex', gap: 4 }}>
               {[
