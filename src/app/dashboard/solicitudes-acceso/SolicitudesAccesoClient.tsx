@@ -157,6 +157,7 @@ export default function SolicitudesAccesoClient({
                 <th className="hidden px-3 py-2.5 md:table-cell">Contacto</th>
                 <th className="hidden px-3 py-2.5 lg:table-cell">Ciudad</th>
                 <th className="hidden px-3 py-2.5 lg:table-cell">Empresa</th>
+                <th className="px-3 py-2.5">Plan</th>
                 <th className="hidden px-3 py-2.5 xl:table-cell">Recibida</th>
                 <th className="px-3 py-2.5">Estado</th>
                 <th className="px-3 py-2.5 text-right">Acciones</th>
@@ -185,6 +186,18 @@ export default function SolicitudesAccesoClient({
                   </td>
                   <td className="hidden px-3 py-2 text-slate-700 lg:table-cell">{r.ciudad ?? "—"}</td>
                   <td className="hidden px-3 py-2 text-slate-700 lg:table-cell">{r.empresa ?? "—"}</td>
+                  <td className="px-3 py-2 text-slate-700">
+                    {r.plan_tier_solicitado ? (
+                      <span className="inline-flex flex-col">
+                        <span className="font-medium text-slate-900">{r.plan_nombre_solicitado ?? r.plan_tier_solicitado}</span>
+                        {r.plan_nombre_solicitado ? (
+                          <span className="text-[10px] text-slate-400">{r.plan_tier_solicitado}</span>
+                        ) : null}
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
+                  </td>
                   <td className="hidden px-3 py-2 text-slate-500 xl:table-cell">{fmtDate(r.created_at)}</td>
                   <td className="px-3 py-2"><EstadoBadge estado={r.estado} /></td>
                   <td className="px-3 py-2 text-right">
@@ -231,6 +244,28 @@ export default function SolicitudesAccesoClient({
                 ? ` (${confirm.row.sub_tipo})`
                 : ""}
               .
+              {confirm.row.plan_tier_solicitado ? (
+                <>
+                  <br />
+                  {confirm.row.tipo === "propietario" ? (
+                    <>
+                      Se asignará el plan{" "}
+                      <strong>
+                        {confirm.row.plan_nombre_solicitado ?? confirm.row.plan_tier_solicitado}
+                      </strong>{" "}
+                      automáticamente.
+                    </>
+                  ) : (
+                    <>
+                      Plan solicitado:{" "}
+                      <strong>
+                        {confirm.row.plan_nombre_solicitado ?? confirm.row.plan_tier_solicitado}
+                      </strong>{" "}
+                      (los agentes no tienen plan asignado directo — quedará registrado en la solicitud).
+                    </>
+                  )}
+                </>
+              ) : null}
             </>
           ) : null
         }

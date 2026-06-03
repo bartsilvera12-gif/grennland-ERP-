@@ -562,7 +562,23 @@ function VerificationModal({ propertyId, propertyTitle, onClose }) {
                 <button
                   className="btn btn-blue"
                   disabled={!ready}
-                  onClick={() => ready && setStep(2)}
+                  onClick={async () => {
+                    if (!ready) return;
+                    try {
+                      await fetch('/api/public/alquiloya/solicitudes-servicio', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          kind: 'verificacion',
+                          nombre: form.ownerName,
+                          telefono: form.phone,
+                          propiedad_id: propertyId || null,
+                          mensaje: 'CCC: ' + form.ccc + ' / NIS: ' + form.nis + ' / CI: ' + form.ciNumber,
+                        }),
+                      });
+                    } catch (e) { /* feedback igual */ }
+                    setStep(2);
+                  }}
                   style={{ opacity: ready ? 1 : .5, cursor: ready ? 'pointer' : 'not-allowed' }}
                 >
                   Enviar solicitud <I.check s={14}/>

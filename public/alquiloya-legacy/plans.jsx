@@ -3,6 +3,8 @@
 function PlansPage({ onNav }) {
   const [audience, setAudience] = React.useState('owner');
   const [verifyOpen, setVerifyOpen] = React.useState(false);
+  const [picked, setPicked] = React.useState(null); // { tier, name }
+  const [changeOpen, setChangeOpen] = React.useState(false);
   // Fuente real desde API; fallback a PLANS de data.jsx si la API falla.
   const [plansData, setPlansData] = React.useState(PLANS);
   React.useEffect(() => {
@@ -52,18 +54,39 @@ function PlansPage({ onNav }) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 22, marginTop: 40, maxWidth: 960, margin: '40px auto 0' }}>
-        {filtered.map(p => <PlanCard key={p.tier} plan={p}/>)}
+        {filtered.map(p => <PlanCard key={p.tier} plan={p} onPick={() => setPicked({ tier: p.tier, name: p.name, audience })}/>)}
+      </div>
+
+      <div style={{ textAlign: 'center', marginTop: 24 }}>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => setChangeOpen(true)}
+          style={{ color: 'var(--blue)', fontWeight: 600 }}
+        >
+          Ya tengo cuenta — quiero cambiar de plan →
+        </button>
       </div>
 
       <CompareTable/>
       <PlansFaq/>
       {verifyOpen && <VerificationModal onClose={() => setVerifyOpen(false)}/>}
+      {picked && (
+        <RequestAccessModal
+          onClose={() => setPicked(null)}
+          planTier={picked.tier}
+          planLabel={picked.name}
+          defaultTipo={picked.audience === 'agent' ? 'agente' : 'propietario'}
+        />
+      )}
+      {changeOpen && <CambioPlanModal planes={filtered} onClose={() => setChangeOpen(false)}/>}
     </div>
   );
 }
 
 function BoostPage({ onNav }) {
   const [verifyOpen, setVerifyOpen] = React.useState(false);
+  const [packToBuy, setPackToBuy] = React.useState(null);
   return (
     <div className="fade-in container" style={{ padding: '48px 32px' }}>
       <div style={{ textAlign: 'center', maxWidth: 760, margin: '0 auto' }}>
@@ -106,13 +129,14 @@ function BoostPage({ onNav }) {
         </div>
       </div>
 
-      <ImpulseSection/>
+      <ImpulseSection onBuy={(pack) => setPackToBuy(pack)}/>
       {verifyOpen && <VerificationModal onClose={() => setVerifyOpen(false)}/>}
+      {packToBuy && <ImpulsoCompraModal pack={packToBuy} onClose={() => setPackToBuy(null)}/>}
     </div>
   );
 }
 
-function PlanCard({ plan }) {
+function PlanCard({ plan, onPick }) {
   const highlight = plan.highlighted;
   return (
     <div className="card" style={{
@@ -156,7 +180,11 @@ function PlanCard({ plan }) {
           <span className="badge badge-soft" style={{ fontSize: 11 }}>Suscripción recurrente</span>
         </div>
       )}
-      <button className={"btn " + (highlight ? 'btn-primary' : 'btn-blue')} style={{ width: '100%', justifyContent: 'center', marginTop: 18 }}>
+      <button
+        className={"btn " + (highlight ? 'btn-primary' : 'btn-blue')}
+        style={{ width: '100%', justifyContent: 'center', marginTop: 18 }}
+        onClick={() => onPick && onPick()}
+      >
         {plan.cta}
       </button>
       <div className="divider" style={{ margin: '22px 0' }}/>
@@ -238,7 +266,7 @@ function CompareTable() {
   );
 }
 
-function ImpulseSection() {
+function ImpulseSection({ onBuy }) {
   return (
     <div style={{ marginTop: 56 }}>
       <SectionHead eyebrow="Impulsos" title="Destacá más propiedades cuando lo necesites" />
@@ -290,7 +318,7 @@ function ImpulseSection() {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 18, color: 'var(--blue)' }}>{formatGs(pack.price)}</div>
-                    <button className="btn btn-blue btn-sm" style={{ marginTop: 4 }}>Comprar</button>
+                    <button className="btn btn-blue btn-sm" style={{ marginTop: 4 }} onClick={() => onBuy && onBuy(pack)}>Comprar</button>
                   </div>
                 </div>
               </div>
@@ -306,4 +334,176 @@ function PlansFaq() {
   return null;
 }
 
-Object.assign(window, { PlansPage, BoostPage });
+// ───────────── Modales: Cambio de plan + Compra de impulsos ─────────────
+
+function _modalOverlay(onClose, busy) {
+  return {
+    style: { position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20, overflowY: 'auto' },
+    onClick: (e) => { if (e.target === e.currentTarget && !busy) onClose(); },
+  };
+}
+const _modalCard = { padding: 24, maxWidth: 460, width: '100%', background: '#fff', borderRadius: 20, position: 'relative', maxHeight: 'calc(100vh - 40px)', overflowY: 'auto' };
+const _fieldLabel = { fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '.03em', marginBottom: 6, display: 'block' };
+const _inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 10, fontFamily: 'inherit', fontSize: 14, color: 'var(--ink)', background: '#fff' };
+
+function _feedback(fb) {
+  if (!fb) return null;
+  const isErr = fb.kind === 'error';
+  return (
+    <div style={{
+      marginTop: 12, padding: '10px 12px', borderRadius: 10, fontSize: 13,
+      background: isErr ? '#fef2f2' : '#ecfdf5',
+      color: isErr ? '#991b1b' : '#065f46',
+      border: '1px solid ' + (isErr ? '#fecaca' : '#a7f3d0'),
+    }}>{fb.text}</div>
+  );
+}
+
+function CambioPlanModal({ planes, onClose }) {
+  const [form, setForm] = React.useState({ nombre: '', email: '', telefono: '', plan_tier: '', mensaje: '' });
+  const [busy, setBusy] = React.useState(false);
+  const [feedback, setFeedback] = React.useState(null);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  async function submit(e) {
+    e.preventDefault();
+    setFeedback(null);
+    if (!form.nombre.trim()) return setFeedback({ kind: 'error', text: 'Ingresá tu nombre.' });
+    if (!form.email.trim() && !form.telefono.trim()) return setFeedback({ kind: 'error', text: 'Ingresá email o teléfono.' });
+    if (!form.plan_tier) return setFeedback({ kind: 'error', text: 'Elegí el plan al que querés cambiar.' });
+    setBusy(true);
+    try {
+      const res = await fetch('/api/public/alquiloya/solicitudes-servicio', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'cambio_plan',
+          nombre: form.nombre.trim(),
+          email: form.email.trim() || null,
+          telefono: form.telefono.trim() || null,
+          plan_tier: form.plan_tier,
+          mensaje: form.mensaje.trim() || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) throw new Error((data && data.error) || ('HTTP ' + res.status));
+      setFeedback({ kind: 'success', text: '¡Listo! Recibimos tu solicitud. El equipo se va a contactar para coordinar el pago y aplicar el cambio.' });
+      setForm({ nombre: '', email: '', telefono: '', plan_tier: '', mensaje: '' });
+    } catch (err) {
+      setFeedback({ kind: 'error', text: 'No pudimos registrar tu solicitud. ' + (err.message || '') });
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div {..._modalOverlay(onClose, busy)}>
+      <div style={_modalCard} onClick={(e) => e.stopPropagation()}>
+        <h2 style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 20, margin: 0 }}>Cambiar de plan</h2>
+        <p style={{ marginTop: 6, fontSize: 13.5, color: 'var(--ink-3)' }}>Decinos a qué plan querés moverte. Te contactamos para coordinar el pago y aplicar el cambio.</p>
+        <form onSubmit={submit}>
+          <div style={{ marginTop: 14 }}>
+            <label style={_fieldLabel}>Plan al que cambiar *</label>
+            <select style={_inputStyle} value={form.plan_tier} onChange={e => set('plan_tier', e.target.value)} required>
+              <option value="">Elegí un plan…</option>
+              {planes.map(p => <option key={p.tier} value={p.tier}>{p.name} — {p.billing === 'gratis' ? 'Gratis' : ('Gs. ' + Number(p.price || 0).toLocaleString('es-PY'))}</option>)}
+            </select>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <label style={_fieldLabel}>Nombre completo *</label>
+            <input style={_inputStyle} maxLength={160} value={form.nombre} onChange={e => set('nombre', e.target.value)} required/>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <label style={_fieldLabel}>Email</label>
+            <input style={_inputStyle} type="email" maxLength={160} value={form.email} onChange={e => set('email', e.target.value)} placeholder="vos@ejemplo.com"/>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <label style={_fieldLabel}>Teléfono / WhatsApp</label>
+            <input style={_inputStyle} type="tel" maxLength={40} value={form.telefono} onChange={e => set('telefono', e.target.value)} placeholder="+595 9XX XXX XXX"/>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <label style={_fieldLabel}>Mensaje (opcional)</label>
+            <textarea style={{ ..._inputStyle, minHeight: 70, resize: 'vertical' }} maxLength={1200} value={form.mensaje} onChange={e => set('mensaje', e.target.value)} placeholder="Aclaraciones, fecha en que querés que arranque, etc."/>
+          </div>
+          {_feedback(feedback)}
+          <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+            <button type="button" disabled={busy} onClick={onClose} className="btn" style={{ flex: 1, background: '#f1f5f9', color: 'var(--ink-2)' }}>Cancelar</button>
+            <button type="submit" disabled={busy} className="btn btn-primary" style={{ flex: 1 }}>{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ImpulsoCompraModal({ pack, onClose }) {
+  const [form, setForm] = React.useState({ nombre: '', email: '', telefono: '', mensaje: '' });
+  const [busy, setBusy] = React.useState(false);
+  const [feedback, setFeedback] = React.useState(null);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  async function submit(e) {
+    e.preventDefault();
+    setFeedback(null);
+    if (!form.nombre.trim()) return setFeedback({ kind: 'error', text: 'Ingresá tu nombre.' });
+    if (!form.email.trim() && !form.telefono.trim()) return setFeedback({ kind: 'error', text: 'Ingresá email o teléfono.' });
+    setBusy(true);
+    try {
+      const res = await fetch('/api/public/alquiloya/solicitudes-servicio', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'impulsos',
+          nombre: form.nombre.trim(),
+          email: form.email.trim() || null,
+          telefono: form.telefono.trim() || null,
+          pack_id: pack.id,
+          pack_qty: pack.qty,
+          monto: pack.price,
+          mensaje: form.mensaje.trim() || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) throw new Error((data && data.error) || ('HTTP ' + res.status));
+      setFeedback({ kind: 'success', text: '¡Listo! Recibimos tu pedido. Te contactamos para coordinar el pago y activar los impulsos.' });
+      setForm({ nombre: '', email: '', telefono: '', mensaje: '' });
+    } catch (err) {
+      setFeedback({ kind: 'error', text: 'No pudimos registrar tu compra. ' + (err.message || '') });
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div {..._modalOverlay(onClose, busy)}>
+      <div style={_modalCard} onClick={(e) => e.stopPropagation()}>
+        <h2 style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 20, margin: 0 }}>Comprar impulsos</h2>
+        <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--yellow-50)', border: '1px solid var(--yellow)' }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', color: '#8a5e00', textTransform: 'uppercase' }}>Pack seleccionado</div>
+          <div style={{ marginTop: 2, fontFamily: 'Montserrat', fontWeight: 800, fontSize: 16, color: 'var(--ink)' }}>
+            {pack.qty} impulso{pack.qty > 1 ? 's' : ''} · Gs. {Number(pack.price || 0).toLocaleString('es-PY')}
+          </div>
+        </div>
+        <form onSubmit={submit}>
+          <div style={{ marginTop: 14 }}>
+            <label style={_fieldLabel}>Nombre completo *</label>
+            <input style={_inputStyle} maxLength={160} value={form.nombre} onChange={e => set('nombre', e.target.value)} required/>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <label style={_fieldLabel}>Email</label>
+            <input style={_inputStyle} type="email" maxLength={160} value={form.email} onChange={e => set('email', e.target.value)} placeholder="vos@ejemplo.com"/>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <label style={_fieldLabel}>Teléfono / WhatsApp</label>
+            <input style={_inputStyle} type="tel" maxLength={40} value={form.telefono} onChange={e => set('telefono', e.target.value)} placeholder="+595 9XX XXX XXX"/>
+          </div>
+          <div style={{ marginTop: 14 }}>
+            <label style={_fieldLabel}>Mensaje (opcional)</label>
+            <textarea style={{ ..._inputStyle, minHeight: 70, resize: 'vertical' }} maxLength={1200} value={form.mensaje} onChange={e => set('mensaje', e.target.value)}/>
+          </div>
+          {_feedback(feedback)}
+          <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+            <button type="button" disabled={busy} onClick={onClose} className="btn" style={{ flex: 1, background: '#f1f5f9', color: 'var(--ink-2)' }}>Cancelar</button>
+            <button type="submit" disabled={busy} className="btn btn-primary" style={{ flex: 1 }}>{busy ? 'Enviando…' : 'Pedir y coordinar pago'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { PlansPage, BoostPage, CambioPlanModal, ImpulsoCompraModal });

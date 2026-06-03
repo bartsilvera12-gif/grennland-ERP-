@@ -198,6 +198,13 @@ const MENU_STRUCTURE: MenuItem[] = [
     icon: Inbox,
   },
   {
+    key: "solicitudes-servicio",
+    slug: "agentes-inmobiliarios",
+    label: "Solicitudes de servicio",
+    href: "/dashboard/solicitudes-servicio",
+    icon: Inbox,
+  },
+  {
     key: "agente-resenas",
     slug: "agentes-inmobiliarios",
     label: "Reseñas de agentes",

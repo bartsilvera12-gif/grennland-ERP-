@@ -1074,8 +1074,8 @@ function Faq() {
   );
 }
 
-function RequestAccessModal({ onClose }) {
-  const [tipo, setTipo] = React.useState('propietario');
+function RequestAccessModal({ onClose, planTier, planLabel, defaultTipo }) {
+  const [tipo, setTipo] = React.useState(defaultTipo === 'agente' ? 'agente' : 'propietario');
   const [subTipo, setSubTipo] = React.useState('Independiente');
   const [form, setForm] = React.useState({ nombre: '', email: '', telefono: '', empresa: '', ciudad: '', mensaje: '' });
   const [busy, setBusy] = React.useState(false);
@@ -1102,6 +1102,7 @@ function RequestAccessModal({ onClose }) {
         empresa: form.empresa.trim() || null,
         ciudad: form.ciudad.trim() || null,
         mensaje: form.mensaje.trim() || null,
+        plan_tier_solicitado: planTier || null,
       };
       const res = await fetch('/api/public/alquiloya/solicitudes-acceso', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
@@ -1132,8 +1133,14 @@ function RequestAccessModal({ onClose }) {
   return (
     <div style={overlay} onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
       <div style={modal}>
-        <h2 style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 20, margin: 0 }}>Solicitar acceso</h2>
+        <h2 style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 20, margin: 0 }}>{planTier ? 'Quiero este plan' : 'Solicitar acceso'}</h2>
         <p style={{ marginTop: 6, fontSize: 13.5, color: 'var(--ink-3)' }}>Contanos quién sos. Nuestro equipo revisa cada pedido y te contactamos.</p>
+        {planTier && (
+          <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--blue-50)', border: '1px solid var(--blue-100)' }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', color: 'var(--blue)', textTransform: 'uppercase' }}>Plan elegido</div>
+            <div style={{ marginTop: 2, fontFamily: 'Montserrat', fontWeight: 800, fontSize: 16, color: 'var(--ink)' }}>{planLabel || planTier}</div>
+          </div>
+        )}
         <form onSubmit={submit}>
           <div style={{ marginTop: 14 }}>
             <label style={fieldLabel}>¿Qué tipo de cuenta querés?</label>

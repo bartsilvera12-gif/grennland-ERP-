@@ -46,6 +46,7 @@ export async function POST(request: Request) {
     const empresa = s(body.empresa, 160);
     const ciudad = s(body.ciudad, 80);
     const mensaje = s(body.mensaje, 1200);
+    const planTier = s(body.plan_tier_solicitado, 40);
 
     const pool = getChatPostgresPool();
     if (!pool) {
@@ -55,10 +56,10 @@ export async function POST(request: Request) {
     const { rows } = await queryWithRetry<{ id: string }>(
       pool,
       `INSERT INTO "alquiloya"."solicitudes_acceso"
-         (empresa_id, tipo, sub_tipo, nombre, email, telefono, empresa, ciudad, mensaje, estado)
-       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, 'pendiente')
+         (empresa_id, tipo, sub_tipo, nombre, email, telefono, empresa, ciudad, mensaje, plan_tier_solicitado, estado)
+       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pendiente')
        RETURNING id`,
-      [ALQUILOYA_EMPRESA_ID, tipo, subTipo, nombre, email, telefono, empresa, ciudad, mensaje]
+      [ALQUILOYA_EMPRESA_ID, tipo, subTipo, nombre, email, telefono, empresa, ciudad, mensaje, planTier]
     );
     return NextResponse.json(successResponse({ id: rows[0].id }));
   } catch (err) {

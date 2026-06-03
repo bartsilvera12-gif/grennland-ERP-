@@ -31,6 +31,7 @@ type SolicitudFull = {
   ciudad: string | null;
   mensaje: string | null;
   estado: "pendiente" | "aprobada" | "rechazada";
+  plan_tier_solicitado: string | null;
 };
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -55,7 +56,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
     const { rows: solRows } = await queryWithRetry<SolicitudFull>(
       pool,
       `SELECT id, empresa_id, tipo, sub_tipo, nombre, email, telefono,
-              empresa, ciudad, mensaje, estado
+              empresa, ciudad, mensaje, estado, plan_tier_solicitado
          FROM ${t("solicitudes_acceso")}
         WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
       [ALQUILOYA_EMPRESA_ID, id]
@@ -84,6 +85,17 @@ export async function PATCH(request: Request, ctx: Ctx) {
     try {
       await client.query("BEGIN");
 
+      // Resolver plan tier → uuid si vino solicitado (puede ser null si el plan no existe).
+      let planId: string | null = null;
+      if (sol.plan_tier_solicitado) {
+        const pr = await client.query<{ id: string }>(
+          `SELECT id FROM ${t("planes_publicacion")}
+            WHERE empresa_id = $1::uuid AND tier = $2 AND activo = true LIMIT 1`,
+          [ALQUILOYA_EMPRESA_ID, sol.plan_tier_solicitado]
+        );
+        planId = pr.rows[0]?.id ?? null;
+      }
+
       let resultadoId: string;
       if (sol.tipo === "agente") {
         const cargo = sol.sub_tipo ?? "Independiente";
@@ -98,10 +110,10 @@ export async function PATCH(request: Request, ctx: Ctx) {
       } else {
         const r = await client.query<{ id: string }>(
           `INSERT INTO ${t("propietarios")}
-             (empresa_id, nombre, email, telefono, tipo_persona, estado, activo)
-           VALUES ($1::uuid, $2, $3, $4, 'fisica', 'verificado', true)
+             (empresa_id, nombre, email, telefono, tipo_persona, estado, activo, plan_publicacion_id)
+           VALUES ($1::uuid, $2, $3, $4, 'fisica', 'verificado', true, $5)
            RETURNING id`,
-          [ALQUILOYA_EMPRESA_ID, sol.nombre, sol.email, sol.telefono]
+          [ALQUILOYA_EMPRESA_ID, sol.nombre, sol.email, sol.telefono, planId]
         );
         resultadoId = r.rows[0].id;
       }
