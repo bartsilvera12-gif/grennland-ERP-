@@ -40,23 +40,30 @@ export default function PortalAgentesLoginPage() {
       }
 
       // Validar vínculo agente/propietario antes de mandarlo al panel.
-      const me = await fetch("/api/agente/me", {
-        cache: "no-store",
-        credentials: "include",
-      });
-
+      // Probamos primero propietario, luego agente.
+      const meProp = await fetch("/api/propietario/me", { cache: "no-store", credentials: "include" });
+      if (meProp.ok) {
+        const bodyP = (await meProp.json().catch(() => ({}))) as {
+          success?: boolean;
+          propietario?: unknown;
+          usuario?: { rol?: string | null } | null;
+        };
+        const rolP = bodyP?.usuario?.rol ?? "";
+        if (bodyP?.success && (bodyP.propietario || /propietario|publicador/i.test(rolP))) {
+          window.location.assign("/publico#admin-agent");
+          return;
+        }
+      }
+      const me = await fetch("/api/agente/me", { cache: "no-store", credentials: "include" });
       if (me.ok) {
         const body = (await me.json().catch(() => ({}))) as {
           success?: boolean;
           agente?: unknown;
           usuario?: { rol?: string | null } | null;
         };
-        // Aceptamos al usuario si tiene agente vinculado o si su rol indica publicador.
         const rol = body?.usuario?.rol ?? "";
-        const okPublicador =
-          /publicador|agente|propietario/i.test(rol) || !!body?.agente;
+        const okPublicador = /publicador|agente|propietario/i.test(rol) || !!body?.agente;
         if (body?.success && okPublicador) {
-          // Full-page navigate para preservar el hash y disparar el bootstrap del legacy.
           window.location.assign("/publico#admin-agent");
           return;
         }

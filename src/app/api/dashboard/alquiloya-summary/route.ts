@@ -25,7 +25,44 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
     }
 
-    const [totales, porTipo, porCiudad, agentesActivos, ultimas, consultas] = await Promise.all([
+    // Helper: chequea si una tabla existe (no rompe si la migration aún no corrió).
+    const tableExists = async (name: string): Promise<boolean> => {
+      const { rows } = await queryWithRetry<{ ok: boolean }>(
+        pool,
+        `SELECT EXISTS (
+          SELECT 1 FROM pg_class c
+          JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE n.nspname='alquiloya' AND c.relname=$1 AND c.relkind='r'
+        ) AS ok`,
+        [name]
+      );
+      return rows[0]?.ok === true;
+    };
+    const colExists = async (table: string, col: string): Promise<boolean> => {
+      const { rows } = await queryWithRetry<{ ok: boolean }>(
+        pool,
+        `SELECT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema='alquiloya' AND table_name=$1 AND column_name=$2
+        ) AS ok`,
+        [table, col]
+      );
+      return rows[0]?.ok === true;
+    };
+    const safeCount = async (sql: string): Promise<number> => {
+      try {
+        const { rows } = await queryWithRetry<{ n: number }>(pool, sql, [ALQUILOYA_EMPRESA_ID]);
+        return rows[0]?.n ?? 0;
+      } catch {
+        return 0;
+      }
+    };
+
+    const [
+      totales, porTipo, porCiudad, agentesActivos, ultimas, consultas,
+      hasSolAcceso, hasSolServicio, hasResenas, hasCaptaciones,
+      hasPlanVencProp, hasPlanVencAg, hasPlanProp,
+    ] = await Promise.all([
       queryWithRetry<{
         total: number;
         activas: number;
@@ -105,7 +142,86 @@ export async function GET(request: Request) {
          FROM ${t("consultas_propiedad")} WHERE empresa_id = $1::uuid AND activo = true`,
         [ALQUILOYA_EMPRESA_ID]
       ),
+      tableExists("solicitudes_acceso"),
+      tableExists("solicitudes_servicio"),
+      tableExists("agente_resenas"),
+      tableExists("agente_captaciones"),
+      colExists("propietarios", "plan_vencimiento_at"),
+      colExists("agentes", "plan_vencimiento_at"),
+      colExists("propietarios", "plan_publicacion_id"),
     ]);
+
+    // Acciones pendientes
+    const solAccesoPend = hasSolAcceso ? await safeCount(
+      `SELECT count(*)::int AS n FROM ${t("solicitudes_acceso")}
+        WHERE empresa_id=$1::uuid AND estado='pendiente'`
+    ) : 0;
+    const solServicioPend = hasSolServicio ? await safeCount(
+      `SELECT count(*)::int AS n FROM ${t("solicitudes_servicio")}
+        WHERE empresa_id=$1::uuid AND estado='pendiente'`
+    ) : 0;
+    const resenasPend = hasResenas ? await safeCount(
+      `SELECT count(*)::int AS n FROM ${t("agente_resenas")}
+        WHERE empresa_id=$1::uuid AND estado='pendiente'`
+    ) : 0;
+    const captacionesPend = hasCaptaciones ? await safeCount(
+      `SELECT count(*)::int AS n FROM ${t("agente_captaciones")}
+        WHERE empresa_id=$1::uuid AND COALESCE(estado,'') NOT IN ('cerrada','finalizada','descartada')`
+    ) : 0;
+
+    // Vencimientos de planes (propietarios + agentes combinados)
+    const venc7Prop = hasPlanVencProp ? await safeCount(
+      `SELECT count(*)::int AS n FROM ${t("propietarios")}
+        WHERE empresa_id=$1::uuid AND activo=true
+          AND plan_vencimiento_at IS NOT NULL
+          AND plan_vencimiento_at BETWEEN now() AND now() + interval '7 days'`
+    ) : 0;
+    const venc7Ag = hasPlanVencAg ? await safeCount(
+      `SELECT count(*)::int AS n FROM ${t("agentes")}
+        WHERE empresa_id=$1::uuid AND activo=true
+          AND plan_vencimiento_at IS NOT NULL
+          AND plan_vencimiento_at BETWEEN now() AND now() + interval '7 days'`
+    ) : 0;
+    const venc30Prop = hasPlanVencProp ? await safeCount(
+      `SELECT count(*)::int AS n FROM ${t("propietarios")}
+        WHERE empresa_id=$1::uuid AND activo=true
+          AND plan_vencimiento_at IS NOT NULL
+          AND plan_vencimiento_at BETWEEN now() AND now() + interval '30 days'`
+    ) : 0;
+    const venc30Ag = hasPlanVencAg ? await safeCount(
+      `SELECT count(*)::int AS n FROM ${t("agentes")}
+        WHERE empresa_id=$1::uuid AND activo=true
+          AND plan_vencimiento_at IS NOT NULL
+          AND plan_vencimiento_at BETWEEN now() AND now() + interval '30 days'`
+    ) : 0;
+    const vencidosProp = hasPlanVencProp ? await safeCount(
+      `SELECT count(*)::int AS n FROM ${t("propietarios")}
+        WHERE empresa_id=$1::uuid AND activo=true
+          AND plan_vencimiento_at IS NOT NULL AND plan_vencimiento_at < now()`
+    ) : 0;
+    const vencidosAg = hasPlanVencAg ? await safeCount(
+      `SELECT count(*)::int AS n FROM ${t("agentes")}
+        WHERE empresa_id=$1::uuid AND activo=true
+          AND plan_vencimiento_at IS NOT NULL AND plan_vencimiento_at < now()`
+    ) : 0;
+
+    // Distribución por plan (propietarios)
+    let porPlan: { label: string; value: number }[] = [];
+    if (hasPlanProp) {
+      try {
+        const { rows } = await queryWithRetry<{ label: string; value: number }>(
+          pool,
+          `SELECT COALESCE(pp.nombre, 'Sin plan') AS label, count(*)::int AS value
+             FROM ${t("propietarios")} p
+             LEFT JOIN ${t("planes_publicacion")} pp
+               ON pp.empresa_id=p.empresa_id AND pp.id=p.plan_publicacion_id
+            WHERE p.empresa_id=$1::uuid AND p.activo=true
+            GROUP BY 1 ORDER BY value DESC, label ASC`,
+          [ALQUILOYA_EMPRESA_ID]
+        );
+        porPlan = rows;
+      } catch {}
+    }
 
     return NextResponse.json({
       success: true,
@@ -113,9 +229,21 @@ export async function GET(request: Request) {
         propiedades: totales.rows[0] ?? { total: 0, activas: 0, publicadas: 0, destacadas: 0 },
         por_tipo: porTipo.rows,
         por_ciudad: porCiudad.rows,
+        por_plan: porPlan,
         agentes: agentesActivos.rows[0] ?? { activos: 0, total: 0 },
         consultas: consultas.rows[0] ?? { total: 0, ultimas_30: 0, pendientes: 0 },
         ultimas: ultimas.rows,
+        acciones_pendientes: {
+          solicitudes_acceso: solAccesoPend,
+          solicitudes_servicio: solServicioPend,
+          agente_resenas: resenasPend,
+          captaciones: captacionesPend,
+        },
+        planes: {
+          por_vencer_7d: venc7Prop + venc7Ag,
+          por_vencer_30d: venc30Prop + venc30Ag,
+          vencidos: vencidosProp + vencidosAg,
+        },
       },
     });
   } catch (err) {

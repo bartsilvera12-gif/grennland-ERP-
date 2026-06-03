@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { createServiceRoleClient } from "@/lib/supabase/service-admin";
+import crypto from "node:crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -128,6 +130,47 @@ export async function PATCH(request: Request, ctx: Ctx) {
         resultadoId = r.rows[0].id;
       }
 
+      // Crear auth.users + alquiloya.usuarios (con propietario_id/agente_id) si hay email.
+      // Si no hay email no podemos crear cuenta -> queda solo el registro y se completa manual.
+      let portalCredentials: { email: string; tempPassword: string } | null = null;
+      let usuarioErpId: string | null = null;
+      if (sol.email) {
+        try {
+          const supabase = createServiceRoleClient();
+          // Genera password temporal (12 chars alfanumericos + 2 simbolos).
+          const tempPassword =
+            crypto.randomBytes(9).toString("base64").replace(/[+/=]/g, "x").slice(0, 12) + "!9";
+          const { data: created, error: createErr } = await supabase.auth.admin.createUser({
+            email: sol.email,
+            password: tempPassword,
+            email_confirm: true,
+            user_metadata: {
+              nombre: sol.nombre,
+              fuente: "solicitud_acceso",
+              tipo: sol.tipo,
+            },
+          });
+          if (createErr) throw new Error(createErr.message);
+          if (!created.user?.id) throw new Error("no se pudo crear el auth.user");
+
+          const authUserId = created.user.id;
+          const rol = sol.tipo === "agente" ? "publicador-agente" : "publicador-propietario";
+          const insertUsuario = await client.query<{ id: string }>(
+            `INSERT INTO ${t("usuarios")}
+               (empresa_id, auth_user_id, email, nombre, rol,
+                ${sol.tipo === "agente" ? "agente_id" : "propietario_id"})
+             VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::uuid)
+             RETURNING id`,
+            [ALQUILOYA_EMPRESA_ID, authUserId, sol.email, sol.nombre, rol, resultadoId]
+          );
+          usuarioErpId = insertUsuario.rows[0]?.id ?? null;
+          portalCredentials = { email: sol.email, tempPassword };
+        } catch (e) {
+          // Best-effort: si falla, no abortamos la aprobacion. Se puede crear manualmente despues.
+          console.warn("[solicitudes-acceso] no se pudo crear auth user:", e instanceof Error ? e.message : e);
+        }
+      }
+
       const upd = await client.query<{ id: string }>(
         `UPDATE ${t("solicitudes_acceso")}
             SET estado='aprobada', resultado_id=$3::uuid,
@@ -144,6 +187,8 @@ export async function PATCH(request: Request, ctx: Ctx) {
         estado: "aprobada",
         resultado_id: resultadoId,
         tipo: sol.tipo,
+        portal_credentials: portalCredentials, // {email, tempPassword} | null
+        usuario_erp_id: usuarioErpId,
       });
     } catch (e) {
       await client.query("ROLLBACK").catch(() => {});

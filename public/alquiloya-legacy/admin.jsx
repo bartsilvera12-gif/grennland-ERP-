@@ -1,6 +1,6 @@
 // Administradores — Global y Propietario/Agente
 
-function AdminLayout({ kind, route, onNav, title, subtitle, actions, children }) {
+function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, children }) {
   const items = kind === 'global' ? [
     { id: 'admin-global', label: 'Dashboard', icon: 'grid' },
     { id: 'admin-global-properties', label: 'Inmuebles', icon: 'house' },
@@ -10,10 +10,8 @@ function AdminLayout({ kind, route, onNav, title, subtitle, actions, children })
   ] : [
     { id: 'admin-agent', label: 'Resumen', icon: 'grid' },
     { id: 'admin-agent-properties', label: 'Mis propiedades', icon: 'house' },
-    { id: 'admin-agent-captures', label: 'Captaciones', icon: 'shield' },
-    // Referidos: gestionado únicamente desde el ERP (/dashboard/referidos).
-    // Consultas: ítem ocultado del menú del panel agente (limpieza UI legacy).
-    // El componente QueriesSection sigue en el archivo pero ya no se accede vía menú.
+    // Captaciones solo aplica a agentes/inmobiliarias, no a propietarios.
+    ...(role === 'propietario' ? [] : [{ id: 'admin-agent-captures', label: 'Captaciones', icon: 'shield' }]),
     { id: 'admin-agent-qr', label: 'Carteles QR', icon: 'qr' },
     { id: 'admin-agent-profile', label: 'Mi perfil', icon: 'user' },
   ];
@@ -236,37 +234,81 @@ function Donut({ data }) {
 }
 
 function AdminAgentPage({ route, onNav }) {
-  const [impulsesFree, setImpulsesFree] = React.useState(7);   // 7 de 10 gratis disponibles
-  const [impulsesPaid, setImpulsesPaid] = React.useState(5);   // 5 comprados
+  const [impulsesFree, setImpulsesFree] = React.useState(0);
+  const [impulsesPaid, setImpulsesPaid] = React.useState(0);   // saldo real desde alquiloya.propietarios.impulsos_saldo
+  const [meData, setMeData] = React.useState(null); // { propietario, usuario, agente }
+  const [meError, setMeError] = React.useState(null);
 
-  // Fase 9B: "Mis propiedades" desde API real. Si /api/agente/propiedades
-  // responde con un array, lo usamos; si falla / 401 / vacío, fallback a PROPERTIES mock.
+  // Cargar perfil real: primero intenta propietario, luego cae a agente.
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/propietario/me', { cache: 'no-store', credentials: 'include' });
+        if (r.ok) {
+          const body = await r.json();
+          if (cancelled) return;
+          if (body?.propietario) {
+            setMeData({ kind: 'propietario', usuario: body.usuario, propietario: body.propietario });
+            setImpulsesPaid(Number(body.propietario.impulsos_saldo) || 0);
+            return;
+          }
+        }
+        const r2 = await fetch('/api/agente/me', { cache: 'no-store', credentials: 'include' });
+        if (r2.ok) {
+          const body2 = await r2.json();
+          if (cancelled) return;
+          if (body2?.agente) {
+            setMeData({ kind: 'agente', usuario: body2.usuario, agente: body2.agente });
+            return;
+          }
+        }
+      } catch (e) {
+        if (!cancelled) setMeError(e && e.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const isPropietario = meData?.kind === 'propietario';
+
+  // Fase 9B: "Mis propiedades" desde API real. Probamos primero propietario (si la
+  // sesion es propietaria devuelve sus inmuebles), si no agente.
   const [myPropiedades, setMyPropiedades] = React.useState(null);
   React.useEffect(() => {
     let cancelled = false;
-    fetch('/api/agente/propiedades', { cache: 'no-store', credentials: 'include' })
-      .then(r => r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)))
-      .then(body => {
-        if (cancelled) return;
-        if (!body || !body.success || !Array.isArray(body.propiedades)) return;
-        // Normalizar al shape consumido por las cards legacy (p.title/p.cover/p.price).
-        const mapped = body.propiedades.map(p => ({
-          id: p.id,
-          title: p.titulo || 'Sin título',
-          cover: p.cover_url || (typeof photo === 'function' ? photo(0) : ''),
-          price: Number(p.precio) || 0,
-          city: p.ciudad || '',
-          neighborhood: p.barrio || '',
-          estado: p.estado || '',
-          activo: p.activo !== false,
-          visible_web: !!p.visible_web,
-          destacada: !!p.destacada,
-          fotos_count: p.fotos_count || 0,
-          _real: true,
-        }));
-        setMyPropiedades(mapped);
-      })
-      .catch(() => { /* fallback mock */ });
+    (async () => {
+      let body = null;
+      try {
+        const r = await fetch('/api/propietario/propiedades', { cache: 'no-store', credentials: 'include' });
+        if (r.ok) {
+          const b = await r.json();
+          if (b?.success && Array.isArray(b.propiedades) && b.propiedades.length > 0) body = b;
+        }
+      } catch { /* try next */ }
+      if (!body) {
+        try {
+          const r2 = await fetch('/api/agente/propiedades', { cache: 'no-store', credentials: 'include' });
+          if (r2.ok) body = await r2.json();
+        } catch { /* fallback mock */ }
+      }
+      if (cancelled || !body || !body.success || !Array.isArray(body.propiedades)) return;
+      // Normalizar al shape consumido por las cards legacy (p.title/p.cover/p.price).
+      const mapped = body.propiedades.map(p => ({
+        id: p.id,
+        title: p.titulo || 'Sin título',
+        cover: p.cover_url || (typeof photo === 'function' ? photo(0) : ''),
+        price: Number(p.precio) || 0,
+        city: p.ciudad || '',
+        neighborhood: p.barrio || '',
+        estado: p.estado || '',
+        activo: p.activo !== false,
+        visible_web: !!p.visible_web,
+        destacada: !!p.destacada,
+        fotos_count: p.fotos_count || 0,
+        _real: true,
+      }));
+      setMyPropiedades(mapped);
+    })();
     return () => { cancelled = true; };
   }, []);
   const propsForRender = (myPropiedades && myPropiedades.length > 0) ? myPropiedades : PROPERTIES;
@@ -279,17 +321,62 @@ function AdminAgentPage({ route, onNav }) {
   const [propFilter, setPropFilter] = React.useState('all');
   const totalAvailable = impulsesFree + impulsesPaid;
 
-  const useBoost = (id) => {
+  const useBoost = async (id) => {
     if (boostedIds[id]) {
       setBoostedIds(b => { const n = { ...b }; delete n[id]; return n; });
       return;
     }
     if (totalAvailable <= 0) { setBuyOpen(true); return; }
+    // Si es propietario, gastar impulso real via API.
+    if (isPropietario) {
+      try {
+        const res = await fetch('/api/propietario/propiedades/' + id + '/usar-impulso', {
+          method: 'POST', credentials: 'include',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+        setBoostedIds(b => ({ ...b, [id]: true }));
+        setImpulsesPaid(Number(data.saldo_restante) || 0);
+        return;
+      } catch (e) {
+        window.alert('No se pudo destacar: ' + (e.message || 'error'));
+        return;
+      }
+    }
+    // Fallback (agente / mock).
     setBoostedIds(b => ({ ...b, [id]: true }));
     if (impulsesFree > 0) setImpulsesFree(v => v - 1);
     else setImpulsesPaid(v => v - 1);
   };
-  const onBuy = (pack) => { setImpulsesPaid(v => v + pack.qty); setBuyOpen(false); };
+  const onBuy = async (pack) => {
+    // Si es propietario logueado, generamos solicitud real.
+    if (isPropietario && meData?.propietario) {
+      try {
+        const res = await fetch('/api/public/alquiloya/solicitudes-servicio', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'impulsos',
+            nombre: meData.propietario.nombre,
+            email: meData.propietario.email,
+            telefono: meData.propietario.telefono,
+            pack_id: pack.id, pack_qty: pack.qty, monto: pack.price,
+            mensaje: 'Compra desde portal propietario',
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.success === false) throw new Error((data && data.error) || ('HTTP ' + res.status));
+        window.alert('¡Listo! Recibimos tu pedido. Te contactamos para coordinar el pago.');
+        setBuyOpen(false);
+        return;
+      } catch (e) {
+        window.alert('No pudimos registrar la compra: ' + (e.message || 'error'));
+        return;
+      }
+    }
+    // Fallback (mock para preview).
+    setImpulsesPaid(v => v + pack.qty);
+    setBuyOpen(false);
+  };
 
   // Reset scroll when changing section
   React.useEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }); }, [route]);
@@ -311,7 +398,7 @@ function AdminAgentPage({ route, onNav }) {
   };
 
   return (
-    <AdminLayout kind="agent" route={route} onNav={onNav} title={titles[view][0]} subtitle={titles[view][1]}>
+    <AdminLayout kind="agent" role={isPropietario ? 'propietario' : 'agente'} route={route} onNav={onNav} title={titles[view][0]} subtitle={titles[view][1]}>
       {view === 'overview' && <ImpulseBanner free={impulsesFree} paid={impulsesPaid} freeMax={10} onBuy={() => setBuyOpen(true)}/>}
 
       {/* KPI strip — single card, 4 metrics separated by thin lines */}

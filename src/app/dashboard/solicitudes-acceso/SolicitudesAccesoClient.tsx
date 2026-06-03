@@ -87,8 +87,17 @@ export default function SolicitudesAccesoClient({
         estado?: SolicitudAccesoRow["estado"];
         resultado_id?: string | null;
         error?: string;
+        portal_credentials?: { email: string; tempPassword: string } | null;
       };
       if (!res.ok || !data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
+      if (action === "aprobar" && data.portal_credentials) {
+        const { email, tempPassword } = data.portal_credentials;
+        window.alert(
+          `Cuenta del portal creada.\n\nEmail: ${email}\nContraseña temporal: ${tempPassword}\n\n` +
+          `IMPORTANTE: copiá esta contraseña ahora y enviásela al usuario por WhatsApp. ` +
+          `No se vuelve a mostrar.`
+        );
+      }
       setRows((prev) =>
         prev.map((r) =>
           r.id === row.id

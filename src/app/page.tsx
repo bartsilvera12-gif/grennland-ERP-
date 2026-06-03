@@ -2868,8 +2868,20 @@ type AlquiloyaSummary = {
   propiedades: { total: number; activas: number; publicadas: number; destacadas: number };
   por_tipo: { label: string; value: number }[];
   por_ciudad: { label: string; value: number }[];
+  por_plan?: { label: string; value: number }[];
   agentes: { activos: number; total: number };
   consultas: { total: number; ultimas_30: number; pendientes: number };
+  acciones_pendientes?: {
+    solicitudes_acceso: number;
+    solicitudes_servicio: number;
+    agente_resenas: number;
+    captaciones: number;
+  };
+  planes?: {
+    por_vencer_7d: number;
+    por_vencer_30d: number;
+    vencidos: number;
+  };
   ultimas: Array<{
     id: string;
     titulo: string | null;
@@ -3001,6 +3013,85 @@ function DashPropiedades() {
           accent={data.consultas.pendientes > 0 ? "warning" : "neutral"}
         />
       </div>
+
+      {/* Acciones pendientes */}
+      {data.acciones_pendientes ? (
+        <motion.div whileHover={{ y: -2 }} className={panelClass}>
+          <div className="flex items-center gap-2">
+            {panelBar}
+            <h3 className={titleClass}>
+              {panelDot}
+              Acciones pendientes
+            </h3>
+          </div>
+          <p className="mt-1 pl-3 text-[11px] text-slate-500">
+            Items que esperan tu aprobación o seguimiento.
+          </p>
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <a href="/dashboard/solicitudes-acceso" className="group rounded-xl border border-amber-200 bg-amber-50 p-4 transition-colors hover:bg-amber-100">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">Solicitudes de acceso</div>
+              <div className="mt-1 text-2xl font-bold tabular-nums text-amber-900">{data.acciones_pendientes.solicitudes_acceso}</div>
+              <div className="mt-0.5 text-[11px] text-amber-700/80">pendientes →</div>
+            </a>
+            <a href="/dashboard/solicitudes-servicio" className="group rounded-xl border border-blue-200 bg-blue-50 p-4 transition-colors hover:bg-blue-100">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-700">Solicitudes de servicio</div>
+              <div className="mt-1 text-2xl font-bold tabular-nums text-blue-900">{data.acciones_pendientes.solicitudes_servicio}</div>
+              <div className="mt-0.5 text-[11px] text-blue-700/80">cambio plan / impulsos →</div>
+            </a>
+            <a href="/dashboard/agente-resenas" className="group rounded-xl border border-violet-200 bg-violet-50 p-4 transition-colors hover:bg-violet-100">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-violet-700">Reseñas a moderar</div>
+              <div className="mt-1 text-2xl font-bold tabular-nums text-violet-900">{data.acciones_pendientes.agente_resenas}</div>
+              <div className="mt-0.5 text-[11px] text-violet-700/80">pendientes →</div>
+            </a>
+            <a href="/dashboard/agentes-inmobiliarios/captaciones" className="group rounded-xl border border-emerald-200 bg-emerald-50 p-4 transition-colors hover:bg-emerald-100">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Captaciones abiertas</div>
+              <div className="mt-1 text-2xl font-bold tabular-nums text-emerald-900">{data.acciones_pendientes.captaciones}</div>
+              <div className="mt-0.5 text-[11px] text-emerald-700/80">en seguimiento →</div>
+            </a>
+          </div>
+        </motion.div>
+      ) : null}
+
+      {/* Suscripciones / vencimientos de plan */}
+      {data.planes ? (
+        <motion.div whileHover={{ y: -2 }} className={panelClass}>
+          <div className="flex items-center gap-2">
+            {panelBar}
+            <h3 className={titleClass}>
+              {panelDot}
+              Suscripciones a planes
+            </h3>
+          </div>
+          <p className="mt-1 pl-3 text-[11px] text-slate-500">
+            Vencimientos próximos de propietarios y agentes con plan pago.
+          </p>
+          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className={`rounded-xl border p-4 ${data.planes.vencidos > 0 ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-white"}`}>
+              <div className={`text-[10px] font-semibold uppercase tracking-wider ${data.planes.vencidos > 0 ? "text-rose-700" : "text-slate-500"}`}>Vencidos</div>
+              <div className={`mt-1 text-2xl font-bold tabular-nums ${data.planes.vencidos > 0 ? "text-rose-900" : "text-slate-700"}`}>{data.planes.vencidos}</div>
+              <div className="mt-0.5 text-[11px] text-slate-500">requieren acción</div>
+            </div>
+            <div className={`rounded-xl border p-4 ${data.planes.por_vencer_7d > 0 ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"}`}>
+              <div className={`text-[10px] font-semibold uppercase tracking-wider ${data.planes.por_vencer_7d > 0 ? "text-amber-700" : "text-slate-500"}`}>Vencen en 7 días</div>
+              <div className={`mt-1 text-2xl font-bold tabular-nums ${data.planes.por_vencer_7d > 0 ? "text-amber-900" : "text-slate-700"}`}>{data.planes.por_vencer_7d}</div>
+              <div className="mt-0.5 text-[11px] text-slate-500">contactar pronto</div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Vencen en 30 días</div>
+              <div className="mt-1 text-2xl font-bold tabular-nums text-slate-700">{data.planes.por_vencer_30d}</div>
+              <div className="mt-0.5 text-[11px] text-slate-500">ventana de renovación</div>
+            </div>
+          </div>
+          {data.por_plan && data.por_plan.length > 0 ? (
+            <div className="mt-5 border-t border-slate-100 pt-4">
+              <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                Propietarios por plan
+              </div>
+              <HBarChart data={data.por_plan} color="bg-[#4FAEB2]" tone="zentra" />
+            </div>
+          ) : null}
+        </motion.div>
+      ) : null}
 
       {/* Distribución por tipo y ciudad */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
