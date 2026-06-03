@@ -32,6 +32,7 @@ import {
   toCalendarDateStr,
 } from "@/lib/fechas/calendario";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import GerencialOverview from "@/components/dashboard/GerencialOverview";
 import { etiquetaVisibleTipoServicio } from "@/lib/clientes/tipo-servicio-catalogo";
 import { useMapNombreTipoServicioCatalogo } from "@/lib/clientes/use-map-nombre-tipo-servicio";
 import { getEtapas, getEtapaClasses, normalizeEtapaCodigo, type EtapaCrm } from "@/lib/crm/etapas";
@@ -2781,6 +2782,9 @@ export default function DashboardPage() {
           </div>
         </div>
       </header>
+
+      {/* Centro de Control gerencial — se renderiza arriba de los tabs y degrada en silencio si no hay datos. */}
+      <GerencialOverview />
 
       {showTabNav ? (
         <nav className="flex w-full flex-wrap gap-1 rounded-2xl border border-[#4FAEB2]/45 bg-white p-1.5 shadow-sm sm:w-fit">
