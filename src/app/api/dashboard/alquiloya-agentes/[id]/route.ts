@@ -63,6 +63,48 @@ export async function DELETE(request: Request, ctx: Ctx) {
     const pool = getChatPostgresPool();
     if (!pool) return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
 
+    const url = new URL(request.url);
+    const hard = url.searchParams.get("hard") === "true";
+
+    if (hard) {
+      const chk = await queryWithRetry<{ activo: boolean }>(
+        pool,
+        `SELECT activo FROM ${t("agentes")} WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
+        [ALQUILOYA_EMPRESA_ID, id]
+      );
+      if (!chk.rows || chk.rows.length === 0) {
+        return NextResponse.json({ error: "no encontrado" }, { status: 404 });
+      }
+      if (chk.rows[0].activo) {
+        return NextResponse.json(
+          { error: "Para eliminar definitivamente, primero desactivá el agente." },
+          { status: 409 }
+        );
+      }
+      try {
+        const r = await queryWithRetry<{ id: string }>(
+          pool,
+          `DELETE FROM ${t("agentes")}
+             WHERE empresa_id=$1::uuid AND id=$2::uuid
+             RETURNING id`,
+          [ALQUILOYA_EMPRESA_ID, id]
+        );
+        if (!r.rows || r.rows.length === 0) {
+          return NextResponse.json({ error: "no encontrado" }, { status: 404 });
+        }
+        return NextResponse.json({ success: true, id: r.rows[0].id, hard: true });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/foreign key|violates|23503/i.test(msg)) {
+          return NextResponse.json(
+            { error: "El agente tiene captaciones o propiedades vinculadas y no puede eliminarse definitivamente." },
+            { status: 409 }
+          );
+        }
+        throw e;
+      }
+    }
+
     // Soft delete: activo=false. Preserva captaciones y propiedades historicas.
     const r = await queryWithRetry<{ id: string }>(
       pool,

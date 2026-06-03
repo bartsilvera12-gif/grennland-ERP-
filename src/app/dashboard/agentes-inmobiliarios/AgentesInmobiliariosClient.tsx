@@ -34,8 +34,21 @@ function IconPower() {
     </svg>
   );
 }
+function IconTrash() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  );
+}
 
 type Tab = "agentes" | "propietarios";
+type Kind = "agente" | "propietario";
+type ActionKind = "desactivar" | "reactivar" | "eliminar";
 
 function Badge({ on, label }: { on: boolean | null; label: string }) {
   const isOn = !!on;
@@ -134,6 +147,200 @@ function TabButton({
   );
 }
 
+function useToggleHandler(kind: Kind) {
+  const router = useRouter();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [pending, setPending] = useState<
+    | { id: string; nombre: string | null; action: ActionKind }
+    | null
+  >(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const endpoint = kind === "agente" ? "alquiloya-agentes" : "alquiloya-propietarios";
+  const noun = kind === "agente" ? "agente" : "propietario";
+
+  async function run() {
+    if (!pending) return;
+    const { id, action } = pending;
+    setBusyId(id);
+    setErr(null);
+    try {
+      let res: Response;
+      if (action === "reactivar") {
+        res = await fetchWithSupabaseSession(`/api/dashboard/${endpoint}/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ activo: true }),
+        });
+      } else if (action === "desactivar") {
+        res = await fetchWithSupabaseSession(`/api/dashboard/${endpoint}/${id}`, {
+          method: "DELETE",
+        });
+      } else {
+        res = await fetchWithSupabaseSession(`/api/dashboard/${endpoint}/${id}?hard=true`, {
+          method: "DELETE",
+        });
+      }
+      const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      if (!res.ok || !data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setPending(null);
+      router.refresh();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "error");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return { busyId, pending, setPending, err, setErr, run, noun };
+}
+
+function ActionsCell({
+  active,
+  viewHref,
+  editHref,
+  onDesactivar,
+  onReactivar,
+  onEliminar,
+  disabled,
+}: {
+  active: boolean;
+  viewHref: string;
+  editHref: string;
+  onDesactivar: () => void;
+  onReactivar: () => void;
+  onEliminar: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="inline-flex items-center gap-1">
+      <Link
+        href={viewHref}
+        title="Ver"
+        aria-label="Ver"
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#4FAEB2]/10 text-[#3F8E91] ring-1 ring-[#4FAEB2]/30 transition-colors hover:bg-[#4FAEB2]/20"
+      >
+        <IconEye />
+      </Link>
+      <Link
+        href={editHref}
+        title="Editar"
+        aria-label="Editar"
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-700 ring-1 ring-slate-200 transition-colors hover:bg-slate-200"
+      >
+        <IconPencil />
+      </Link>
+      {active ? (
+        <button
+          type="button"
+          onClick={onDesactivar}
+          disabled={disabled}
+          title="Desactivar"
+          aria-label="Desactivar"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-rose-50 text-rose-700 ring-1 ring-rose-200 transition-colors hover:bg-rose-100 disabled:cursor-wait disabled:opacity-60"
+        >
+          <IconPower />
+        </button>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={onReactivar}
+            disabled={disabled}
+            title="Reactivar"
+            aria-label="Reactivar"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 transition-colors hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60"
+          >
+            <IconPower />
+          </button>
+          <button
+            type="button"
+            onClick={onEliminar}
+            disabled={disabled}
+            title="Eliminar definitivamente"
+            aria-label="Eliminar definitivamente"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-rose-600 text-white ring-1 ring-rose-700 transition-colors hover:bg-rose-700 disabled:cursor-wait disabled:opacity-60"
+          >
+            <IconTrash />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ConfirmFor({
+  pending,
+  busy,
+  noun,
+  onConfirm,
+  onCancel,
+}: {
+  pending: { id: string; nombre: string | null; action: ActionKind } | null;
+  busy: boolean;
+  noun: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!pending) return <ConfirmDialog open={false} title="" onConfirm={() => {}} onCancel={() => {}} />;
+  const display = pending.nombre?.trim() || `este ${noun}`;
+  const cfg: Record<ActionKind, { title: string; confirmLabel: string; tone: "danger" | "default"; description: React.ReactNode }> = {
+    desactivar: {
+      title: `Desactivar ${noun}`,
+      confirmLabel: "Desactivar",
+      tone: "danger",
+      description: (
+        <>
+          Vas a desactivar a <strong className="text-slate-900">{display}</strong>.
+          <br />
+          Dejará de aparecer en la web pública, pero <em>los datos históricos se conservan</em>.
+          <br />
+          Podés reactivarlo cuando quieras.
+        </>
+      ),
+    },
+    reactivar: {
+      title: `Reactivar ${noun}`,
+      confirmLabel: "Reactivar",
+      tone: "default",
+      description: (
+        <>
+          Vas a reactivar a <strong className="text-slate-900">{display}</strong>.
+          <br />
+          Volverá a aparecer en la web pública.
+        </>
+      ),
+    },
+    eliminar: {
+      title: `Eliminar definitivamente`,
+      confirmLabel: "Eliminar para siempre",
+      tone: "danger",
+      description: (
+        <>
+          <strong className="text-rose-700">Atención:</strong> esta acción borra a{" "}
+          <strong className="text-slate-900">{display}</strong> de la base.
+          <br />
+          No se podrá recuperar. Si tiene captaciones, propiedades u otros vínculos, la eliminación va a fallar y deberás resolverlos primero.
+        </>
+      ),
+    },
+  };
+  const c = cfg[pending.action];
+  return (
+    <ConfirmDialog
+      open={true}
+      title={c.title}
+      description={c.description}
+      confirmLabel={c.confirmLabel}
+      cancelLabel="Cancelar"
+      tone={c.tone}
+      busy={busy}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
+  );
+}
+
 function AgentesTab({
   rows,
   error,
@@ -141,41 +348,14 @@ function AgentesTab({
   rows: ErpAgenteInmobiliarioRow[];
   error: string | null;
 }) {
-  const router = useRouter();
   const [showInactive, setShowInactive] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [pending, setPending] = useState<{ id: string; nombre: string | null; nextActivo: boolean } | null>(null);
+  const { busyId, pending, setPending, err, setErr, run, noun } = useToggleHandler("agente");
 
   const inactiveCount = useMemo(() => rows.filter((r) => !r.activo).length, [rows]);
   const visibleRows = useMemo(
     () => (showInactive ? rows.filter((r) => !r.activo) : rows.filter((r) => r.activo)),
     [rows, showInactive]
   );
-
-  async function doToggle() {
-    if (!pending) return;
-    const { id, nextActivo } = pending;
-    setBusyId(id);
-    try {
-      const res = nextActivo
-        ? await fetchWithSupabaseSession(`/api/dashboard/alquiloya-agentes/${id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ activo: true }),
-          })
-        : await fetchWithSupabaseSession(`/api/dashboard/alquiloya-agentes/${id}`, {
-            method: "DELETE",
-          });
-      const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
-      if (!res.ok || !data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setPending(null);
-      router.refresh();
-    } catch (e) {
-      window.alert(`No se pudo ${nextActivo ? "reactivar" : "desactivar"}: ${e instanceof Error ? e.message : "error"}`);
-    } finally {
-      setBusyId(null);
-    }
-  }
 
   if (error) {
     return (
@@ -209,6 +389,11 @@ function AgentesTab({
           ) : null}
         </label>
       </div>
+      {err ? (
+        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {err}
+        </div>
+      ) : null}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="min-w-full text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -226,7 +411,9 @@ function AgentesTab({
             {visibleRows.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-6 py-12 text-center text-sm text-slate-500">
-                  No hay agentes activos. Activá &ldquo;Ver desactivados&rdquo; para verlos.
+                  {showInactive
+                    ? "No hay agentes desactivados."
+                    : "No hay agentes activos. Activá \"Ver desactivados\" para verlos."}
                 </td>
               </tr>
             ) : (
@@ -261,47 +448,15 @@ function AgentesTab({
                       <Badge on={a.activo} label={a.activo ? "Sí" : "No"} />
                     </td>
                     <td className="sticky right-0 bg-white px-3 py-2 text-right shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.08)]">
-                      <div className="inline-flex items-center gap-1">
-                        <Link
-                          href={`/dashboard/agentes-inmobiliarios/agentes/${a.id}`}
-                          title="Ver"
-                          aria-label="Ver"
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-[#4FAEB2]/10 text-[#3F8E91] ring-1 ring-[#4FAEB2]/30 transition-colors hover:bg-[#4FAEB2]/20"
-                        >
-                          <IconEye />
-                        </Link>
-                        <Link
-                          href={`/dashboard/agentes-inmobiliarios/agentes/${a.id}/editar`}
-                          title="Editar"
-                          aria-label="Editar"
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-slate-100 text-slate-700 ring-1 ring-slate-200 transition-colors hover:bg-slate-200"
-                        >
-                          <IconPencil />
-                        </Link>
-                        {a.activo ? (
-                          <button
-                            type="button"
-                            onClick={() => setPending({ id: a.id, nombre: a.nombre, nextActivo: false })}
-                            disabled={busyId === a.id}
-                            title="Desactivar"
-                            aria-label="Desactivar"
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-rose-50 text-rose-700 ring-1 ring-rose-200 transition-colors hover:bg-rose-100 disabled:cursor-wait disabled:opacity-60"
-                          >
-                            <IconPower />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setPending({ id: a.id, nombre: a.nombre, nextActivo: true })}
-                            disabled={busyId === a.id}
-                            title="Reactivar"
-                            aria-label="Reactivar"
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 transition-colors hover:bg-emerald-100 disabled:cursor-wait disabled:opacity-60"
-                          >
-                            <IconPower />
-                          </button>
-                        )}
-                      </div>
+                      <ActionsCell
+                        active={!!a.activo}
+                        viewHref={`/dashboard/agentes-inmobiliarios/agentes/${a.id}`}
+                        editHref={`/dashboard/agentes-inmobiliarios/agentes/${a.id}/editar`}
+                        onDesactivar={() => { setErr(null); setPending({ id: a.id, nombre: a.nombre, action: "desactivar" }); }}
+                        onReactivar={() => { setErr(null); setPending({ id: a.id, nombre: a.nombre, action: "reactivar" }); }}
+                        onEliminar={() => { setErr(null); setPending({ id: a.id, nombre: a.nombre, action: "eliminar" }); }}
+                        disabled={busyId === a.id}
+                      />
                     </td>
                   </tr>
                 );
@@ -310,33 +465,11 @@ function AgentesTab({
           </tbody>
         </table>
       </div>
-      <ConfirmDialog
-        open={!!pending}
-        title={pending?.nextActivo ? "Reactivar agente" : "Desactivar agente"}
-        description={
-          pending ? (
-            pending.nextActivo ? (
-              <>
-                Vas a reactivar a <strong className="text-slate-900">{pending.nombre?.trim() || "este agente"}</strong>.
-                <br />
-                Volverá a aparecer en la web pública.
-              </>
-            ) : (
-              <>
-                Vas a desactivar a <strong className="text-slate-900">{pending.nombre?.trim() || "este agente"}</strong>.
-                <br />
-                Dejará de aparecer en la web pública, pero <em>sus captaciones y propiedades históricas se conservan</em>.
-                <br />
-                Podés reactivarlo cuando quieras.
-              </>
-            )
-          ) : null
-        }
-        confirmLabel={pending?.nextActivo ? "Reactivar" : "Desactivar"}
-        cancelLabel="Cancelar"
-        tone={pending?.nextActivo ? "default" : "danger"}
+      <ConfirmFor
+        pending={pending}
         busy={busyId === pending?.id}
-        onConfirm={doToggle}
+        noun={noun}
+        onConfirm={run}
         onCancel={() => busyId !== pending?.id && setPending(null)}
       />
     </>
@@ -350,6 +483,15 @@ function PropietariosTab({
   rows: ErpPropietarioRow[];
   error: string | null;
 }) {
+  const [showInactive, setShowInactive] = useState(false);
+  const { busyId, pending, setPending, err, setErr, run, noun } = useToggleHandler("propietario");
+
+  const inactiveCount = useMemo(() => rows.filter((r) => !r.activo).length, [rows]);
+  const visibleRows = useMemo(
+    () => (showInactive ? rows.filter((r) => !r.activo) : rows.filter((r) => r.activo)),
+    [rows, showInactive]
+  );
+
   if (error) {
     return (
       <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -360,66 +502,103 @@ function PropietariosTab({
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
-        Todavía no hay propietarios registrados. Cuando se carguen propietarios
-        externos (alquiloya.propietarios) aparecerán acá.
+        Todavía no hay propietarios registrados.
       </div>
     );
   }
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-      <table className="min-w-full text-sm">
-        <thead className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-          <tr>
-            <th className="px-3 py-2.5">Nombre</th>
-            <th className="px-3 py-2.5">Tipo</th>
-            <th className="px-3 py-2.5">Documento</th>
-            <th className="px-3 py-2.5">Teléfono</th>
-            <th className="px-3 py-2.5">Email</th>
-            <th className="px-3 py-2.5">Estado</th>
-            <th className="px-3 py-2.5">Activo</th>
-            <th className="px-3 py-2.5">Usuario</th>
-            <th className="px-3 py-2.5">Plan</th>
-            <th className="px-3 py-2.5 text-right">Acciones</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {rows.map((p) => (
-            <tr key={p.id} className="hover:bg-slate-50">
-              <td className="px-3 py-2 font-medium text-slate-900">{p.nombre}</td>
-              <td className="px-3 py-2 text-slate-700">{p.tipo_persona ?? "—"}</td>
-              <td className="px-3 py-2 text-slate-700">{p.documento ?? "—"}</td>
-              <td className="px-3 py-2 text-slate-700">{p.telefono ?? "—"}</td>
-              <td className="px-3 py-2 text-slate-700">{p.email ?? "—"}</td>
-              <td className="px-3 py-2 text-slate-700">{p.estado ?? "—"}</td>
-              <td className="px-3 py-2">
-                <Badge on={p.activo} label={p.activo ? "Sí" : "No"} />
-              </td>
-              <td className="px-3 py-2 text-slate-500">
-                {p.usuario_id ? <span className="text-emerald-700">vinculado</span> : "—"}
-              </td>
-              <td className="px-3 py-2 text-slate-500">
-                {p.plan_publicacion_id ? <span className="text-emerald-700">asignado</span> : "—"}
-              </td>
-              <td className="px-3 py-2 text-right">
-                <div className="inline-flex items-center gap-1.5">
-                  <Link
-                    href={`/dashboard/agentes-inmobiliarios/propietarios/${p.id}`}
-                    className="inline-flex items-center rounded-md bg-[#4FAEB2]/10 px-2.5 py-1 text-xs font-medium text-[#3F8E91] ring-1 ring-[#4FAEB2]/30 hover:bg-[#4FAEB2]/20"
-                  >
-                    Ver
-                  </Link>
-                  <Link
-                    href={`/dashboard/agentes-inmobiliarios/propietarios/${p.id}/editar`}
-                    className="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-200"
-                  >
-                    Editar
-                  </Link>
-                </div>
-              </td>
+    <>
+      <div className="mb-3 flex items-center justify-end gap-3 text-sm">
+        <label className="inline-flex cursor-pointer items-center gap-2 text-slate-600">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-[#4FAEB2] focus:ring-[#4FAEB2]"
+          />
+          Ver desactivados
+          {inactiveCount > 0 ? (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+              {inactiveCount}
+            </span>
+          ) : null}
+        </label>
+      </div>
+      {err ? (
+        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {err}
+        </div>
+      ) : null}
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <table className="min-w-full text-sm">
+          <thead className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+            <tr>
+              <th className="px-3 py-2.5">Nombre</th>
+              <th className="hidden px-3 py-2.5 md:table-cell">Tipo</th>
+              <th className="hidden px-3 py-2.5 lg:table-cell">Documento</th>
+              <th className="px-3 py-2.5">Teléfono</th>
+              <th className="hidden px-3 py-2.5 lg:table-cell">Email</th>
+              <th className="hidden px-3 py-2.5 xl:table-cell">Estado</th>
+              <th className="px-3 py-2.5">Activo</th>
+              <th className="hidden px-3 py-2.5 xl:table-cell">Usuario</th>
+              <th className="hidden px-3 py-2.5 xl:table-cell">Plan</th>
+              <th className="sticky right-0 bg-slate-50 px-3 py-2.5 text-right shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.08)]">Acciones</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {visibleRows.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="px-6 py-12 text-center text-sm text-slate-500">
+                  {showInactive
+                    ? "No hay propietarios desactivados."
+                    : "No hay propietarios activos. Activá \"Ver desactivados\" para verlos."}
+                </td>
+              </tr>
+            ) : (
+              visibleRows.map((p) => {
+                const dim = !p.activo;
+                return (
+                  <tr key={p.id} className={`hover:bg-slate-50 ${dim ? "opacity-60" : ""}`}>
+                    <td className="px-3 py-2 font-medium text-slate-900">{p.nombre}</td>
+                    <td className="hidden px-3 py-2 text-slate-700 md:table-cell">{p.tipo_persona ?? "—"}</td>
+                    <td className="hidden px-3 py-2 text-slate-700 lg:table-cell">{p.documento ?? "—"}</td>
+                    <td className="px-3 py-2 text-slate-700">{p.telefono ?? "—"}</td>
+                    <td className="hidden px-3 py-2 text-slate-700 lg:table-cell">{p.email ?? "—"}</td>
+                    <td className="hidden px-3 py-2 text-slate-700 xl:table-cell">{p.estado ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      <Badge on={p.activo} label={p.activo ? "Sí" : "No"} />
+                    </td>
+                    <td className="hidden px-3 py-2 text-slate-500 xl:table-cell">
+                      {p.usuario_id ? <span className="text-emerald-700">vinculado</span> : "—"}
+                    </td>
+                    <td className="hidden px-3 py-2 text-slate-500 xl:table-cell">
+                      {p.plan_publicacion_id ? <span className="text-emerald-700">asignado</span> : "—"}
+                    </td>
+                    <td className="sticky right-0 bg-white px-3 py-2 text-right shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.08)]">
+                      <ActionsCell
+                        active={!!p.activo}
+                        viewHref={`/dashboard/agentes-inmobiliarios/propietarios/${p.id}`}
+                        editHref={`/dashboard/agentes-inmobiliarios/propietarios/${p.id}/editar`}
+                        onDesactivar={() => { setErr(null); setPending({ id: p.id, nombre: p.nombre, action: "desactivar" }); }}
+                        onReactivar={() => { setErr(null); setPending({ id: p.id, nombre: p.nombre, action: "reactivar" }); }}
+                        onEliminar={() => { setErr(null); setPending({ id: p.id, nombre: p.nombre, action: "eliminar" }); }}
+                        disabled={busyId === p.id}
+                      />
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+      <ConfirmFor
+        pending={pending}
+        busy={busyId === pending?.id}
+        noun={noun}
+        onConfirm={run}
+        onCancel={() => busyId !== pending?.id && setPending(null)}
+      />
+    </>
   );
 }
