@@ -323,13 +323,26 @@
       font-size: 14px !important;
     }
 
-    /* Tabs de tipo de inmueble en el hero — más chiquitos */
-    .hero-search-grid + *, /* nada */
-    .row.gap-4 button[style*="border-radius: 14px 14px 0 0"],
-    .row.gap-4 button[style*="border-radius:14px 14px 0 0"] {
-      padding: 8px 12px 10px !important;
-      font-size: 12px !important;
+    /* Tabs de tipo de inmueble en el hero — grid 2x2 prolijo en mobile */
+    .hero-type-tabs {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 8px !important;
+      max-width: 100%;
+      margin-bottom: 10px;
     }
+    .hero-type-tabs > button {
+      padding: 10px 8px !important;
+      font-size: 12.5px !important;
+      border-radius: 12px !important;
+      top: 0 !important;
+      background: rgba(255,255,255,.85) !important;
+      box-shadow: 0 1px 3px rgba(11,22,34,.08) !important;
+      justify-content: center !important;
+      width: 100%;
+      gap: 6px !important;
+    }
+    .hero-type-tabs > button > span svg { width: 14px !important; height: 14px !important; }
 
     /* Stats hero: 4 columnas → 2x2, números más chicos */
     .hero-stats-grid {

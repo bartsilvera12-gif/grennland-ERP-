@@ -126,7 +126,7 @@ function HeroSearch({ onSubmit }) {
   return (
     <div style={{ position: 'relative' }}>
       {/* Type tabs — attached to top of the search panel */}
-      <div className="row gap-4" style={{ justifyContent: 'center' }}>
+      <div className="row gap-4 hero-type-tabs" style={{ justifyContent: 'center' }}>
         {TIPOS.map(t => {
           const active = tipo === t.id;
           return (
