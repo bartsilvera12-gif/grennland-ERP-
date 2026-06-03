@@ -138,13 +138,15 @@ export function AgenteForm({
             />
           </div>
           <div className={fieldCls}>
-            <label className={labelCls}>Orden</label>
+            <label className={labelCls}>Prioridad en listado</label>
             <input
               type="number"
               className={inputCls}
               value={form.orden}
               onChange={(e) => set("orden", Number(e.target.value) || 0)}
+              placeholder="0"
             />
+            <p className="mt-1 text-[11px] text-slate-500">Menor número = aparece primero en la web pública. Dejá 0 si no querés ordenarlo manualmente.</p>
           </div>
           <div className="flex items-end gap-5">
             <label className="inline-flex items-center gap-2 text-sm text-slate-700">

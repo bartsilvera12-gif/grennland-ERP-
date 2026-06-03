@@ -1,6 +1,6 @@
 // Administradores — Global y Propietario/Agente
 
-function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, children }) {
+function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displayName, displayEmail, children }) {
   const items = kind === 'global' ? [
     { id: 'admin-global', label: 'Dashboard', icon: 'grid' },
     { id: 'admin-global-properties', label: 'Inmuebles', icon: 'house' },
@@ -25,9 +25,9 @@ function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, child
               Panel {kind === 'global' ? 'global' : 'de gestión'}
             </div>
             <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 16, marginTop: 4 }}>
-              {kind === 'global' ? 'Administración' : 'Inmobiliaria Centro'}
+              {kind === 'global' ? 'Administración' : (displayName || 'Mi cuenta')}
             </div>
-            <div className="muted xs">{kind === 'global' ? 'AlquiloYa · Equipo' : 'admin@centroinmob.py'}</div>
+            <div className="muted xs">{kind === 'global' ? 'AlquiloYa · Equipo' : (displayEmail || '')}</div>
           </div>
           <nav className="col gap-2">
             {items.map(it => (
@@ -405,7 +405,28 @@ function AdminAgentPage({ route, onNav }) {
   };
 
   return (
-    <AdminLayout kind="agent" role={isPropietario ? 'propietario' : 'agente'} route={route} onNav={onNav} title={titles[view][0]} subtitle={titles[view][1]}>
+    <AdminLayout
+      kind="agent"
+      role={isPropietario ? 'propietario' : 'agente'}
+      route={route}
+      onNav={onNav}
+      title={titles[view][0]}
+      subtitle={titles[view][1]}
+      displayName={
+        meData
+          ? (isPropietario
+              ? (meData.propietario?.nombre || meData.usuario?.nombre)
+              : (meData.agente?.nombre || meData.usuario?.nombre))
+          : null
+      }
+      displayEmail={
+        meData
+          ? (meData.usuario?.email
+             || (isPropietario ? meData.propietario?.email : meData.agente?.email)
+             || '')
+          : ''
+      }
+    >
       {view === 'overview' && <ImpulseBanner free={impulsesFree} paid={impulsesPaid} freeMax={10} onBuy={() => setBuyOpen(true)}/>}
 
       {/* KPI strip — single card, 4 metrics separated by thin lines */}

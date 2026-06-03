@@ -53,34 +53,45 @@ export async function POST(request: Request) {
     const nombre = s(body.nombre);
     if (!nombre) return NextResponse.json({ error: "nombre requerido" }, { status: 400 });
 
-    const { rows } = await queryWithRetry<{ id: string }>(
+    // Detectamos columnas opcionales (perfil agente) para tolerar instancias sin la migration.
+    const { rows: cols } = await queryWithRetry<{ column_name: string }>(
       pool,
-      `INSERT INTO ${t("agentes")} (
-         empresa_id, nombre, email, telefono, whatsapp,
-         cargo, bio, foto_url, orden, activo,
-         verificado, nivel, idiomas, tiempo_respuesta, tasa_respuesta
-       )
-       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-               $11, $12, $13, $14, $15)
-       RETURNING id`,
-      [
-        ALQUILOYA_EMPRESA_ID,
-        nombre,
-        s(body.email),
-        s(body.telefono),
-        s(body.whatsapp),
-        s(body.cargo),
-        s(body.bio),
-        s(body.foto_url),
-        i(body.orden, 0),
-        b(body.activo, true),
-        b((body as Record<string, unknown>).verificado, false),
-        s((body as Record<string, unknown>).nivel),
-        s((body as Record<string, unknown>).idiomas),
-        s((body as Record<string, unknown>).tiempo_respuesta),
-        s((body as Record<string, unknown>).tasa_respuesta),
-      ]
+      `SELECT column_name FROM information_schema.columns
+         WHERE table_schema='alquiloya' AND table_name='agentes'`
     );
+    const colSet = new Set(cols.map((c) => c.column_name));
+    const extras: { col: string; val: unknown }[] = [];
+    if (colSet.has("verificado"))
+      extras.push({ col: "verificado", val: b((body as Record<string, unknown>).verificado, false) });
+    if (colSet.has("nivel")) extras.push({ col: "nivel", val: s((body as Record<string, unknown>).nivel) });
+    if (colSet.has("idiomas")) extras.push({ col: "idiomas", val: s((body as Record<string, unknown>).idiomas) });
+    if (colSet.has("tiempo_respuesta"))
+      extras.push({ col: "tiempo_respuesta", val: s((body as Record<string, unknown>).tiempo_respuesta) });
+    if (colSet.has("tasa_respuesta"))
+      extras.push({ col: "tasa_respuesta", val: s((body as Record<string, unknown>).tasa_respuesta) });
+
+    const baseCols = ["empresa_id", "nombre", "email", "telefono", "whatsapp",
+                      "cargo", "bio", "foto_url", "orden", "activo"];
+    const allCols = [...baseCols, ...extras.map((e) => e.col)];
+    const baseVals: unknown[] = [
+      ALQUILOYA_EMPRESA_ID,
+      nombre,
+      s(body.email),
+      s(body.telefono),
+      s(body.whatsapp),
+      s(body.cargo),
+      s(body.bio),
+      s(body.foto_url),
+      i(body.orden, 0),
+      b(body.activo, true),
+    ];
+    const allVals = [...baseVals, ...extras.map((e) => e.val)];
+    const placeholders = allCols
+      .map((_, i) => (i === 0 ? `$${i + 1}::uuid` : `$${i + 1}`))
+      .join(", ");
+    const sql = `INSERT INTO ${t("agentes")} (${allCols.join(", ")})
+                 VALUES (${placeholders}) RETURNING id`;
+    const { rows } = await queryWithRetry<{ id: string }>(pool, sql, allVals);
     return NextResponse.json({ success: true, id: rows[0].id });
   } catch (err) {
     console.error("[api/dashboard/alquiloya-agentes POST]", err instanceof Error ? err.message : err);
