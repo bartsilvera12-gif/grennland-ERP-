@@ -53,6 +53,34 @@ export async function GET(_req: Request, ctx: Ctx) {
   }
 }
 
+export async function DELETE(request: Request, ctx: Ctx) {
+  try {
+    const user = await getAuthUserForApiRoute(request);
+    if (!user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    const { id } = await ctx.params;
+    if (!uuidRe.test(id)) return NextResponse.json({ error: "id invalido" }, { status: 400 });
+
+    const pool = getChatPostgresPool();
+    if (!pool) return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
+
+    // Soft delete: activo=false. Preserva captaciones y propiedades historicas.
+    const r = await queryWithRetry<{ id: string }>(
+      pool,
+      `UPDATE ${t("agentes")} SET activo = false, updated_at = now()
+        WHERE empresa_id = $1::uuid AND id = $2::uuid
+        RETURNING id`,
+      [ALQUILOYA_EMPRESA_ID, id]
+    );
+    if (!r.rows || r.rows.length === 0) {
+      return NextResponse.json({ error: "no encontrado" }, { status: 404 });
+    }
+    return NextResponse.json({ success: true, id: r.rows[0].id });
+  } catch (err) {
+    console.error("[api/dashboard/alquiloya-agentes/[id] DELETE]", err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Error" }, { status: 500 });
+  }
+}
+
 export async function PATCH(request: Request, ctx: Ctx) {
   try {
     const user = await getAuthUserForApiRoute(request);
