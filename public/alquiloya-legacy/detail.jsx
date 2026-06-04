@@ -29,7 +29,7 @@ function DetailPage({ p, onProperty, onNav }) {
           <DetailMap p={p}/>
         </div>
         <div style={{ position: 'sticky', top: 92 }}>
-          <AgentCard agent={p.agent} price={p.price} tipo={p.tipo} onNav={onNav}/>
+          <AgentCard agent={p.agent} price={p.price} tipo={p.tipo} onNav={onNav} property={p}/>
         </div>
       </div>
       <section className="container" style={{ padding: '32px' }}>
@@ -417,7 +417,34 @@ function DetailQR({ p }) {
   );
 }
 
-function AgentCard({ agent, price, tipo, onNav }) {
+function AgentCard({ agent, price, tipo, onNav, property }) {
+  function registerConsulta(canal) {
+    try {
+      fetch('/api/public/alquiloya/consultas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propiedad_id: property?.apiId || null,
+          agente_id: agent?.apiId || null,
+          canal: canal || 'web',
+          mensaje: 'Consulta desde la ficha de "' + (property?.title || 'propiedad') + '"',
+        }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {}
+  }
+  function onClickWhatsApp() {
+    registerConsulta('whatsapp');
+    const phone = (agent?.whatsapp || agent?.telefono || '').replace(/\D/g, '');
+    const msg = encodeURIComponent('Hola! Me interesa la propiedad "' + (property?.title || '') + '" en ' + (property?.address || property?.ciudad || ''));
+    const url = phone ? ('https://wa.me/' + phone + '?text=' + msg) : ('https://wa.me/?text=' + msg);
+    window.open(url, '_blank', 'noopener');
+  }
+  function onClickVisita() {
+    registerConsulta('web');
+    onClickWhatsApp();
+  }
+  function onClickMensaje() { registerConsulta('web'); onClickWhatsApp(); }
   const { agents } = useAlquiloYaPublicData();
   agent = agent || agents[0] || AGENTS[0];
   const agentRecord = agents.find(a => a.id === agent.id || a.apiId === agent.id || a.name === agent.name);
@@ -449,9 +476,9 @@ function AgentCard({ agent, price, tipo, onNav }) {
         <div className="row between" style={{ marginTop: 4 }}><span className="muted">Miembro desde</span><strong>Ene. 2024</strong></div>
       </div>
       <div className="col gap-10" style={{ marginTop: 16 }}>
-        <button className="btn btn-wa btn-lg" style={{ justifyContent: 'center' }}><I.whats s={18}/> Consultar por WhatsApp</button>
-        <button className="btn btn-blue" style={{ justifyContent: 'center' }}><I.cal s={16}/> Solicitar visita</button>
-        <button className="btn btn-outline" style={{ justifyContent: 'center' }}><I.chat s={16}/> Enviar mensaje</button>
+        <button type="button" className="btn btn-wa btn-lg" style={{ justifyContent: 'center' }} onClick={onClickWhatsApp}><I.whats s={18}/> Consultar por WhatsApp</button>
+        <button type="button" className="btn btn-blue" style={{ justifyContent: 'center' }} onClick={onClickVisita}><I.cal s={16}/> Solicitar visita</button>
+        <button type="button" className="btn btn-outline" style={{ justifyContent: 'center' }} onClick={onClickMensaje}><I.chat s={16}/> Enviar mensaje</button>
       </div>
       <div style={{ marginTop: 16, padding: 12, background: 'var(--yellow-50)', borderRadius: 10, fontSize: 12.5, color: '#8a5e00', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
         <I.shield s={14}/>

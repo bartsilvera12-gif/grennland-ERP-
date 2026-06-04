@@ -576,7 +576,9 @@ function AdminAgentPage({ route, onNav }) {
 
         {view === 'overview' && (
         <div className="col gap-12">
-          {/* Consultas recientes y Pendientes: bloques ocultados en limpieza UI legacy. */}
+          {/* Embudo + consultas recientes — solo agentes (los propietarios no tienen). */}
+          {!isPropietario && <EmbudoCaptaciones/>}
+          {!isPropietario && <ConsultasRecientes onNav={onNav}/>}
 
           {/* QR mini */}
           <div className="card" style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1238,4 +1240,136 @@ function BuyImpulsesModal({ onClose, onBuy }) {
   );
 }
 
-Object.assign(window, { AdminGlobalPage, AdminAgentPage });
+// ───────── Embudo de captaciones (datos reales /api/agente/embudo) ─────────
+function EmbudoCaptaciones() {
+  const [data, setData] = React.useState(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/agente/embudo', { cache: 'no-store', credentials: 'include' });
+        if (!r.ok) return;
+        const b = await r.json().catch(() => ({}));
+        if (!cancelled && Array.isArray(b?.embudo)) setData(b.embudo);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  if (!data) return null;
+  const labels = {
+    prospecto: 'Prospecto',
+    contactado: 'Contactado',
+    visita_agendada: 'Visita',
+    en_negociacion: 'Negociación',
+    cerrada: 'Cerrada',
+    perdida: 'Perdida',
+  };
+  const colors = {
+    prospecto: ['var(--blue-50)', 'var(--blue)'],
+    contactado: ['#e6f4ff', '#0058A5'],
+    visita_agendada: ['#fff7e3', '#8a5e00'],
+    en_negociacion: ['#fce8f3', '#b81b72'],
+    cerrada: ['#dcfce7', '#15803d'],
+    perdida: ['#fee2e2', '#991b1b'],
+  };
+  const total = data.reduce((acc, r) => acc + (Number(r.count) || 0), 0);
+  return (
+    <div className="card" style={{ padding: 14 }}>
+      <div className="row between" style={{ alignItems: 'center' }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 13 }}>Embudo de negociaciones</div>
+          <div className="muted xs">Captaciones del agente · total {total}</div>
+        </div>
+      </div>
+      <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
+        {data.map((row) => {
+          const [bg, fg] = colors[row.etapa] || ['var(--bg-3)', 'var(--ink-3)'];
+          return (
+            <div key={row.etapa} style={{ background: bg, color: fg, padding: '8px 6px', borderRadius: 8, textAlign: 'center' }}>
+              <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 18 }}>{row.count}</div>
+              <div style={{ fontSize: 10, fontWeight: 600, marginTop: 2 }}>{labels[row.etapa] || row.etapa}</div>
+            </div>
+          );
+        })}
+      </div>
+      {total === 0 && (
+        <div className="muted xs" style={{ marginTop: 10, textAlign: 'center' }}>
+          Todavía no tenés captaciones cargadas. Cuando captures propietarios aparecerá el embudo acá.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ───────── Consultas recientes (datos reales /api/agente/consultas) ─────────
+function ConsultasRecientes({ onNav }) {
+  const [data, setData] = React.useState(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/agente/consultas?limit=6', { cache: 'no-store', credentials: 'include' });
+        if (!r.ok) return;
+        const b = await r.json().catch(() => ({}));
+        if (!cancelled && Array.isArray(b?.consultas)) setData(b.consultas);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  if (!data) return null;
+  function fmtRel(iso) {
+    if (!iso) return '';
+    const d = new Date(iso); const diff = Math.floor((Date.now() - d.getTime()) / 60000);
+    if (diff < 1) return 'ahora';
+    if (diff < 60) return diff + ' min';
+    const h = Math.floor(diff / 60);
+    if (h < 24) return h + ' h';
+    const dd = Math.floor(h / 24);
+    return dd + ' d';
+  }
+  const canalIcon = (canal) => canal === 'whatsapp' ? '💬' : canal === 'mail' ? '✉' : canal === 'telefono' ? '📞' : '🔵';
+  return (
+    <div className="card" style={{ padding: 14 }}>
+      <div className="row between" style={{ alignItems: 'center' }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 13 }}>Últimas consultas</div>
+          <div className="muted xs">Interesados que dejaron mensaje en tus propiedades</div>
+        </div>
+      </div>
+      <div className="col gap-8" style={{ marginTop: 10 }}>
+        {data.length === 0 && (
+          <div className="muted xs" style={{ padding: '14px 0', textAlign: 'center' }}>
+            Todavía no recibiste consultas. Cuando alguien clic en &quot;Consultar&quot; en una de tus propiedades, aparecerán acá.
+          </div>
+        )}
+        {data.map((c) => (
+          <div key={c.id} className="row gap-10" style={{ alignItems: 'flex-start', padding: '8px 0', borderBottom: '1px solid var(--line-2)' }}>
+            <span style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--bg-3)', display: 'grid', placeItems: 'center', fontSize: 12, flexShrink: 0 }}>{canalIcon(c.canal)}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="row between" style={{ alignItems: 'baseline' }}>
+                <div style={{ fontWeight: 600, fontSize: 12.5 }}>{c.nombre || c.email || c.telefono || 'Interesado anónimo'}</div>
+                <div className="muted xs">{fmtRel(c.created_at)}</div>
+              </div>
+              {c.propiedad_titulo && (
+                <div className="muted xs" style={{ marginTop: 1 }}>{c.propiedad_titulo}{c.propiedad_ciudad ? ' · ' + c.propiedad_ciudad : ''}</div>
+              )}
+              {c.mensaje && (
+                <div style={{ fontSize: 12, color: 'var(--ink-2)', marginTop: 4, lineHeight: 1.4 }}>{c.mensaje}</div>
+              )}
+              <div className="row gap-10" style={{ marginTop: 6 }}>
+                {c.telefono && (
+                  <a href={'https://wa.me/' + String(c.telefono).replace(/\D/g, '')} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 600, color: '#1ebd5b', textDecoration: 'none' }}>WhatsApp →</a>
+                )}
+                {c.email && (
+                  <a href={'mailto:' + c.email} style={{ fontSize: 11, fontWeight: 600, color: 'var(--blue)', textDecoration: 'none' }}>Email →</a>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { AdminGlobalPage, AdminAgentPage, EmbudoCaptaciones, ConsultasRecientes });
