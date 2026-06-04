@@ -150,10 +150,10 @@ export default async function CaptacionesDashboardPage() {
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <Link
-            href="/dashboard/agentes-inmobiliarios"
+            href="/"
             className="mb-2 inline-flex text-xs font-medium text-slate-500 hover:text-[#3F8E91]"
           >
-            ← Volver al listado
+            ← Volver al dashboard
           </Link>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Dashboard captaciones</h1>
           <p className="mt-1 text-sm text-slate-500">
