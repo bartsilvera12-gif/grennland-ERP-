@@ -28,7 +28,7 @@ function formatFecha(iso: string) {
 // ── Constantes de estilo ───────────────────────────────────────────────────────
 
 const inputFilterClass =
-  "border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none";
+  "border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#4FAEB2]/40 focus:border-[#4FAEB2] focus:outline-none";
 
 const tipoVentaBadge: Record<TipoVenta, string> = {
   CONTADO: "bg-blue-50 text-blue-700",
@@ -84,18 +84,34 @@ function MetricCard({
   label: string; value: string; sub?: string; accent?: boolean;
 }) {
   return (
-    <div className={`rounded-xl border px-5 py-4 flex flex-col gap-1 ${
-      accent ? "bg-[#0EA5E9] border-[#0EA5E9]" : "bg-white border-slate-200"
-    }`}>
-      <span className="text-xs font-medium uppercase tracking-wide text-gray-400">
+    <div
+      className={`relative overflow-hidden rounded-2xl border px-5 py-4 flex flex-col gap-1 shadow-sm transition-shadow hover:shadow-md ${
+        accent
+          ? "border-[#4FAEB2]/30 bg-gradient-to-br from-[#4FAEB2]/10 via-white to-white ring-1 ring-[#4FAEB2]/20"
+          : "border-slate-200 bg-white"
+      }`}
+    >
+      {accent ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-[#4FAEB2] via-[#4FAEB2]/70 to-[#4FAEB2]/30"
+        />
+      ) : null}
+      <span
+        className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${
+          accent ? "text-[#3F8E91]" : "text-slate-500"
+        }`}
+      >
         {label}
       </span>
-      <span className={`text-2xl font-bold tabular-nums leading-tight ${
-        accent ? "text-white" : "text-gray-800"
-      }`}>
+      <span
+        className={`text-2xl font-bold tabular-nums leading-tight ${
+          accent ? "text-slate-900" : "text-slate-800"
+        }`}
+      >
         {value}
       </span>
-      {sub && <span className="text-xs text-gray-400">{sub}</span>}
+      {sub && <span className={`text-xs ${accent ? "text-slate-500" : "text-gray-400"}`}>{sub}</span>}
     </div>
   );
 }
@@ -236,7 +252,7 @@ export default function VentasPage() {
           <h2 className="text-xl font-semibold">Órdenes de venta</h2>
           <Link
             href="/ventas/nueva"
-            className="bg-[#0EA5E9] hover:bg-[#0284C7] text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#4FAEB2] px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#3F8E91] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/40"
           >
             + Nueva venta
           </Link>
