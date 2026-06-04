@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { cachedSessionFetch } from "@/lib/api/cached-session-fetch";
 import { getCurrentUser } from "@/lib/auth";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/super-admin-bootstrap-email";
 import { supabase } from "@/lib/supabase";
@@ -487,23 +488,21 @@ export default function Sidebar() {
           return;
         }
 
-        const res = await fetchWithSupabaseSession("/api/empresas/module-access", {
-          cache: "no-store",
-        });
-        if (cancelled) return;
-
+        // Cacheado por sesión (5 min) + dedupe con AuthGuard y otros consumidores.
         let superA = false;
         let modList: ModuloEmpresa[] = [];
         const bootstrapSuper = isBootstrapSuperAdminEmail(session.user.email ?? null);
 
-        if (res.ok) {
-          const body = (await res.json()) as {
+        try {
+          const body = await cachedSessionFetch<{
             superAdmin?: boolean;
             modulos?: ModuloEmpresa[];
-          };
+          }>("/api/empresas/module-access", 5 * 60 * 1000);
+          if (cancelled) return;
           superA = !!body.superAdmin || bootstrapSuper;
           modList = Array.isArray(body.modulos) ? body.modulos : [];
-        } else {
+        } catch {
+          if (cancelled) return;
           superA = bootstrapSuper;
         }
 
