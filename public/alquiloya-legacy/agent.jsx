@@ -447,8 +447,8 @@ function WriteReviewModal({ agent, onClose }) {
   }
 
   return ReactDOM.createPortal(
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 540, width: '100%', position: 'relative', maxHeight: 'calc(100vh - 32px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 540, width: '100%', position: 'relative', maxHeight: 'calc(100dvh - 32px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, margin: 'auto 0' }}>
         <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, background: 'var(--bg-2)', border: 'none', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', display: 'grid', placeItems: 'center', zIndex: 2 }}>
           <I.x s={14}/>
         </button>

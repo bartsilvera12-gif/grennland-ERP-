@@ -369,12 +369,12 @@ function PlansFaq() {
 
 function _modalOverlay(onClose, busy) {
   return {
-    style: { position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
+    style: { position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' },
     onClick: (e) => { if (e.target === e.currentTarget && !busy) onClose(); },
   };
 }
 // Estructura 3-zonas: header/body/footer fijos, body con scroll.
-const _modalCard = { maxWidth: 460, width: '100%', background: '#fff', borderRadius: 20, position: 'relative', maxHeight: 'calc(100vh - 32px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 60px -10px rgba(15,23,42,.4)' };
+const _modalCard = { maxWidth: 460, width: '100%', background: '#fff', borderRadius: 20, position: 'relative', maxHeight: 'calc(100dvh - 32px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 60px -10px rgba(15,23,42,.4)', margin: 'auto 0' };
 const _modalHead = { padding: '20px 24px 14px', borderBottom: '1px solid var(--line-2)', flexShrink: 0 };
 const _modalBody = { padding: '16px 24px', overflowY: 'auto', flex: 1, minHeight: 0 };
 const _modalFoot = { padding: '14px 24px', borderTop: '1px solid var(--line-2)', background: '#fff', flexShrink: 0, display: 'flex', gap: 8 };

@@ -1120,13 +1120,15 @@ function RequestAccessModal({ onClose, planTier, planLabel, defaultTipo }) {
 
   const overlay = {
     position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15,23,42,.55)', backdropFilter: 'blur(4px)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+    display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16,
+    overflowY: 'auto',
   };
   const modal = {
     width: '100%', maxWidth: 480, background: '#fff', borderRadius: 20,
     boxShadow: '0 24px 60px -10px rgba(15,23,42,.4)',
-    maxHeight: 'calc(100vh - 32px)', color: 'var(--ink)',
+    maxHeight: 'calc(100dvh - 32px)', color: 'var(--ink)',
     display: 'flex', flexDirection: 'column', overflow: 'hidden',
+    margin: 'auto 0',
   };
   const fieldLabel = { fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '.03em', marginBottom: 6, display: 'block' };
   const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 10, fontFamily: 'inherit', fontSize: 14, color: 'var(--ink)', background: '#fff' };

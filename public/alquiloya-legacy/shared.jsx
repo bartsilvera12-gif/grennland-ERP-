@@ -452,12 +452,14 @@ function VerificationModal({ propertyId, propertyTitle, onClose }) {
   return (
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 200,
-      display: 'grid', placeItems: 'center', padding: 20
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 20,
+      overflowY: 'auto'
     }}>
       <div onClick={(e) => e.stopPropagation()} className="card" style={{
         maxWidth: 680, width: '100%', background: '#fff', position: 'relative',
-        maxHeight: 'calc(100vh - 40px)',
-        display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0
+        maxHeight: 'calc(100dvh - 40px)',
+        display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0,
+        margin: 'auto 0'
       }}>
         <button onClick={onClose} style={{
           position: 'absolute', top: 14, right: 14, background: 'var(--bg-2)', border: 'none',
