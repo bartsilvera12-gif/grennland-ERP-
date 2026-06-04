@@ -447,74 +447,81 @@ function WriteReviewModal({ agent, onClose }) {
   }
 
   return ReactDOM.createPortal(
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 200, display: 'grid', placeItems: 'center', padding: 20, overflowY: 'auto' }}>
-      <div onClick={(e) => e.stopPropagation()} className="card" style={{ padding: 26, maxWidth: 540, width: '100%', position: 'relative', maxHeight: 'calc(100vh - 40px)', overflowY: 'auto' }}>
-        <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, background: 'var(--bg-2)', border: 'none', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ maxWidth: 540, width: '100%', position: 'relative', maxHeight: 'calc(100vh - 32px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+        <button onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, background: 'var(--bg-2)', border: 'none', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', display: 'grid', placeItems: 'center', zIndex: 2 }}>
           <I.x s={14}/>
         </button>
 
-        <div className="tag">Reseña</div>
-        <h3 style={{ fontSize: 20, marginTop: 6 }}>Calificá a {agent.name.split(' ')[0]}</h3>
-        <p className="muted" style={{ fontSize: 13, marginTop: 6, lineHeight: 1.5 }}>
-          Tu opinión ayuda a otros propietarios e inquilinos a elegir agente. La reseña se publica luego de una revisión rápida.
-        </p>
+        {/* Header sticky */}
+        <div style={{ padding: '22px 26px 14px', borderBottom: '1px solid var(--line-2)', flexShrink: 0 }}>
+          <div className="tag">Reseña</div>
+          <h3 style={{ fontSize: 20, marginTop: 6 }}>Calificá a {agent.name.split(' ')[0]}</h3>
+          <p className="muted" style={{ fontSize: 13, marginTop: 6, lineHeight: 1.5 }}>
+            Tu opinión ayuda a otros propietarios e inquilinos a elegir agente. La reseña se publica luego de una revisión rápida.
+          </p>
+        </div>
 
-        {/* Stars input */}
-        <div style={{ marginTop: 18 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-3)', letterSpacing: '.02em', textTransform: 'uppercase', marginBottom: 8 }}>Tu calificación</div>
-          <div className="row gap-4">
-            {[1,2,3,4,5].map(n => (
-              <button key={n}
-                onMouseEnter={() => setHover(n)}
-                onMouseLeave={() => setHover(0)}
-                onClick={() => setStars(n)}
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 0,
-                  color: (hover || stars) >= n ? 'var(--yellow)' : '#d4dae3',
-                  transition: 'color .12s, transform .12s',
-                  transform: (hover === n) ? 'scale(1.15)' : 'none',
-                }}>
-                <I.star s={32}/>
-              </button>
-            ))}
-            {stars > 0 && <span style={{ fontSize: 13, marginLeft: 8, color: 'var(--ink-3)', fontWeight: 600 }}>
-              {['Muy mala','Mala','Regular','Buena','Excelente'][stars-1]}
-            </span>}
+        {/* Body scrollable */}
+        <div style={{ padding: '16px 26px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
+          {/* Stars input */}
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-3)', letterSpacing: '.02em', textTransform: 'uppercase', marginBottom: 8 }}>Tu calificación</div>
+            <div className="row gap-4">
+              {[1,2,3,4,5].map(n => (
+                <button key={n}
+                  onMouseEnter={() => setHover(n)}
+                  onMouseLeave={() => setHover(0)}
+                  onClick={() => setStars(n)}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 0,
+                    color: (hover || stars) >= n ? 'var(--yellow)' : '#d4dae3',
+                    transition: 'color .12s, transform .12s',
+                    transform: (hover === n) ? 'scale(1.15)' : 'none',
+                  }}>
+                  <I.star s={32}/>
+                </button>
+              ))}
+              {stars > 0 && <span style={{ fontSize: 13, marginLeft: 8, color: 'var(--ink-3)', fontWeight: 600 }}>
+                {['Muy mala','Mala','Regular','Buena','Excelente'][stars-1]}
+              </span>}
+            </div>
+          </div>
+
+          {/* Role */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-3)', letterSpacing: '.02em', textTransform: 'uppercase', marginBottom: 8 }}>¿Cómo trabajaste con este agente?</div>
+            <div className="row gap-6">
+              {['Inquilino','Propietario','Otro'].map(r => (
+                <button key={r} onClick={() => setRole(r)} style={{
+                  padding: '7px 14px', borderRadius: 999,
+                  border: '1px solid ' + (role === r ? 'var(--blue)' : 'var(--line)'),
+                  background: role === r ? 'var(--blue-50)' : '#fff',
+                  color: role === r ? 'var(--blue)' : 'var(--ink-2)',
+                  fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit'
+                }}>{r}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Name */}
+          <div className="field" style={{ marginTop: 16 }}>
+            <label>Tu nombre</label>
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej: Pablo R."/>
+          </div>
+
+          {/* Body */}
+          <div className="field" style={{ marginTop: 14 }}>
+            <label>Tu experiencia</label>
+            <textarea className="input" rows={5} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Contá brevemente cómo fue trabajar con este agente. Mínimo 15 caracteres." />
+            <div className="muted xs" style={{ textAlign: 'right' }}>{body.length} caracteres</div>
           </div>
         </div>
 
-        {/* Role */}
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink-3)', letterSpacing: '.02em', textTransform: 'uppercase', marginBottom: 8 }}>¿Cómo trabajaste con este agente?</div>
-          <div className="row gap-6">
-            {['Inquilino','Propietario','Otro'].map(r => (
-              <button key={r} onClick={() => setRole(r)} style={{
-                padding: '7px 14px', borderRadius: 999,
-                border: '1px solid ' + (role === r ? 'var(--blue)' : 'var(--line)'),
-                background: role === r ? 'var(--blue-50)' : '#fff',
-                color: role === r ? 'var(--blue)' : 'var(--ink-2)',
-                fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit'
-              }}>{r}</button>
-            ))}
-          </div>
-        </div>
-
-        {/* Name */}
-        <div className="field" style={{ marginTop: 16 }}>
-          <label>Tu nombre</label>
-          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej: Pablo R."/>
-        </div>
-
-        {/* Body */}
-        <div className="field" style={{ marginTop: 14 }}>
-          <label>Tu experiencia</label>
-          <textarea className="input" rows={5} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Contá brevemente cómo fue trabajar con este agente. Mínimo 15 caracteres." />
-          <div className="muted xs" style={{ textAlign: 'right' }}>{body.length} caracteres</div>
-        </div>
-
-        <div className="row between" style={{ marginTop: 18 }}>
-          <span className="muted xs">Tu reseña se publica después de una revisión rápida.</span>
-          <div className="row gap-10">
+        {/* Footer sticky */}
+        <div style={{ padding: '14px 26px', borderTop: '1px solid var(--line-2)', background: '#fff', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <span className="muted xs" style={{ minWidth: 0 }}>Tu reseña se publica después de una revisión rápida.</span>
+          <div className="row gap-10" style={{ flexShrink: 0 }}>
             <button onClick={onClose} className="btn btn-outline">Cancelar</button>
             <button onClick={submit} className="btn btn-blue"
               disabled={!ready || submitting}

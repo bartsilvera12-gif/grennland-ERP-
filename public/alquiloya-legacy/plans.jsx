@@ -369,11 +369,15 @@ function PlansFaq() {
 
 function _modalOverlay(onClose, busy) {
   return {
-    style: { position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20, overflowY: 'auto' },
+    style: { position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 },
     onClick: (e) => { if (e.target === e.currentTarget && !busy) onClose(); },
   };
 }
-const _modalCard = { padding: 24, maxWidth: 460, width: '100%', background: '#fff', borderRadius: 20, position: 'relative', maxHeight: 'calc(100vh - 40px)', overflowY: 'auto' };
+// Estructura 3-zonas: header/body/footer fijos, body con scroll.
+const _modalCard = { maxWidth: 460, width: '100%', background: '#fff', borderRadius: 20, position: 'relative', maxHeight: 'calc(100vh - 32px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 60px -10px rgba(15,23,42,.4)' };
+const _modalHead = { padding: '20px 24px 14px', borderBottom: '1px solid var(--line-2)', flexShrink: 0 };
+const _modalBody = { padding: '16px 24px', overflowY: 'auto', flex: 1, minHeight: 0 };
+const _modalFoot = { padding: '14px 24px', borderTop: '1px solid var(--line-2)', background: '#fff', flexShrink: 0, display: 'flex', gap: 8 };
 const _fieldLabel = { fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '.03em', marginBottom: 6, display: 'block' };
 const _inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 10, fontFamily: 'inherit', fontSize: 14, color: 'var(--ink)', background: '#fff' };
 
@@ -426,11 +430,13 @@ function CambioPlanModal({ planes, onClose }) {
 
   return (
     <div {..._modalOverlay(onClose, busy)}>
-      <div style={_modalCard} onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 20, margin: 0 }}>Cambiar de plan</h2>
-        <p style={{ marginTop: 6, fontSize: 13.5, color: 'var(--ink-3)' }}>Decinos a qué plan querés moverte. Te contactamos para coordinar el pago y aplicar el cambio.</p>
-        <form onSubmit={submit}>
-          <div style={{ marginTop: 14 }}>
+      <form onSubmit={submit} style={_modalCard} onClick={(e) => e.stopPropagation()}>
+        <div style={_modalHead}>
+          <h2 style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 20, margin: 0 }}>Cambiar de plan</h2>
+          <p style={{ marginTop: 6, fontSize: 13.5, color: 'var(--ink-3)' }}>Decinos a qué plan querés moverte. Te contactamos para coordinar el pago y aplicar el cambio.</p>
+        </div>
+        <div style={_modalBody}>
+          <div>
             <label style={_fieldLabel}>Plan al que cambiar *</label>
             <select style={_inputStyle} value={form.plan_tier} onChange={e => set('plan_tier', e.target.value)} required>
               <option value="">Elegí un plan…</option>
@@ -454,12 +460,12 @@ function CambioPlanModal({ planes, onClose }) {
             <textarea style={{ ..._inputStyle, minHeight: 70, resize: 'vertical' }} maxLength={1200} value={form.mensaje} onChange={e => set('mensaje', e.target.value)} placeholder="Aclaraciones, fecha en que querés que arranque, etc."/>
           </div>
           {_feedback(feedback)}
-          <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
-            <button type="button" disabled={busy} onClick={onClose} className="btn" style={{ flex: 1, background: '#f1f5f9', color: 'var(--ink-2)' }}>Cancelar</button>
-            <button type="submit" disabled={busy} className="btn btn-primary" style={{ flex: 1 }}>{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
-          </div>
-        </form>
-      </div>
+        </div>
+        <div style={_modalFoot}>
+          <button type="button" disabled={busy} onClick={onClose} className="btn" style={{ flex: 1, background: '#f1f5f9', color: 'var(--ink-2)' }}>Cancelar</button>
+          <button type="submit" disabled={busy} className="btn btn-primary" style={{ flex: 1 }}>{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -501,16 +507,18 @@ function ImpulsoCompraModal({ pack, onClose }) {
 
   return (
     <div {..._modalOverlay(onClose, busy)}>
-      <div style={_modalCard} onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 20, margin: 0 }}>Comprar impulsos</h2>
-        <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--yellow-50)', border: '1px solid var(--yellow)' }}>
-          <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', color: '#8a5e00', textTransform: 'uppercase' }}>Pack seleccionado</div>
-          <div style={{ marginTop: 2, fontFamily: 'Montserrat', fontWeight: 800, fontSize: 16, color: 'var(--ink)' }}>
-            {pack.qty} impulso{pack.qty > 1 ? 's' : ''} · Gs. {Number(pack.price || 0).toLocaleString('es-PY')}
+      <form onSubmit={submit} style={_modalCard} onClick={(e) => e.stopPropagation()}>
+        <div style={_modalHead}>
+          <h2 style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 20, margin: 0 }}>Comprar impulsos</h2>
+          <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--yellow-50)', border: '1px solid var(--yellow)' }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', color: '#8a5e00', textTransform: 'uppercase' }}>Pack seleccionado</div>
+            <div style={{ marginTop: 2, fontFamily: 'Montserrat', fontWeight: 800, fontSize: 16, color: 'var(--ink)' }}>
+              {pack.qty} impulso{pack.qty > 1 ? 's' : ''} · Gs. {Number(pack.price || 0).toLocaleString('es-PY')}
+            </div>
           </div>
         </div>
-        <form onSubmit={submit}>
-          <div style={{ marginTop: 14 }}>
+        <div style={_modalBody}>
+          <div>
             <label style={_fieldLabel}>Nombre completo *</label>
             <input style={_inputStyle} maxLength={160} value={form.nombre} onChange={e => set('nombre', e.target.value)} required/>
           </div>
@@ -527,12 +535,12 @@ function ImpulsoCompraModal({ pack, onClose }) {
             <textarea style={{ ..._inputStyle, minHeight: 70, resize: 'vertical' }} maxLength={1200} value={form.mensaje} onChange={e => set('mensaje', e.target.value)}/>
           </div>
           {_feedback(feedback)}
-          <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
-            <button type="button" disabled={busy} onClick={onClose} className="btn" style={{ flex: 1, background: '#f1f5f9', color: 'var(--ink-2)' }}>Cancelar</button>
-            <button type="submit" disabled={busy} className="btn btn-primary" style={{ flex: 1 }}>{busy ? 'Enviando…' : 'Pedir y coordinar pago'}</button>
-          </div>
-        </form>
-      </div>
+        </div>
+        <div style={_modalFoot}>
+          <button type="button" disabled={busy} onClick={onClose} className="btn" style={{ flex: 1, background: '#f1f5f9', color: 'var(--ink-2)' }}>Cancelar</button>
+          <button type="submit" disabled={busy} className="btn btn-primary" style={{ flex: 1 }}>{busy ? 'Enviando…' : 'Pedir y coordinar pago'}</button>
+        </div>
+      </form>
     </div>
   );
 }
