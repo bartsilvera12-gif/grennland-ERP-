@@ -2861,6 +2861,75 @@ export default function DashboardPage() {
 }
 
 // ── Dashboard Propiedades (AlquiloYa) ─────────────────────────────────────────
+type KpiTone = "ok" | "warn" | "info" | "muted";
+type KpiAccent = "teal" | "indigo" | "sky" | "amber";
+
+const ACCENT_BG: Record<KpiAccent, string> = {
+  teal: "bg-gradient-to-br from-[#4FAEB2]/15 to-[#4FAEB2]/0 ring-[#4FAEB2]/30",
+  indigo: "bg-gradient-to-br from-indigo-100/70 to-indigo-50/0 ring-indigo-200",
+  sky: "bg-gradient-to-br from-sky-100/70 to-sky-50/0 ring-sky-200",
+  amber: "bg-gradient-to-br from-amber-100/70 to-amber-50/0 ring-amber-200",
+};
+const ACCENT_ICON: Record<KpiAccent, string> = {
+  teal: "bg-[#4FAEB2]/15 text-[#3F8E91]",
+  indigo: "bg-indigo-100 text-indigo-700",
+  sky: "bg-sky-100 text-sky-700",
+  amber: "bg-amber-100 text-amber-700",
+};
+const TONE_TEXT: Record<KpiTone, string> = {
+  ok: "text-emerald-700 bg-emerald-50 ring-emerald-200",
+  warn: "text-amber-700 bg-amber-50 ring-amber-200",
+  info: "text-sky-700 bg-sky-50 ring-sky-200",
+  muted: "text-slate-500 bg-slate-100 ring-slate-200",
+};
+
+function DensoKpi({
+  accent,
+  icon,
+  label,
+  value,
+  valueSuffix,
+  stats,
+}: {
+  accent: KpiAccent;
+  icon: React.ReactNode;
+  label: string;
+  value: number | string;
+  valueSuffix?: string;
+  stats: { label: string; value: number | string; tone: KpiTone; suffix?: string }[];
+}) {
+  return (
+    <div className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ring-1 ${ACCENT_BG[accent]}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">{label}</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">
+            {value}
+            {valueSuffix ? <span className="text-base font-semibold text-slate-500">{valueSuffix}</span> : null}
+          </p>
+        </div>
+        <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${ACCENT_ICON[accent]}`}>
+          {icon}
+        </div>
+      </div>
+      {stats.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {stats.map((s, i) => (
+            <span
+              key={i}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${TONE_TEXT[s.tone]}`}
+            >
+              <span className="tabular-nums">{s.value}{s.suffix ?? ""}</span>
+              <span className="text-[10px] font-medium opacity-80">{s.label}</span>
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+
 type AlquiloyaSummary = {
   propiedades: { total: number; activas: number; publicadas: number; destacadas: number };
   por_tipo: { label: string; value: number }[];
@@ -2963,51 +3032,82 @@ function DashPropiedades() {
 
   return (
     <div className="space-y-8">
-      {/* KPIs principales */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <KpiCard
-          icon={<Icon.Propiedades className="h-4 w-4" />}
-          label="Total de propiedades"
-          value={String(data.propiedades.total)}
-          accent="featured"
+      {/* KPIs compactos: 4 cards con sub-stats inline */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <DensoKpi
+          accent="teal"
+          icon={<Icon.Propiedades className="h-5 w-5" />}
+          label="Propiedades"
+          value={data.propiedades.total}
+          stats={[
+            { label: "activas", value: data.propiedades.activas, tone: "ok" },
+            { label: "publicadas", value: data.propiedades.publicadas, tone: "info" },
+            { label: "destacadas", value: data.propiedades.destacadas, tone: "warn" },
+          ]}
         />
-        <KpiCard
-          icon={<Icon.CheckCircle className="h-4 w-4" />}
-          label="Activas / publicadas"
-          value={`${data.propiedades.activas} / ${data.propiedades.publicadas}`}
-          sub="Activas · publicadas en la web"
+        <DensoKpi
+          accent="indigo"
+          icon={<Icon.Target className="h-5 w-5" />}
+          label="Agentes"
+          value={data.agentes.activos}
+          valueSuffix={` / ${data.agentes.total}`}
+          stats={[
+            { label: "activos", value: data.agentes.activos, tone: "ok" },
+            {
+              label: "inactivos",
+              value: Math.max(0, data.agentes.total - data.agentes.activos),
+              tone: "muted",
+            },
+          ]}
         />
-        <KpiCard
-          icon={<Icon.Diamond className="h-4 w-4" />}
-          label="Destacadas"
-          value={String(data.propiedades.destacadas)}
+        <DensoKpi
+          accent="sky"
+          icon={<Icon.Chat className="h-5 w-5" />}
+          label="Consultas"
+          value={data.consultas.total}
+          stats={[
+            {
+              label: "últimos 30d",
+              value: data.consultas.ultimas_30,
+              tone: data.consultas.ultimas_30 > 0 ? "ok" : "muted",
+            },
+            {
+              label: "pendientes",
+              value: data.consultas.pendientes,
+              tone: data.consultas.pendientes > 0 ? "warn" : "muted",
+            },
+          ]}
         />
-        <KpiCard
-          icon={<Icon.Target className="h-4 w-4" />}
-          label="Agentes activos"
-          value={`${data.agentes.activos} / ${data.agentes.total}`}
-          sub="Activos · totales"
-        />
-      </div>
-
-      {/* Consultas */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <KpiCard
-          icon={<Icon.Chat className="h-4 w-4" />}
-          label="Consultas recibidas"
-          value={String(data.consultas.total)}
-        />
-        <KpiCard
-          icon={<Icon.Calendar className="h-4 w-4" />}
-          label="Consultas últimos 30 días"
-          value={String(data.consultas.ultimas_30)}
-          accent={data.consultas.ultimas_30 > 0 ? "featured" : "neutral"}
-        />
-        <KpiCard
-          icon={<Icon.Alert className="h-4 w-4" />}
-          label="Pendientes de atención"
-          value={String(data.consultas.pendientes)}
-          accent={data.consultas.pendientes > 0 ? "warning" : "neutral"}
+        <DensoKpi
+          accent="amber"
+          icon={<Icon.CheckCircle className="h-5 w-5" />}
+          label="Tasa publicación"
+          value={
+            data.propiedades.total > 0
+              ? Math.round((data.propiedades.publicadas / data.propiedades.total) * 100)
+              : 0
+          }
+          valueSuffix="%"
+          stats={[
+            {
+              label: "% destacadas",
+              value:
+                data.propiedades.total > 0
+                  ? Math.round((data.propiedades.destacadas / data.propiedades.total) * 100)
+                  : 0,
+              tone: "warn",
+              suffix: "%",
+            },
+            {
+              label: "activas %",
+              value:
+                data.propiedades.total > 0
+                  ? Math.round((data.propiedades.activas / data.propiedades.total) * 100)
+                  : 0,
+              tone: "ok",
+              suffix: "%",
+            },
+          ]}
         />
       </div>
 
