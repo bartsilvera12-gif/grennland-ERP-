@@ -205,6 +205,13 @@ const MENU_STRUCTURE: MenuItem[] = [
     icon: Inbox,
   },
   {
+    key: "impulsos-packs",
+    slug: "planes",
+    label: "Packs de impulsos",
+    href: "/dashboard/impulsos-packs",
+    icon: Sparkles,
+  },
+  {
     key: "agente-resenas",
     slug: "agentes-inmobiliarios",
     label: "Reseñas de agentes",

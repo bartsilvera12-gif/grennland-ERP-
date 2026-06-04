@@ -104,6 +104,7 @@ export function pathRequiresModuleSlug(pathname: string): string | null {
     if (p.startsWith("/dashboard/agentes-inmobiliarios")) return "agentes-inmobiliarios";
     if (p.startsWith("/dashboard/solicitudes-acceso")) return "agentes-inmobiliarios";
     if (p.startsWith("/dashboard/solicitudes-servicio")) return "agentes-inmobiliarios";
+    if (p.startsWith("/dashboard/impulsos-packs")) return "planes";
     if (p.startsWith("/dashboard/agente-resenas")) return "agentes-inmobiliarios";
     if (p.startsWith("/dashboard/referidos")) return "referidos";
     if (p.startsWith("/dashboard/conversaciones-finalizadas")) return "conversaciones-finalizadas";

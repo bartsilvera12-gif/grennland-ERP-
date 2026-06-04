@@ -267,6 +267,37 @@ function CompareTable() {
 }
 
 function ImpulseSection({ onBuy }) {
+  const [apiPacks, setApiPacks] = React.useState(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    fetch('/api/public/alquiloya/impulsos-packs', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)))
+      .then(body => {
+        if (cancelled) return;
+        const arr = body && body.success && body.data && Array.isArray(body.data.packs) ? body.data.packs : null;
+        if (!arr || arr.length === 0) return;
+        const mapped = arr.map(p => ({
+          id: p.codigo,
+          qty: Number(p.qty) || 0,
+          price: Number(p.precio) || 0,
+          unit: p.qty > 0 ? Math.round(Number(p.precio) / Number(p.qty)) : 0,
+          popular: p.badge === 'popular',
+          best: p.badge === 'best',
+          save: (p.badge === 'popular' || p.badge === 'best') && p.qty > 1
+            ? (function() {
+                const baseUnit = (typeof window !== 'undefined' && window.IMPULSE_PACKS_BASE_UNIT) || 25000;
+                const u = p.qty > 0 ? Number(p.precio) / Number(p.qty) : 0;
+                const pct = Math.round((1 - u / baseUnit) * 100);
+                return pct > 0 ? (pct + '%') : null;
+              })()
+            : null,
+        }));
+        setApiPacks(mapped);
+      })
+      .catch(() => { /* fallback IMPULSE_PACKS mock */ });
+    return () => { cancelled = true; };
+  }, []);
+  const packs = apiPacks || IMPULSE_PACKS;
   return (
     <div style={{ marginTop: 56 }}>
       <SectionHead eyebrow="Impulsos" title="Destacá más propiedades cuando lo necesites" />
@@ -298,7 +329,7 @@ function ImpulseSection({ onBuy }) {
             </div>
           </div>
           <div className="col gap-12">
-            {IMPULSE_PACKS.map(pack => (
+            {packs.map(pack => (
               <div key={pack.id} className="card" style={{
                 padding: 16,
                 border: pack.popular ? '2px solid var(--yellow)' : (pack.best ? '2px solid var(--blue)' : '1px solid var(--line)'),
