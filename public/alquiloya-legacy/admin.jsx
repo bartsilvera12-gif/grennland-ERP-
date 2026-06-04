@@ -288,20 +288,28 @@ function AdminAgentPage({ route, onNav }) {
     let cancelled = false;
     (async () => {
       let body = null;
+      // Si la sesion es de propietario (incluso con 0 inmuebles) usamos esa.
       try {
         const r = await fetch('/api/propietario/propiedades', { cache: 'no-store', credentials: 'include' });
         if (r.ok) {
           const b = await r.json();
-          if (b?.success && Array.isArray(b.propiedades) && b.propiedades.length > 0) body = b;
+          if (b?.success && Array.isArray(b.propiedades)) body = b;
         }
       } catch { /* try next */ }
       if (!body) {
         try {
           const r2 = await fetch('/api/agente/propiedades', { cache: 'no-store', credentials: 'include' });
-          if (r2.ok) body = await r2.json();
+          if (r2.ok) {
+            const b2 = await r2.json();
+            if (b2?.success && Array.isArray(b2.propiedades)) body = b2;
+          }
         } catch { /* fallback mock */ }
       }
-      if (cancelled || !body || !body.success || !Array.isArray(body.propiedades)) return;
+      if (cancelled) return;
+      if (!body || !body.success || !Array.isArray(body.propiedades)) {
+        // Sin sesion real: no marcar como cargado, dejar null → fallback preview.
+        return;
+      }
       // Normalizar al shape consumido por las cards legacy (p.title/p.cover/p.price).
       const mapped = body.propiedades.map(p => ({
         id: p.id,
@@ -318,11 +326,13 @@ function AdminAgentPage({ route, onNav }) {
         fotos_count: p.fotos_count || 0,
         _real: true,
       }));
+      // Marcamos como cargado AUNQUE este vacio. Empty array = "tengo sesion pero 0 propiedades".
       setMyPropiedades(mapped);
     })();
     return () => { cancelled = true; };
   }, []);
-  const propsForRender = (myPropiedades && myPropiedades.length > 0) ? myPropiedades : PROPERTIES;
+  // propsForRender: si terminó de cargar (array, incluso vacio) → usar real. Sino preview con PROPERTIES.
+  const propsForRender = Array.isArray(myPropiedades) ? myPropiedades : PROPERTIES;
   // KPIs derivados de datos reales del ERP. Si no hay propiedades reales, mostramos guiones.
   const hasRealProps = Array.isArray(myPropiedades);
   const totalProps = hasRealProps ? myPropiedades.length : 0;

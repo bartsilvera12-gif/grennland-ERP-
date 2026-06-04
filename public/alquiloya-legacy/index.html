@@ -227,6 +227,63 @@
     h3 { font-size: 20px !important; }
   }
 
+  /* Header: nav scrollable horizontalmente en tablet+ chico para que el "Ingresar"
+     no se vaya de pantalla. */
+  @media (max-width: 1024px) {
+    #neura-public-header nav,
+    header nav.row {
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      max-width: calc(100vw - 220px);
+    }
+    header nav.row::-webkit-scrollbar { display: none; }
+  }
+  /* En mobile, el nav del header pasa a ser un menu hamburguesa simple */
+  @media (max-width: 760px) {
+    header nav.row {
+      position: fixed !important;
+      top: 96px !important;
+      left: 0 !important;
+      right: 0 !important;
+      background: #fff !important;
+      border-bottom: 1px solid var(--line) !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 0 !important;
+      padding: 8px 16px !important;
+      max-height: 0 !important;
+      overflow: hidden !important;
+      transition: max-height .2s ease, padding .2s ease !important;
+      box-shadow: 0 8px 20px rgba(0,0,0,.08) !important;
+      z-index: 39 !important;
+    }
+    header nav.row.is-open {
+      max-height: 60vh !important;
+      padding: 12px 16px !important;
+    }
+    header nav.row button {
+      width: 100% !important;
+      text-align: left !important;
+      padding: 12px 8px !important;
+      border-bottom: 1px solid var(--line-2) !important;
+    }
+    .nav-hamburger { display: inline-flex !important; }
+  }
+  .nav-hamburger {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .nav-hamburger:hover { background: var(--bg-2); }
+
   /* Mobile */
   @media (max-width: 760px) {
     html, body { font-size: 15px; }
@@ -385,7 +442,7 @@
 <script type="text/babel" src="brand.jsx?v=mobile-1"></script>
 <script type="text/babel" src="data.jsx?v=mobile-1"></script>
 <script type="text/babel" src="api-data.jsx?v=per-endpoint-1"></script>
-<script type="text/babel" src="shared.jsx?v=footer-1"></script>
+<script type="text/babel" src="shared.jsx?v=hamburger-1"></script>
 <script type="text/babel" src="home.jsx?v=verified-real-1"></script>
 <script type="text/babel" src="catalog.jsx?v=mobile-1"></script>
 <script type="text/babel" src="detail.jsx?v=consultas-1"></script>
@@ -393,7 +450,7 @@
 <script type="text/babel" src="plans.jsx?v=modal-portal-1"></script>
 <script type="text/babel" src="publish.jsx?v=confirm-1"></script>
 <script type="text/babel" src="posters.jsx?v=mobile-1"></script>
-<script type="text/babel" src="admin.jsx?v=mi-blog-1"></script>
+<script type="text/babel" src="admin.jsx?v=real-empty-1"></script>
 <script type="text/babel" src="agent.jsx?v=blog-2"></script>
 <script type="text/babel" src="help.jsx?v=mobile-1"></script>
 <script type="text/babel" src="app.jsx?v=boost-1"></script>

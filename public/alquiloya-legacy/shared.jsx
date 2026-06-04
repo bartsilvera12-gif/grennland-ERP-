@@ -1,6 +1,7 @@
 // Shared layout components: Header, Footer, PropertyCard, AdBanner, QRMock, etc.
 
 function Header({ route, onNav, onPublish }) {
+  const [menuOpen, setMenuOpen] = React.useState(false);
   const items = [
     { id: 'home', label: 'Inicio' },
     { id: 'catalog', label: 'Alquileres' },
@@ -14,7 +15,7 @@ function Header({ route, onNav, onPublish }) {
       position: 'sticky', top: 0, zIndex: 40,
       background: '#fff', borderBottom: '1px solid var(--line)',
       boxShadow: '0 1px 0 rgba(11,22,34,.03)',
-      overflow: 'hidden',
+      overflow: 'visible',
     }}>
       <div className="container" style={{
         height: 96, display: 'flex', alignItems: 'center', gap: 24, position: 'relative'
@@ -24,10 +25,33 @@ function Header({ route, onNav, onPublish }) {
           <Logo size={32} />
         </button>
 
+        {/* Hamburger (mobile only via CSS) */}
+        <button
+          className="nav-hamburger"
+          aria-label={menuOpen ? "Cerrar menú" : "Abrir menú"}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen(o => !o)}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            {menuOpen ? (
+              <>
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </>
+            ) : (
+              <>
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+                <line x1="3" y1="18" x2="21" y2="18"/>
+              </>
+            )}
+          </svg>
+        </button>
+
         {/* Nav */}
-        <nav className="row gap-24" style={{ marginLeft: 8, flexShrink: 0 }}>
+        <nav className={"row gap-24" + (menuOpen ? " is-open" : "")} style={{ marginLeft: 8, flexShrink: 0 }}>
           {items.map(it => (
-            <button key={it.id} onClick={() => onNav(it.id)} style={{
+            <button key={it.id} onClick={() => { onNav(it.id); setMenuOpen(false); }} style={{
               background: 'none', border: 'none', padding: '8px 4px',
               fontSize: 14.5, fontWeight: 600,
               color: route === it.id ? 'var(--blue)' : 'var(--ink-2)',
