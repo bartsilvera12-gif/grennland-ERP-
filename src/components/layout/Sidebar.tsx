@@ -305,7 +305,7 @@ function NavItem({
     return (
       <div className="space-y-0.5">
         <div
-          className={`group/parent relative flex items-center gap-0.5 rounded-xl text-sm transition-all ${
+          className={`group/parent relative flex items-center gap-0.5 rounded-xl text-sm transition-[background-color,color,box-shadow] ${
             active
               ? "bg-gradient-to-r from-[#7DCFD2]/22 via-[#7DCFD2]/12 to-transparent text-white"
               : "text-slate-300 hover:bg-white/[0.04] hover:text-white"
@@ -371,7 +371,7 @@ function NavItem({
                     <Link
                       key={c.href}
                       href={c.href}
-                      className={`relative block rounded-lg px-3 py-1.5 text-[13px] transition-all ${
+                      className={`relative block rounded-lg px-3 py-1.5 text-[13px] transition-[background-color,color,box-shadow] ${
                         childActive2
                           ? "bg-[#7DCFD2]/14 font-medium text-white"
                           : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200"
@@ -398,7 +398,7 @@ function NavItem({
   return (
     <Link
       href={item.href}
-      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all ${
+      className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-[background-color,color,box-shadow] ${
         isActive
           ? "bg-gradient-to-r from-[#7DCFD2]/22 via-[#7DCFD2]/12 to-transparent font-semibold text-white"
           : "font-medium text-slate-300 hover:bg-white/[0.04] hover:text-white"
@@ -422,7 +422,7 @@ function NavItem({
           <button
             type="button"
             onClick={(e) => { e.preventDefault(); onToggleFavorito(itemId); }}
-            className={`rounded-md p-1 transition-all ${
+            className={`rounded-md p-1 transition-[background-color,color,box-shadow] ${
               isFavorito
                 ? "text-amber-300 opacity-100"
                 : "text-slate-500 opacity-0 hover:text-amber-300 group-hover:opacity-100"
@@ -778,7 +778,7 @@ export default function Sidebar() {
             )}
             <Link
               href="/admin/empresas"
-              className={`relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all ${
+              className={`relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-[background-color,color,box-shadow] ${
                 (pathname ?? "").startsWith("/admin/empresas")
                   ? "bg-gradient-to-r from-amber-400/15 via-amber-400/8 to-transparent font-semibold text-amber-100"
                   : "font-medium text-amber-300/90 hover:bg-white/[0.04] hover:text-amber-200"
