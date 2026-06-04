@@ -13,6 +13,12 @@ const DEFAULT_ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
 // no preguntamos más. Se invalida con cada deploy (cold start del proceso).
 const overviewTableExistsCache = new Map<string, boolean>();
 
+// Cache de la respuesta completa por tenant (la data es la misma para todos los
+// usuarios del mismo empresa_id). TTL 30s.
+type CachedOverview = { data: unknown; expiresAt: number; refreshing: boolean };
+const overviewResponseCache = new Map<string, CachedOverview>();
+const OVERVIEW_FRESH_MS = 30_000;
+
 type Severity = "danger" | "warning" | "info";
 
 type Alerta = {
@@ -70,6 +76,18 @@ export async function GET(request: Request) {
     const schema = getClientSchema();
     const empresaId =
       process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || DEFAULT_ALQUILOYA_EMPRESA_ID;
+
+    // ── Cache compartido por tenant ──────────────────────────────────────────
+    // La respuesta es la misma para todos los usuarios del mismo empresa_id, asi
+    // que un solo cache module-level sirve a todos. TTL 30s.
+    // Despues del TTL, el siguiente request regenera (1 hit costoso, luego 30s
+    // gratis para todos).
+    const cacheKey = `${schema}:${empresaId}`;
+    const now = Date.now();
+    const cached = overviewResponseCache.get(cacheKey);
+    if (cached && now < cached.expiresAt) {
+      return NextResponse.json({ success: true, data: cached.data, cached: "fresh" });
+    }
 
     const sq = (t: string) => `"${schema}"."${t}"`;
 
@@ -255,17 +273,24 @@ export async function GET(request: Request) {
     actividad.sort((a, b) => (a.cuando < b.cuando ? 1 : a.cuando > b.cuando ? -1 : 0));
     const actividadFinal = actividad.slice(0, 10);
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        modulos,
-        alertas,
-        kpis,
-        actividad: actividadFinal,
-      },
+    const payload = {
+      modulos,
+      alertas,
+      kpis,
+      actividad: actividadFinal,
+    };
+
+    // Guardamos en el cache para la proxima request.
+    overviewResponseCache.set(cacheKey, {
+      data: payload,
+      expiresAt: Date.now() + OVERVIEW_FRESH_MS,
+      refreshing: false,
     });
+
+    return NextResponse.json({ success: true, data: payload });
   } catch (err) {
     console.error("[api/dashboard/overview]", err instanceof Error ? err.message : err);
     return NextResponse.json({ error: "Error al cargar overview" }, { status: 500 });
   }
 }
+
