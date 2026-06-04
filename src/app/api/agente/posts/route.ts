@@ -63,19 +63,32 @@ export async function GET(request: Request) {
     if (!auth.ok) return auth.res;
     const pool = getChatPostgresPool();
     if (!pool) return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
-    const { rows } = await queryWithRetry(
-      pool,
-      `SELECT id, slug, titulo, resumen, contenido, cover_url,
-              publicado, destacado, orden,
-              publicado_at::text AS publicado_at,
-              created_at::text AS created_at,
-              updated_at::text AS updated_at
-         FROM ${t("agente_posts")}
-        WHERE empresa_id = $1::uuid AND agente_id = $2::uuid
-        ORDER BY updated_at DESC NULLS LAST`,
-      [ALQUILOYA_EMPRESA_ID, auth.agenteId]
-    );
-    return NextResponse.json({ success: true, posts: rows ?? [] });
+    try {
+      const { rows } = await queryWithRetry(
+        pool,
+        `SELECT id, slug, titulo, resumen, contenido, cover_url,
+                publicado, destacado, orden,
+                publicado_at::text AS publicado_at,
+                created_at::text AS created_at,
+                updated_at::text AS updated_at
+           FROM ${t("agente_posts")}
+          WHERE empresa_id = $1::uuid AND agente_id = $2::uuid
+          ORDER BY updated_at DESC NULLS LAST`,
+        [ALQUILOYA_EMPRESA_ID, auth.agenteId]
+      );
+      return NextResponse.json({ success: true, posts: rows ?? [] });
+    } catch (e) {
+      // Tabla aun no migrada: devolvemos lista vacia con flag para UI mas amigable.
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/does not exist|relation .* does not exist/i.test(msg)) {
+        return NextResponse.json({
+          success: true,
+          posts: [],
+          notice: "El blog aún no está activo. Pedile al admin que corra la migración de agente_posts.",
+        });
+      }
+      throw e;
+    }
   } catch (err) {
     console.error("[api/agente/posts GET]", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Error" }, { status: 500 });
