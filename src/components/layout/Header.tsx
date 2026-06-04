@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, ChevronDown, LogOut } from "lucide-react";
-import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { cachedSessionFetch, invalidateCachedFetch } from "@/lib/api/cached-session-fetch";
 import { signOut } from "@/lib/auth";
 
 type HeaderUsuario = {
@@ -58,9 +58,11 @@ export default function Header() {
     let alive = true;
     async function loadUsuario() {
       try {
-        const res = await fetchWithSupabaseSession("/api/usuarios/me", { cache: "no-store" });
-        if (!res.ok) throw new Error(`Error ${res.status}`);
-        const json = (await res.json()) as { usuario?: HeaderUsuario };
+        // Cacheado por sesión: el usuario no cambia entre navegaciones, TTL 10 min.
+        const json = await cachedSessionFetch<{ usuario?: HeaderUsuario }>(
+          "/api/usuarios/me",
+          10 * 60 * 1000
+        );
         if (alive) setUsuario(json.usuario ?? null);
       } catch {
         if (alive) setUsuario(null);
@@ -130,6 +132,7 @@ export default function Header() {
             <button
               type="button"
               onClick={async () => {
+                invalidateCachedFetch(); // limpia /me, /module-access, etc. para el próximo login
                 await signOut();
                 router.push("/login");
               }}

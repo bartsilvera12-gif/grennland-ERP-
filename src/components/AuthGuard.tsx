@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { cachedSessionFetch } from "@/lib/api/cached-session-fetch";
 import { getCurrentUser, getSession } from "@/lib/auth";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/super-admin-bootstrap-email";
 import {
@@ -54,21 +55,21 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const res = await fetchWithSupabaseSession("/api/empresas/module-access", {
-        cache: "no-store",
-      });
-      if (cancelled) return;
-
       let superAdmin = false;
       let slugs: string[] = [];
 
       const bootstrapSuper = isBootstrapSuperAdminEmail(session.user.email ?? null);
 
-      if (res.ok) {
-        const data = (await res.json()) as { superAdmin?: boolean; slugs?: string[] };
+      try {
+        const data = await cachedSessionFetch<{
+          superAdmin?: boolean;
+          slugs?: string[];
+        }>("/api/empresas/module-access", 5 * 60 * 1000);
+        if (cancelled) return;
         superAdmin = !!data.superAdmin || bootstrapSuper;
         slugs = Array.isArray(data.slugs) ? data.slugs : [];
-      } else {
+      } catch {
+        if (cancelled) return;
         superAdmin = bootstrapSuper;
       }
 

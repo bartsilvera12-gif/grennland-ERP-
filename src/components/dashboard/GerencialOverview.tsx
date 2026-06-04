@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { cachedSessionFetch } from "@/lib/api/cached-session-fetch";
 import AccesosRapidos from "./AccesosRapidos";
 import AlertasStrip from "./AlertasStrip";
 import PulsoDelDia from "./PulsoDelDia";
@@ -83,11 +83,12 @@ export default function GerencialOverview() {
     (async () => {
       try {
         setLoading(true);
-        const res = await fetchWithSupabaseSession("/api/dashboard/overview", {
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const body = (await res.json()) as { success?: boolean; data?: Overview; error?: string };
+        // Cacheado 60s — KPIs no real-time, evita el spike de 4s al cambiar de pestaña.
+        const body = await cachedSessionFetch<{
+          success?: boolean;
+          data?: Overview;
+          error?: string;
+        }>("/api/dashboard/overview", 60 * 1000);
         if (cancelled) return;
         if (body.success && body.data) setData(body.data);
         else throw new Error(body.error ?? "Respuesta inválida");
