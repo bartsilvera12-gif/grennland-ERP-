@@ -25,6 +25,18 @@ export function esRolAdminEmpresa(rol: string | null | undefined): boolean {
   return r === "admin" || r === "administrador";
 }
 
+/**
+ * Roles "publicador-*" son cuentas externas que usan EXCLUSIVAMENTE el portal
+ * publico (/publico#admin-agent) — NUNCA el ERP. Bloqueamos su acceso a
+ * cualquier modulo del ERP devolviendo lista vacia.
+ *
+ * Cubre: publicador-agente, publicador-propietario, publicador (legacy).
+ */
+export function esRolPublicador(rol: string | null | undefined): boolean {
+  const r = (rol ?? "").trim().toLowerCase();
+  return r === "publicador" || r.startsWith("publicador-");
+}
+
 async function allModuloIdsFromCatalog(supabase: ModulosSupabase): Promise<string[]> {
   const { data, error } = await supabase.from("modulos").select("id");
   if (error) throw new Error(error.message);
@@ -62,6 +74,11 @@ export async function resolveEffectiveModules(
   usuario: { id: string; empresa_id: string | null; rol: string | null }
 ): Promise<ModuloRow[]> {
   const rol = (usuario.rol ?? "").trim();
+
+  // Publicadores (agentes y propietarios del portal publico) NO pueden entrar
+  // al ERP. Lista vacia bloquea Sidebar + AuthGuard + middleware.
+  if (esRolPublicador(rol)) return [];
+
   if (rol === "super_admin") {
     const { data, error } = await supabase.from("modulos").select("id, nombre, slug").order("slug");
     if (error) throw new Error(error.message);

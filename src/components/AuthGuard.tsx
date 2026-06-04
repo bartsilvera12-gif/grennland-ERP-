@@ -73,13 +73,24 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
         superAdmin = bootstrapSuper;
       }
 
+      let userRol = "";
       if (!superAdmin) {
         try {
           const cu = await getCurrentUser();
-          if ((cu?.rol ?? "").trim() === "super_admin") superAdmin = true;
+          userRol = (cu?.rol ?? "").trim().toLowerCase();
+          if (userRol === "super_admin") superAdmin = true;
         } catch {
           /* sin fila usuarios en cliente */
         }
+      }
+
+      // GUARD CRITICO: publicadores (portal externo) NUNCA entran al ERP.
+      // Independiente de los slugs que tengan, los mandamos a su portal.
+      const esPublicador = userRol === "publicador" || userRol.startsWith("publicador-");
+      if (esPublicador && !cancelled) {
+        router.replace("/publico#admin-agent");
+        setLoading(false);
+        return;
       }
 
       setAccess({
