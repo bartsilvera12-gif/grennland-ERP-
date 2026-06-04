@@ -10,8 +10,9 @@ function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displ
   ] : [
     { id: 'admin-agent', label: 'Resumen', icon: 'grid' },
     { id: 'admin-agent-properties', label: 'Mis propiedades', icon: 'house' },
-    // Captaciones solo aplica a agentes/inmobiliarias, no a propietarios.
+    // Captaciones y Blog solo aplican a agentes/inmobiliarias, no a propietarios.
     ...(role === 'propietario' ? [] : [{ id: 'admin-agent-captures', label: 'Captaciones', icon: 'shield' }]),
+    ...(role === 'propietario' ? [] : [{ id: 'admin-agent-blog', label: 'Mi blog', icon: 'doc' }]),
     { id: 'admin-agent-qr', label: 'Carteles QR', icon: 'qr' },
     { id: 'admin-agent-profile', label: 'Mi perfil', icon: 'user' },
   ];
@@ -403,6 +404,7 @@ function AdminAgentPage({ route, onNav }) {
     'admin-agent-properties': 'properties',
     'admin-agent-captures': 'captures',
     'admin-agent-queries': 'queries',
+    'admin-agent-blog': 'blog',
     'admin-agent-profile': 'profile',
   })[route] || 'overview';
 
@@ -411,6 +413,7 @@ function AdminAgentPage({ route, onNav }) {
     properties: ['Mis propiedades', 'Editá, pausá o destacá tus inmuebles publicados.'],
     captures: ['Captaciones', 'Propiedades que capturaste de propietarios + comisión por cierre.'],
     queries: ['Consultas', 'Mensajes de interesados en tus inmuebles.'],
+    blog: ['Mi blog', 'Publicá artículos, guías y novedades. Aparecen en tu perfil público.'],
     profile: ['Mi perfil', 'Información que ven los propietarios al elegirte como agente.'],
   };
 
@@ -617,6 +620,8 @@ function AdminAgentPage({ route, onNav }) {
       )}
 
       {view === 'captures' && <CapturesSection/>}
+
+      {view === 'blog' && <BlogSection/>}
 
       {view === 'queries' && <QueriesSection/>}
 
@@ -1392,4 +1397,183 @@ function ConsultasRecientes({ onNav }) {
   );
 }
 
-Object.assign(window, { AdminGlobalPage, AdminAgentPage, EmbudoCaptaciones, ConsultasRecientes });
+// ───────── Mi blog (CRUD de posts del agente logueado) ─────────
+function BlogSection() {
+  const [posts, setPosts] = React.useState(null);
+  const [err, setErr] = React.useState(null);
+  const [editing, setEditing] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);
+  const [filter, setFilter] = React.useState('todos');
+
+  async function reload() {
+    try {
+      const r = await fetch('/api/agente/posts', { cache: 'no-store', credentials: 'include' });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok || !body.success) throw new Error(body.error || ('HTTP ' + r.status));
+      setPosts(Array.isArray(body.posts) ? body.posts : []);
+    } catch (e) {
+      setErr(e && e.message ? e.message : 'No se pudo cargar el blog.');
+    }
+  }
+  React.useEffect(() => { reload(); }, []);
+
+  async function save() {
+    if (!editing) return;
+    setErr(null);
+    if (!editing.titulo || !editing.titulo.trim()) { setErr('El título es obligatorio'); return; }
+    setSaving(true);
+    try {
+      const isNew = editing.isNew;
+      const payload = {
+        titulo: editing.titulo,
+        slug: editing.slug || null,
+        resumen: editing.resumen || null,
+        contenido: editing.contenido || null,
+        cover_url: editing.cover_url || null,
+        publicado: !!editing.publicado,
+        destacado: !!editing.destacado,
+        orden: Number(editing.orden) || 0,
+      };
+      const url = isNew ? '/api/agente/posts' : ('/api/agente/posts/' + editing.id);
+      const r = await fetch(url, {
+        method: isNew ? 'POST' : 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok || !body.success) throw new Error(body.error || ('HTTP ' + r.status));
+      setEditing(null);
+      await reload();
+    } catch (e) {
+      setErr(e && e.message ? e.message : 'No se pudo guardar.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove(post) {
+    if (!post) return;
+    if (!window.confirm('¿Eliminar el post "' + (post.titulo || '') + '"? Esto no se puede deshacer.')) return;
+    try {
+      const r = await fetch('/api/agente/posts/' + post.id, { method: 'DELETE', credentials: 'include' });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok || !body.success) throw new Error(body.error || ('HTTP ' + r.status));
+      await reload();
+    } catch (e) {
+      window.alert(e && e.message ? e.message : 'No se pudo eliminar.');
+    }
+  }
+
+  if (posts === null && !err) {
+    return <div className="muted" style={{ padding: 20, textAlign: 'center' }}>Cargando…</div>;
+  }
+  if (err && posts === null) {
+    return <div className="card" style={{ padding: 18, color: 'var(--red)' }}>{err}</div>;
+  }
+  const list = (posts || []).filter(p => filter === 'todos' ? true : filter === 'publicado' ? p.publicado : !p.publicado);
+  return (
+    <div>
+      <div className="row between" style={{ alignItems: 'center', marginBottom: 14 }}>
+        <div className="row gap-8">
+          {['todos','publicado','borrador'].map(f => (
+            <button key={f} type="button" onClick={() => setFilter(f)} style={{
+              padding: '6px 12px', borderRadius: 999, border: '1px solid ' + (filter === f ? 'var(--blue)' : 'var(--line)'),
+              background: filter === f ? 'var(--blue)' : '#fff', color: filter === f ? '#fff' : 'var(--ink-2)',
+              fontFamily: 'inherit', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            }}>{f === 'todos' ? 'Todos' : f === 'publicado' ? 'Publicados' : 'Borradores'}</button>
+          ))}
+        </div>
+        <button type="button" className="btn btn-blue" onClick={() => setEditing({ isNew: true, titulo: '', publicado: false, destacado: false, orden: 0 })}>+ Nuevo post</button>
+      </div>
+
+      {err && <div className="card" style={{ padding: 12, marginBottom: 12, color: 'var(--red)', background: '#fef2f2', border: '1px solid #fecaca' }}>{err}</div>}
+
+      {list.length === 0 ? (
+        <div className="card" style={{ padding: 28, textAlign: 'center', color: 'var(--ink-3)' }}>
+          {filter === 'borrador' ? 'No tenés borradores.' : filter === 'publicado' ? 'Todavía no publicaste ningún post.' : 'Todavía no escribiste nada. Empezá con tu primer post.'}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+          {list.map(p => (
+            <div key={p.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              {p.cover_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.cover_url} alt={p.titulo} style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block', background: 'var(--bg-2)' }}/>
+              ) : (
+                <div style={{ height: 100, background: 'linear-gradient(135deg, var(--blue-50), var(--bg-2))' }}/>
+              )}
+              <div style={{ padding: 16 }}>
+                <div className="row gap-6" style={{ flexWrap: 'wrap' }}>
+                  <span className="badge" style={{ background: p.publicado ? 'var(--green)' : 'var(--bg-3)', color: p.publicado ? '#fff' : 'var(--ink-3)', fontSize: 10 }}>
+                    {p.publicado ? 'Publicado' : 'Borrador'}
+                  </span>
+                  {p.destacado && <span className="badge badge-featured" style={{ fontSize: 10 }}>★ Destacado</span>}
+                </div>
+                <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 16, marginTop: 8, lineHeight: 1.25 }}>{p.titulo}</div>
+                {p.resumen && <div className="muted" style={{ marginTop: 6, fontSize: 13, lineHeight: 1.45 }}>{p.resumen.slice(0, 140)}{p.resumen.length > 140 ? '…' : ''}</div>}
+                {p.publicado_at && <div className="muted xs" style={{ marginTop: 10 }}>{new Date(p.publicado_at).toLocaleDateString('es-PY', { day: '2-digit', month: 'short', year: 'numeric' })}</div>}
+                <div className="row gap-8" style={{ marginTop: 12 }}>
+                  <button type="button" onClick={() => setEditing(Object.assign({ isNew: false }, p))} className="btn" style={{ background: 'var(--bg-3)', color: 'var(--ink-2)', padding: '6px 12px', fontSize: 12 }}>Editar</button>
+                  <button type="button" onClick={() => remove(p)} className="btn" style={{ background: '#fee2e2', color: '#991b1b', padding: '6px 12px', fontSize: 12 }}>Eliminar</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editing && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget && !saving) setEditing(null); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20, overflowY: 'auto' }}
+        >
+          <div className="card" style={{ maxWidth: 640, width: '100%', padding: 24, background: '#fff', maxHeight: 'calc(100vh - 40px)', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontSize: 20 }}>{editing.isNew ? 'Nuevo post' : 'Editar post'}</h3>
+            <div className="field" style={{ marginTop: 14 }}>
+              <label>Título *</label>
+              <input className="input" value={editing.titulo || ''} onChange={(e) => setEditing(x => ({ ...x, titulo: e.target.value }))}/>
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Slug (URL)</label>
+              <input className="input" placeholder="se-genera-solo-si-lo-dejas-vacio" value={editing.slug || ''} onChange={(e) => setEditing(x => ({ ...x, slug: e.target.value }))}/>
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Cover URL</label>
+              <input className="input" placeholder="https://..." value={editing.cover_url || ''} onChange={(e) => setEditing(x => ({ ...x, cover_url: e.target.value }))}/>
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Resumen (1-2 líneas)</label>
+              <textarea className="input" rows={2} value={editing.resumen || ''} onChange={(e) => setEditing(x => ({ ...x, resumen: e.target.value }))}/>
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Contenido</label>
+              <textarea className="input" rows={10} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }} value={editing.contenido || ''} onChange={(e) => setEditing(x => ({ ...x, contenido: e.target.value }))}/>
+            </div>
+            <div className="row gap-16" style={{ marginTop: 14, flexWrap: 'wrap' }}>
+              <label className="checkbox">
+                <input type="checkbox" checked={!!editing.publicado} onChange={(e) => setEditing(x => ({ ...x, publicado: e.target.checked }))}/>
+                Publicado
+              </label>
+              <label className="checkbox">
+                <input type="checkbox" checked={!!editing.destacado} onChange={(e) => setEditing(x => ({ ...x, destacado: e.target.checked }))}/>
+                Destacado
+              </label>
+              <div className="field" style={{ flex: 1, minWidth: 120 }}>
+                <label style={{ fontSize: 11.5 }}>Orden</label>
+                <input className="input" type="number" value={editing.orden ?? 0} onChange={(e) => setEditing(x => ({ ...x, orden: Number(e.target.value) || 0 }))}/>
+              </div>
+            </div>
+            {err && <div style={{ marginTop: 12, color: 'var(--red)', fontSize: 13 }}>{err}</div>}
+            <div className="row gap-10" style={{ marginTop: 18, justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-outline" onClick={() => setEditing(null)} disabled={saving}>Cancelar</button>
+              <button type="button" className="btn btn-blue" onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+Object.assign(window, { AdminGlobalPage, AdminAgentPage, EmbudoCaptaciones, ConsultasRecientes, BlogSection });
