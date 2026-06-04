@@ -449,7 +449,7 @@ function VerificationModal({ propertyId, propertyTitle, onClose }) {
   const ownerOk = form.ownerName.trim().length >= 3 && form.phone.trim().length >= 8;
   const ready = cccOk && catastralOk && nisOk && ciOk && ownerOk && form.accept;
 
-  return (
+  return ReactDOM.createPortal(
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 200,
       display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 20,
@@ -603,7 +603,8 @@ function VerificationModal({ propertyId, propertyTitle, onClose }) {
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

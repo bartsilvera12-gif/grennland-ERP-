@@ -428,7 +428,7 @@ function CambioPlanModal({ planes, onClose }) {
     } finally { setBusy(false); }
   }
 
-  return (
+  return ReactDOM.createPortal(
     <div {..._modalOverlay(onClose, busy)}>
       <form onSubmit={submit} style={_modalCard} onClick={(e) => e.stopPropagation()}>
         <div style={_modalHead}>
@@ -466,7 +466,8 @@ function CambioPlanModal({ planes, onClose }) {
           <button type="submit" disabled={busy} className="btn btn-primary" style={{ flex: 1 }}>{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -505,7 +506,7 @@ function ImpulsoCompraModal({ pack, onClose }) {
     } finally { setBusy(false); }
   }
 
-  return (
+  return ReactDOM.createPortal(
     <div {..._modalOverlay(onClose, busy)}>
       <form onSubmit={submit} style={_modalCard} onClick={(e) => e.stopPropagation()}>
         <div style={_modalHead}>
@@ -541,7 +542,8 @@ function ImpulsoCompraModal({ pack, onClose }) {
           <button type="submit" disabled={busy} className="btn btn-primary" style={{ flex: 1 }}>{busy ? 'Enviando…' : 'Pedir y coordinar pago'}</button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 

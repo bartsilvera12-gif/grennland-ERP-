@@ -1134,7 +1134,7 @@ function RequestAccessModal({ onClose, planTier, planLabel, defaultTipo }) {
   const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 10, fontFamily: 'inherit', fontSize: 14, color: 'var(--ink)', background: '#fff' };
   const segBtn = (active) => ({ padding: 10, borderRadius: 10, border: '1px solid ' + (active ? 'var(--blue)' : 'var(--line)'), background: active ? 'var(--blue-50)' : '#fff', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13.5, fontWeight: 600, color: active ? 'var(--blue)' : 'var(--ink-2)' });
 
-  return (
+  return ReactDOM.createPortal(
     <div style={overlay} onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
       <form onSubmit={submit} style={modal}>
         {/* Header sticky */}
@@ -1210,7 +1210,8 @@ function RequestAccessModal({ onClose, planTier, planLabel, defaultTipo }) {
           <button type="submit" disabled={busy} className="btn btn-primary" style={{ flex: 1 }}>{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
 
