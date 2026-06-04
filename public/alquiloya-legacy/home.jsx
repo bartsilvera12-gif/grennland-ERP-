@@ -1123,8 +1123,10 @@ function RequestAccessModal({ onClose, planTier, planLabel, defaultTipo }) {
     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
   };
   const modal = {
-    width: '100%', maxWidth: 480, background: '#fff', borderRadius: 20, padding: 24,
-    boxShadow: '0 24px 60px -10px rgba(15,23,42,.4)', maxHeight: '92vh', overflowY: 'auto', color: 'var(--ink)',
+    width: '100%', maxWidth: 480, background: '#fff', borderRadius: 20,
+    boxShadow: '0 24px 60px -10px rgba(15,23,42,.4)',
+    maxHeight: 'calc(100vh - 32px)', color: 'var(--ink)',
+    display: 'flex', flexDirection: 'column', overflow: 'hidden',
   };
   const fieldLabel = { fontSize: 12, fontWeight: 600, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: '.03em', marginBottom: 6, display: 'block' };
   const inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid var(--line)', borderRadius: 10, fontFamily: 'inherit', fontSize: 14, color: 'var(--ink)', background: '#fff' };
@@ -1132,17 +1134,22 @@ function RequestAccessModal({ onClose, planTier, planLabel, defaultTipo }) {
 
   return (
     <div style={overlay} onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-      <div style={modal}>
-        <h2 style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 20, margin: 0 }}>{planTier ? 'Quiero este plan' : 'Solicitar acceso'}</h2>
-        <p style={{ marginTop: 6, fontSize: 13.5, color: 'var(--ink-3)' }}>Contanos quién sos. Nuestro equipo revisa cada pedido y te contactamos.</p>
-        {planTier && (
-          <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--blue-50)', border: '1px solid var(--blue-100)' }}>
-            <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', color: 'var(--blue)', textTransform: 'uppercase' }}>Plan elegido</div>
-            <div style={{ marginTop: 2, fontFamily: 'Montserrat', fontWeight: 800, fontSize: 16, color: 'var(--ink)' }}>{planLabel || planTier}</div>
-          </div>
-        )}
-        <form onSubmit={submit}>
-          <div style={{ marginTop: 14 }}>
+      <form onSubmit={submit} style={modal}>
+        {/* Header sticky */}
+        <div style={{ padding: '20px 24px 14px', borderBottom: '1px solid var(--line-2)', flexShrink: 0 }}>
+          <h2 style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 20, margin: 0 }}>{planTier ? 'Quiero este plan' : 'Solicitar acceso'}</h2>
+          <p style={{ marginTop: 6, fontSize: 13.5, color: 'var(--ink-3)' }}>Contanos quién sos. Nuestro equipo revisa cada pedido y te contactamos.</p>
+          {planTier && (
+            <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--blue-50)', border: '1px solid var(--blue-100)' }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', color: 'var(--blue)', textTransform: 'uppercase' }}>Plan elegido</div>
+              <div style={{ marginTop: 2, fontFamily: 'Montserrat', fontWeight: 800, fontSize: 16, color: 'var(--ink)' }}>{planLabel || planTier}</div>
+            </div>
+          )}
+        </div>
+
+        {/* Body scrollable */}
+        <div style={{ padding: '16px 24px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
+          <div>
             <label style={fieldLabel}>¿Qué tipo de cuenta querés?</label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <button type="button" style={segBtn(tipo === 'propietario')} onClick={() => setTipo('propietario')}>Propietario</button>
@@ -1193,13 +1200,14 @@ function RequestAccessModal({ onClose, planTier, planLabel, defaultTipo }) {
               border: '1px solid ' + (feedback.kind === 'error' ? '#fecaca' : '#a7f3d0'),
             }}>{feedback.text}</div>
           )}
+        </div>
 
-          <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
-            <button type="button" disabled={busy} onClick={onClose} className="btn" style={{ flex: 1, background: '#f1f5f9', color: 'var(--ink-2)' }}>Cancelar</button>
-            <button type="submit" disabled={busy} className="btn btn-primary" style={{ flex: 1 }}>{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
-          </div>
-        </form>
-      </div>
+        {/* Footer sticky */}
+        <div style={{ padding: '14px 24px', borderTop: '1px solid var(--line-2)', background: '#fff', flexShrink: 0, display: 'flex', gap: 8 }}>
+          <button type="button" disabled={busy} onClick={onClose} className="btn" style={{ flex: 1, background: '#f1f5f9', color: 'var(--ink-2)' }}>Cancelar</button>
+          <button type="submit" disabled={busy} className="btn btn-primary" style={{ flex: 1 }}>{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
+        </div>
+      </form>
     </div>
   );
 }

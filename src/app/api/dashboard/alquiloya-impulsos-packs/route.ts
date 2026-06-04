@@ -29,6 +29,24 @@ export async function GET(request: Request) {
     if (!user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     const pool = getChatPostgresPool();
     if (!pool) return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
+
+    // Detectar si la tabla existe (para tolerar instancias sin la migration corrida).
+    const { rows: exists } = await queryWithRetry<{ exists: boolean }>(
+      pool,
+      `SELECT EXISTS (
+         SELECT 1 FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'alquiloya' AND c.relname = 'impulsos_packs' AND c.relkind = 'r'
+       ) AS exists`
+    );
+    if (!exists?.[0]?.exists) {
+      return NextResponse.json({
+        success: true,
+        data: { packs: [] },
+        warning: "La tabla alquiloya.impulsos_packs todavía no existe. Corré la migration 20260628120000_alquiloya_impulsos_packs.sql en Supabase.",
+      });
+    }
+
     const { rows } = await queryWithRetry(
       pool,
       `SELECT id, codigo, qty, precio::float8 AS precio, moneda, badge, orden, activo
@@ -40,7 +58,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, data: { packs: rows ?? [] } });
   } catch (err) {
     console.error("[api/dashboard/alquiloya-impulsos-packs GET]", err);
-    return NextResponse.json({ error: "Error" }, { status: 500 });
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Error" }, { status: 500 });
   }
 }
 
