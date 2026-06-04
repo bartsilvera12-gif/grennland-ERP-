@@ -191,6 +191,13 @@ const MENU_STRUCTURE: MenuItem[] = [
     icon: ListChecks,
   },
   {
+    key: "testimonios",
+    slug: "propiedades",
+    label: "Testimonios",
+    href: "/dashboard/testimonios",
+    icon: Star,
+  },
+  {
     key: "agentes-inmobiliarios",
     slug: "agentes-inmobiliarios",
     label: "Agentes inmobiliarios",

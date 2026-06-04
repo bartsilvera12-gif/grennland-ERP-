@@ -14,6 +14,7 @@ export type AgenteFormData = {
   cargo: string;
   bio: string;
   foto_url: string;
+  logo_empresa_url: string;
   orden: number;
   activo: boolean;
   verificado: boolean;
@@ -58,6 +59,7 @@ export function AgenteForm({
         cargo: form.cargo || null,
         bio: form.bio || null,
         foto_url: form.foto_url || null,
+        logo_empresa_url: form.logo_empresa_url || null,
         orden: form.orden,
         activo: form.activo,
         verificado: form.verificado,
@@ -127,6 +129,11 @@ export function AgenteForm({
           <div className={fieldCls}>
             <label className={labelCls}>URL de foto</label>
             <input className={inputCls} value={form.foto_url} onChange={(e) => set("foto_url", e.target.value)} placeholder="https://..." />
+          </div>
+          <div className={fieldCls}>
+            <label className={labelCls}>URL del logo de la empresa</label>
+            <input className={inputCls} value={form.logo_empresa_url} onChange={(e) => set("logo_empresa_url", e.target.value)} placeholder="https://... (opcional)" />
+            <p className="mt-1 text-[11px] text-slate-500">Solo aplica si es una inmobiliaria con marca propia.</p>
           </div>
           <div className={`${fieldCls} sm:col-span-2`}>
             <label className={labelCls}>Bio / Descripción</label>

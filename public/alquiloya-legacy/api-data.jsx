@@ -108,6 +108,7 @@
       phone: row.whatsapp || row.telefono || fallback?.phone || '',
       email: row.email || fallback?.email || '',
       foto_url: row.foto_url || fallback?.foto_url || null,
+      logo_empresa_url: row.logo_empresa_url || null,
       bio: row.bio || fallback?.bio || '',
       raw: row,
     };

@@ -37,6 +37,7 @@ export default async function EditarAgentePage({ params }: Props) {
           cargo: a.cargo ?? "",
           bio: a.bio ?? "",
           foto_url: a.foto_url ?? "",
+          logo_empresa_url: (a as { logo_empresa_url?: string | null }).logo_empresa_url ?? "",
           orden: a.orden ?? 0,
           activo: a.activo ?? true,
           verificado: a.verificado ?? false,

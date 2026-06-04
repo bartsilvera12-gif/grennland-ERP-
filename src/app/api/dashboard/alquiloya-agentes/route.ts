@@ -62,6 +62,8 @@ export async function POST(request: Request) {
     );
     const colSet = new Set(cols.map((c) => c.column_name));
     const extras: { col: string; val: unknown }[] = [];
+    if (colSet.has("logo_empresa_url"))
+      extras.push({ col: "logo_empresa_url", val: s((body as Record<string, unknown>).logo_empresa_url) });
     if (colSet.has("verificado"))
       extras.push({ col: "verificado", val: b((body as Record<string, unknown>).verificado, false) });
     if (colSet.has("nivel")) extras.push({ col: "nivel", val: s((body as Record<string, unknown>).nivel) });

@@ -30,6 +30,7 @@ export default function NuevoAgentePage() {
           cargo: "",
           bio: "",
           foto_url: "",
+          logo_empresa_url: "",
           orden: 0,
           activo: true,
           verificado: false,

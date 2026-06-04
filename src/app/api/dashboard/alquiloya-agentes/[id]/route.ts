@@ -160,6 +160,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
       []
     );
     const colSet = new Set(cols.map((c) => c.column_name));
+    if ("logo_empresa_url" in body && colSet.has("logo_empresa_url")) push("logo_empresa_url", s(body.logo_empresa_url));
     if ("verificado" in body && colSet.has("verificado")) {
       const v = b(body.verificado);
       if (v !== undefined) push("verificado", v);

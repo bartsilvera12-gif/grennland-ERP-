@@ -106,30 +106,68 @@ function Footer({ onNav }) {
               El marketplace inmobiliario más rápido para alquileres en Paraguay.
             </p>
           </div>
-          <FootCol title="Buscar" items={['Departamentos','Casas','Salones comerciales','Temporales']} onClick={() => onNav('catalog')} />
-          <FootCol title="Para propietarios" items={['Publicar inmueble','Planes y precios','Carteles QR','Centro de ayuda']} />
-          <FootCol title="Empresa" items={['Sobre AlquiloYa','Términos','Política de privacidad','Trabajá con nosotros']} />
-          <FootCol title="Contacto" items={['Info@alquiloya.com.py','0983 000 292','Asunción, Paraguay','Lunes a Sábado 08:00 a 20:00']} />
+          <FootCol title="Buscar" items={[
+            { label: 'Departamentos', onClick: () => onNav('catalog') },
+            { label: 'Casas', onClick: () => onNav('catalog') },
+            { label: 'Salones comerciales', onClick: () => onNav('catalog') },
+            { label: 'Temporales', onClick: () => onNav('temporal') },
+          ]} />
+          <FootCol title="Para propietarios" items={[
+            { label: 'Publicar inmueble', onClick: () => onNav('publish') },
+            { label: 'Planes y precios', onClick: () => onNav('plans') },
+            { label: 'Destacar propiedad', onClick: () => onNav('boost') },
+            { label: 'Centro de ayuda', onClick: () => onNav('help') },
+          ]} />
+          <FootCol title="Empresa" items={[
+            { label: 'Inicio', onClick: () => onNav('home') },
+            { label: 'Solicitar acceso', href: '/portal-agentes' },
+            { label: 'Ingresar', href: '/portal-agentes/login' },
+            { label: 'Centro de ayuda', onClick: () => onNav('help') },
+          ]} />
+          <FootCol title="Contacto" items={[
+            { label: 'Info@alquiloya.com.py', href: 'mailto:Info@alquiloya.com.py' },
+            { label: '0983 000 292', href: 'https://wa.me/595983000292' },
+            { label: 'Asunción, Paraguay', href: 'https://maps.google.com/?q=Asuncion+Paraguay', external: true },
+            { label: 'Lunes a Sábado 08:00 a 20:00' },
+          ]} />
         </div>
         <div style={{ borderTop: '1px solid #1b2a3a', marginTop: 40, paddingTop: 20, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 12.5, color: '#6b7785', flexShrink: 0 }}>© 2026 AlquiloYa · Todos los derechos reservados</div>
           <div style={{ flex: 1, textAlign: 'center', fontSize: 12.5, color: '#9aa4b1' }}>
             Desarrollado por <a href="https://neura.com.py" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--yellow)', fontWeight: 700, textDecoration: 'none' }}>Neura</a>
           </div>
-          <div className="row gap-16" style={{ fontSize: 12.5, color: '#6b7785', flexShrink: 0 }}>
-            <span>Instagram</span><span>Facebook</span><span>WhatsApp</span><span>TikTok</span>
+          <div className="row gap-16" style={{ fontSize: 12.5, flexShrink: 0 }}>
+            <a href="https://instagram.com/alquiloya" target="_blank" rel="noopener noreferrer" style={{ color: '#9aa4b1', textDecoration: 'none' }}>Instagram</a>
+            <a href="https://facebook.com/alquiloya" target="_blank" rel="noopener noreferrer" style={{ color: '#9aa4b1', textDecoration: 'none' }}>Facebook</a>
+            <a href="https://wa.me/595983000292" target="_blank" rel="noopener noreferrer" style={{ color: '#9aa4b1', textDecoration: 'none' }}>WhatsApp</a>
+            <a href="https://tiktok.com/@alquiloya" target="_blank" rel="noopener noreferrer" style={{ color: '#9aa4b1', textDecoration: 'none' }}>TikTok</a>
           </div>
         </div>
       </div>
     </footer>
   );
 }
-function FootCol({ title, items, onClick }) {
+function FootCol({ title, items }) {
+  const linkStyle = { color: '#9aa4b1', fontSize: 13.5, cursor: 'pointer', textDecoration: 'none', display: 'block' };
   return (
     <div>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 14, letterSpacing: '.02em' }}>{title}</div>
       <div className="col gap-8">
-        {items.map(it => <a key={it} onClick={onClick} style={{ color: '#9aa4b1', fontSize: 13.5, cursor: 'pointer' }}>{it}</a>)}
+        {items.map((it, i) => {
+          const label = typeof it === 'string' ? it : it.label;
+          const key = (typeof it === 'string' ? it : (it.label || '')) + '-' + i;
+          if (typeof it !== 'string' && it.href) {
+            return (
+              <a key={key} href={it.href} target={it.external ? '_blank' : undefined} rel={it.external ? 'noopener noreferrer' : undefined} style={linkStyle}>
+                {label}
+              </a>
+            );
+          }
+          if (typeof it !== 'string' && it.onClick) {
+            return <a key={key} onClick={it.onClick} style={linkStyle}>{label}</a>;
+          }
+          return <span key={key} style={{ ...linkStyle, cursor: 'default' }}>{label}</span>;
+        })}
       </div>
     </div>
   );

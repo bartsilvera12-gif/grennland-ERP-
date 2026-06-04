@@ -882,6 +882,20 @@ function HowItWorks() {
 
 function OwnersBlock({ onNav }) {
   const [reqOpen, setReqOpen] = React.useState(false);
+  const [apiTestimonios, setApiTestimonios] = React.useState(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    fetch('/api/public/alquiloya/testimonios', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(body => {
+        if (cancelled) return;
+        const arr = body && body.success && body.data && Array.isArray(body.data.testimonios) ? body.data.testimonios : null;
+        if (arr && arr.length > 0) setApiTestimonios(arr);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const featured = apiTestimonios ? apiTestimonios[0] : null;
   return (
     <section className="container" style={{ padding: '64px 32px' }}>
       <div style={{
@@ -932,18 +946,28 @@ function OwnersBlock({ onNav }) {
           <div style={{ position: 'relative' }}>
             <div className="card" style={{ padding: 18, color: 'var(--ink)', boxShadow: 'var(--shadow-lg)' }}>
               <div className="row gap-12">
-                <Avatar name="Mariana López" size={42} color="#0058A5"/>
+                {featured && featured.foto_url ? (
+                  <img src={featured.foto_url} alt={featured.autor} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }}/>
+                ) : (
+                  <Avatar name={featured ? featured.autor : 'Mariana López'} size={42} color="#0058A5"/>
+                )}
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>Mariana López</div>
-                  <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>Propietaria · Asunción</div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{featured ? featured.autor : 'Mariana López'}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                    {featured
+                      ? [featured.rol, featured.ciudad].filter(Boolean).join(' · ') || 'Cliente AlquiloYa'
+                      : 'Propietaria · Asunción'}
+                  </div>
                 </div>
-                <span className="badge badge-verified" style={{ marginLeft: 'auto' }}><I.check s={10}/> Verificada</span>
+                {(!featured || featured.destacado) && (
+                  <span className="badge badge-verified" style={{ marginLeft: 'auto' }}><I.check s={10}/> Verificada</span>
+                )}
               </div>
               <div style={{ fontSize: 14, color: 'var(--ink-2)', marginTop: 14, fontStyle: 'italic', lineHeight: 1.5 }}>
-                "Publiqué mi departamento un martes y el viernes ya tenía visitas confirmadas. Lo recomiendo 100%."
+                &quot;{featured ? featured.contenido : 'Publiqué mi departamento un martes y el viernes ya tenía visitas confirmadas. Lo recomiendo 100%.'}&quot;
               </div>
               <div className="row gap-4" style={{ marginTop: 12, color: 'var(--yellow)' }}>
-                {[1,2,3,4,5].map(i => <I.star key={i} s={14}/>)}
+                {Array.from({ length: featured ? (Number(featured.calificacion) || 5) : 5 }).map((_, i) => <I.star key={i} s={14}/>)}
               </div>
             </div>
             <div style={{ position: 'absolute', right: -16, bottom: -16, background: 'var(--yellow)', color: 'var(--ink)', padding: '10px 16px', borderRadius: 12, fontFamily: 'Montserrat', fontWeight: 800, fontSize: 13, boxShadow: 'var(--shadow)' }}>

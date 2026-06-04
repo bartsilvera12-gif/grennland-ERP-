@@ -75,8 +75,11 @@ function AgentProfilePage({ slug, onNav, onProperty }) {
             )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="row gap-8" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="row gap-12" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: 28, lineHeight: 1.1, letterSpacing: '-.015em' }}>{agent.name}</h1>
+              {agent.logo_empresa_url && (
+                <img src={agent.logo_empresa_url} alt="Logo empresa" style={{ height: 32, width: 'auto', maxWidth: 120, objectFit: 'contain', background: '#fff', padding: 4, borderRadius: 6, border: '1px solid var(--line-2)' }}/>
+              )}
               <AgentLevelBadgeNew level={agent.level}/>
             </div>
             <div className="row gap-10" style={{ marginTop: 6, fontSize: 13.5, color: 'var(--ink-3)', flexWrap: 'wrap' }}>

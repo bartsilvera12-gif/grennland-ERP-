@@ -256,7 +256,8 @@ export async function listPublicAgentes() {
       `
         SELECT
           a.id, a.empresa_id, a.nombre, a.email, a.telefono, a.whatsapp,
-          a.foto_url, a.cargo, a.bio, a.orden, a.activo, a.created_at, a.updated_at,
+          a.foto_url, a.logo_empresa_url,
+          a.cargo, a.bio, a.orden, a.activo, a.created_at, a.updated_at,
           (
             SELECT count(*)::int
             FROM ${t("propiedades")} p
@@ -295,7 +296,8 @@ export async function getPublicAgente(id: string) {
       `
         SELECT
           a.id, a.empresa_id, a.nombre, a.email, a.telefono, a.whatsapp,
-          a.foto_url, a.cargo, a.bio, a.orden, a.activo, a.created_at, a.updated_at,
+          a.foto_url, a.logo_empresa_url,
+          a.cargo, a.bio, a.orden, a.activo, a.created_at, a.updated_at,
           COALESCE(a.verificado, false) AS verificado,
           a.nivel, a.idiomas, a.tiempo_respuesta, a.tasa_respuesta,
           (SELECT count(*)::int FROM "alquiloya"."propiedades" pc
