@@ -33,6 +33,7 @@ import {
 } from "@/lib/fechas/calendario";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import GerencialOverview from "@/components/dashboard/GerencialOverview";
+import UsuarioSelect from "@/components/dashboard/UsuarioSelect";
 import { etiquetaVisibleTipoServicio } from "@/lib/clientes/tipo-servicio-catalogo";
 import { useMapNombreTipoServicioCatalogo } from "@/lib/clientes/use-map-nombre-tipo-servicio";
 import { getEtapas, getEtapaClasses, normalizeEtapaCodigo, type EtapaCrm } from "@/lib/crm/etapas";
@@ -2747,19 +2748,11 @@ export default function DashboardPage() {
 
         <div className="flex flex-wrap items-center gap-2">
           {usuarios.length > 0 && (
-            <select
-              value={usuarioId ?? ""}
-              onChange={(e) => handleUsuarioChange(parseInt(e.target.value, 10))}
-              aria-label="Ver dashboard como"
-              title="Ver dashboard como"
-              className="h-9 rounded-xl border border-[#4FAEB2]/45 bg-white px-3 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-[#4FAEB2]/60 focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/20"
-            >
-              {usuarios.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.nombre} ({u.nivel})
-                </option>
-              ))}
-            </select>
+            <UsuarioSelect
+              usuarios={usuarios.map((u) => ({ id: u.id, nombre: u.nombre, nivel: u.nivel }))}
+              value={usuarioId}
+              onChange={(id) => handleUsuarioChange(id)}
+            />
           )}
           <div className="flex h-9 flex-wrap items-center gap-1 rounded-xl border border-[#4FAEB2]/45 bg-white p-1 shadow-sm">
             {PERIODO_OPTS.map((p) => {
