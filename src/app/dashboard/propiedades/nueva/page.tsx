@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import MapPicker from "@/components/MapPicker";
 
 type Agente = { id: string; nombre: string };
 type Foto = { url: string; alt: string; es_portada: boolean };
@@ -46,6 +47,8 @@ export default function NuevaPropiedadPage() {
     activo: true,
     visible_web: true,
     destacada: false,
+    lat: null as number | null,
+    lng: null as number | null,
   });
   const [fotos, setFotos] = useState<Foto[]>([{ url: "", alt: "", es_portada: true }]);
   const [cars, setCars] = useState<Caracteristica[]>([{ nombre: "", valor: "" }]);
@@ -173,6 +176,14 @@ export default function NuevaPropiedadPage() {
               <label className={labelCls}>Dirección</label>
               <input className={inputCls} value={form.direccion} onChange={(e) => set("direccion", e.target.value)} />
             </div>
+          </div>
+          <div className="mt-5">
+            <label className={labelCls}>Punto en el mapa</label>
+            <p className="mb-2 text-[11px] text-slate-500">Clic en el mapa para fijar la ubicación. Podés arrastrar el pin.</p>
+            <MapPicker
+              value={{ lat: form.lat, lng: form.lng }}
+              onChange={(v) => setForm((f) => ({ ...f, lat: v.lat, lng: v.lng }))}
+            />
           </div>
         </section>
 

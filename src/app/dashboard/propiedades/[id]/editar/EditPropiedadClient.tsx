@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import type { ErpPropiedadDetail } from "@/lib/alquiloya/erp-propiedades";
+import MapPicker from "@/components/MapPicker";
 
 type Agente = { id: string; nombre: string };
 type Foto = { url: string; alt: string; es_portada: boolean };
@@ -57,6 +58,8 @@ export default function EditPropiedadClient({ initial }: { initial: ErpPropiedad
     activo: !!initial.activo,
     visible_web: !!initial.visible_web,
     destacada: !!initial.destacada,
+    lat: initial.lat == null ? null : Number(initial.lat),
+    lng: initial.lng == null ? null : Number(initial.lng),
   });
 
   const [fotos, setFotos] = useState<Foto[]>(
@@ -196,6 +199,14 @@ export default function EditPropiedadClient({ initial }: { initial: ErpPropiedad
               <label className={labelCls}>Dirección</label>
               <input className={inputCls} value={form.direccion} onChange={(e) => set("direccion", e.target.value)} />
             </div>
+          </div>
+          <div className="mt-5">
+            <label className={labelCls}>Punto en el mapa</label>
+            <p className="mb-2 text-[11px] text-slate-500">Clic en el mapa para fijar la ubicación. Podés arrastrar el pin.</p>
+            <MapPicker
+              value={{ lat: form.lat, lng: form.lng }}
+              onChange={(v) => setForm((f) => ({ ...f, lat: v.lat, lng: v.lng }))}
+            />
           </div>
         </section>
 

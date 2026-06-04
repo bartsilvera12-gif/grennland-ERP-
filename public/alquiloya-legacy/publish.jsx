@@ -53,6 +53,8 @@ function PublishPage() {
     ciudad: '',
     barrio: '',
     direccion: '',
+    lat: null,
+    lng: null,
     // fotos: lista de { url, alt, es_portada }
     fotos: [],
     // características: array de string nombre
@@ -104,6 +106,8 @@ function PublishPage() {
         ciudad: form.ciudad,
         barrio: form.barrio || null,
         direccion: form.direccion || null,
+        lat: typeof form.lat === 'number' ? form.lat : null,
+        lng: typeof form.lng === 'number' ? form.lng : null,
         precio,
         moneda: form.moneda || 'PYG',
         dormitorios: form.dormitorios ? Number(form.dormitorios) : null,
@@ -589,6 +593,73 @@ function StepLocation({ form, setF }) {
           <label>Dirección (no se mostrará al público)</label>
           <input className="input" value={form.direccion} onChange={(e) => setF({ direccion: e.target.value })} placeholder="Ej. Mariscal López casi Capitán Brizuela"/>
         </div>
+        <div className="field" style={{ marginTop: 18 }}>
+          <label>Punto en el mapa</label>
+          <div className="muted xs" style={{ marginBottom: 6 }}>Clic en el mapa para fijar la ubicación exacta. Podés arrastrar el pin.</div>
+          <LeafletPickerWidget
+            lat={form.lat}
+            lng={form.lng}
+            onChange={(lat, lng) => setF({ lat, lng })}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LeafletPickerWidget({ lat, lng, onChange }) {
+  const ref = React.useRef(null);
+  const mapRef = React.useRef(null);
+  const markerRef = React.useRef(null);
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || !window.L) return;
+    if (!ref.current || mapRef.current) return;
+    const L = window.L;
+    const init = (typeof lat === 'number' && typeof lng === 'number') ? [lat, lng] : [-25.2637, -57.5759];
+    const m = L.map(ref.current).setView(init, (typeof lat === 'number' && typeof lng === 'number') ? 16 : 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap',
+    }).addTo(m);
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(m);
+      markerRef.current.on('dragend', (e) => {
+        const ll = e.target.getLatLng();
+        onChange(Number(ll.lat.toFixed(6)), Number(ll.lng.toFixed(6)));
+      });
+    }
+    m.on('click', (e) => {
+      const nlat = Number(e.latlng.lat.toFixed(6));
+      const nlng = Number(e.latlng.lng.toFixed(6));
+      if (markerRef.current) {
+        markerRef.current.setLatLng([nlat, nlng]);
+      } else {
+        markerRef.current = L.marker([nlat, nlng], { draggable: true }).addTo(m);
+        markerRef.current.on('dragend', (ev) => {
+          const ll = ev.target.getLatLng();
+          onChange(Number(ll.lat.toFixed(6)), Number(ll.lng.toFixed(6)));
+        });
+      }
+      onChange(nlat, nlng);
+    });
+    mapRef.current = m;
+    return () => { try { m.remove(); } catch {} mapRef.current = null; markerRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <div>
+      <div ref={ref} style={{ height: 280, width: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg-2)' }}/>
+      <div className="row between muted xs" style={{ marginTop: 6 }}>
+        <span>
+          {(typeof lat === 'number' && typeof lng === 'number')
+            ? `Lat: ${lat}  ·  Lng: ${lng}`
+            : 'Sin punto fijado'}
+        </span>
+        {(typeof lat === 'number' && typeof lng === 'number') && (
+          <button type="button" onClick={() => {
+            if (markerRef.current && mapRef.current) { try { mapRef.current.removeLayer(markerRef.current); } catch {} markerRef.current = null; }
+            onChange(null, null);
+          }} style={{ background: 'transparent', border: '1px solid var(--line)', borderRadius: 6, padding: '2px 8px', fontSize: 11, color: 'var(--ink-3)', cursor: 'pointer' }}>Quitar</button>
+        )}
       </div>
     </div>
   );

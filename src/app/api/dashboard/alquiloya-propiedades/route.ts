@@ -51,6 +51,8 @@ function b(v: unknown, def: boolean): boolean {
 
 type PostBody = {
   titulo?: string;
+  lat?: number | string | null;
+  lng?: number | string | null;
   tipo?: string;
   operacion?: string;
   estado?: string;
@@ -106,14 +108,14 @@ export async function POST(request: Request) {
            tipo, operacion, estado, ciudad, barrio, direccion,
            precio, moneda, dormitorios, banos, cocheras,
            superficie_m2, terreno_m2,
-           destacada, visible_web, activo
+           destacada, visible_web, activo, lat, lng
          )
          VALUES (
            $1::uuid, $2::uuid, $3, $4, $5,
            $6, COALESCE($7, 'alquiler'), COALESCE($8, 'disponible'), $9, $10, $11,
            $12, COALESCE($13, 'PYG'), $14, $15, $16,
            $17, $18,
-           $19, $20, $21
+           $19, $20, $21, $22, $23
          )
          RETURNING id`,
         [
@@ -138,6 +140,8 @@ export async function POST(request: Request) {
           b(body.destacada, false),
           b(body.visible_web, true),
           b(body.activo, true),
+          n(body.lat),
+          n(body.lng),
         ]
       );
       const propId = ins.rows[0].id as string;

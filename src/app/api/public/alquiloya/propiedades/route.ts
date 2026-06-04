@@ -75,6 +75,8 @@ type CaracIn = { nombre?: string; valor?: string | null; icono?: string | null }
 type FotoIn = { url?: string; alt?: string | null; es_portada?: boolean | null };
 type Body = {
   titulo?: string; tipo?: string; operacion?: string; descripcion?: string;
+  lat?: number | string | null;
+  lng?: number | string | null;
   ciudad?: string; barrio?: string; direccion?: string;
   precio?: number | string; moneda?: string;
   dormitorios?: number | string; banos?: number | string; cocheras?: number | string;
@@ -206,7 +208,7 @@ export async function POST(request: Request) {
            tipo, operacion, estado, ciudad, barrio, direccion,
            precio, moneda, dormitorios, banos, cocheras,
            superficie_m2, terreno_m2,
-           destacada, visible_web, activo
+           destacada, visible_web, activo, lat, lng
          )
          VALUES (
            $1::uuid, $2::uuid, NULL,
@@ -216,7 +218,7 @@ export async function POST(request: Request) {
            $7, $8, $9,
            $10, COALESCE($11,'PYG'), $12, $13, $14,
            $15, $16,
-           false, false, false
+           false, false, false, $17, $18
          )
          RETURNING id, codigo`,
         [
@@ -236,6 +238,8 @@ export async function POST(request: Request) {
           i(body.cocheras),
           n(body.superficie_m2),
           n(body.terreno_m2),
+          n(body.lat),
+          n(body.lng),
         ]
       );
       const propId = ins.rows[0].id;

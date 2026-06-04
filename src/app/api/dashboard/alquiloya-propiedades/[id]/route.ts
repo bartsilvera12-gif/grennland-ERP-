@@ -70,6 +70,8 @@ type PatchBody = {
   activo?: boolean;
   visible_web?: boolean;
   destacada?: boolean;
+  lat?: number | string | null;
+  lng?: number | string | null;
   fotos?: Array<{ url: string; alt?: string | null; es_portada?: boolean | null }>;
   caracteristicas?: Array<{ nombre: string; valor?: string | null; icono?: string | null }>;
 };
@@ -136,6 +138,8 @@ export async function PATCH(
            destacada = $18,
            visible_web = $19,
            activo = $20,
+           lat = $23,
+           lng = $24,
            updated_at = now()
          WHERE id = $21::uuid AND empresa_id = $22::uuid`,
         [
@@ -161,6 +165,8 @@ export async function PATCH(
           b(body.activo, true),
           id,
           ALQUILOYA_EMPRESA_ID,
+          n(body.lat),
+          n(body.lng),
         ]
       );
 
