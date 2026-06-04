@@ -137,6 +137,10 @@
     font-size: 13.5px; font-weight: 600; color: var(--ink-2);
   }
   .seg button.active { border-color: var(--blue); background: var(--blue-50); color: var(--blue); }
+  .seg-rich button { padding: 12px 10px; text-align: center; transition: border-color .15s, background .15s; }
+  .seg-rich button .seg-title { display: block; font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 13.5px; }
+  .seg-rich button .seg-sub { display: block; font-size: 11px; color: var(--ink-3); margin-top: 2px; font-weight: 500; }
+  .seg-rich button.active .seg-sub { color: var(--blue); }
   .modal-actions { display: flex; gap: 8px; margin-top: 18px; }
   .modal-actions .btn { flex: 1; padding: 11px 16px; font-size: 14px; }
   .modal-cancel { background: #f1f5f9; color: var(--ink-2); }
@@ -182,11 +186,18 @@
         </div>
 
         <div class="field" id="field-subtipo" style="display:none">
-          <label for="sol-subtipo">Tipo de agente</label>
-          <select id="sol-subtipo">
-            <option value="Independiente">Independiente</option>
-            <option value="Inmobiliaria">Inmobiliaria</option>
-          </select>
+          <label>Tipo de agente</label>
+          <div class="seg seg-rich" role="tablist">
+            <button type="button" data-subtipo="Independiente" class="active">
+              <span class="seg-title">Independiente</span>
+              <span class="seg-sub">Trabajo por mi cuenta</span>
+            </button>
+            <button type="button" data-subtipo="Inmobiliaria">
+              <span class="seg-title">Inmobiliaria</span>
+              <span class="seg-sub">Tengo una empresa</span>
+            </button>
+          </div>
+          <input type="hidden" id="sol-subtipo" value="Independiente" />
         </div>
 
         <div class="field">
@@ -232,7 +243,9 @@
       var form = document.getElementById('solicitar-form');
       var submitBtn = document.getElementById('sol-submit');
       var feedback = document.getElementById('sol-feedback');
-      var segBtns = document.querySelectorAll('.seg button');
+      var tipoBtns = document.querySelectorAll('.seg button[data-tipo]');
+      var subTipoBtns = document.querySelectorAll('.seg button[data-subtipo]');
+      var subTipoHidden = document.getElementById('sol-subtipo');
       var fieldSub = document.getElementById('field-subtipo');
       var fieldEmpresa = document.getElementById('field-empresa');
       var tipo = 'propietario';
@@ -248,13 +261,20 @@
       backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeModal(); });
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
 
-      segBtns.forEach(function (b) {
+      tipoBtns.forEach(function (b) {
         b.addEventListener('click', function () {
-          segBtns.forEach(function (x) { x.classList.remove('active'); });
+          tipoBtns.forEach(function (x) { x.classList.remove('active'); });
           b.classList.add('active');
           tipo = b.getAttribute('data-tipo');
           fieldSub.style.display = tipo === 'agente' ? '' : 'none';
           fieldEmpresa.style.display = tipo === 'agente' ? '' : 'none';
+        });
+      });
+      subTipoBtns.forEach(function (b) {
+        b.addEventListener('click', function () {
+          subTipoBtns.forEach(function (x) { x.classList.remove('active'); });
+          b.classList.add('active');
+          if (subTipoHidden) subTipoHidden.value = b.getAttribute('data-subtipo');
         });
       });
 

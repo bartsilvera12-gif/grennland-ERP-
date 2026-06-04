@@ -1161,10 +1161,16 @@ function RequestAccessModal({ onClose, planTier, planLabel, defaultTipo }) {
           {tipo === 'agente' && (
             <div style={{ marginTop: 14 }}>
               <label style={fieldLabel}>Tipo de agente</label>
-              <select style={inputStyle} value={subTipo} onChange={e => setSubTipo(e.target.value)}>
-                <option value="Independiente">Independiente</option>
-                <option value="Inmobiliaria">Inmobiliaria</option>
-              </select>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <button type="button" style={segBtn(subTipo === 'Independiente')} onClick={() => setSubTipo('Independiente')}>
+                  <span style={{ display: 'block', fontFamily: 'Montserrat', fontWeight: 800, fontSize: 13.5 }}>Independiente</span>
+                  <span style={{ display: 'block', fontSize: 11, color: subTipo === 'Independiente' ? 'var(--blue)' : 'var(--ink-3)', marginTop: 2, fontWeight: 500 }}>Trabajo por mi cuenta</span>
+                </button>
+                <button type="button" style={segBtn(subTipo === 'Inmobiliaria')} onClick={() => setSubTipo('Inmobiliaria')}>
+                  <span style={{ display: 'block', fontFamily: 'Montserrat', fontWeight: 800, fontSize: 13.5 }}>Inmobiliaria</span>
+                  <span style={{ display: 'block', fontSize: 11, color: subTipo === 'Inmobiliaria' ? 'var(--blue)' : 'var(--ink-3)', marginTop: 2, fontWeight: 500 }}>Tengo una empresa</span>
+                </button>
+              </div>
             </div>
           )}
           <div style={{ marginTop: 14 }}>
