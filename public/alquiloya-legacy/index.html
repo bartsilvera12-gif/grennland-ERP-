@@ -3,6 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<!--
+  IMPORTANT: cuando el middleware reescribe "/" del dominio publico
+  (alquiloya.com.py) a "/alquiloya-legacy/index.html", el browser sigue
+  viendo "/" en la barra. Sin <base> los scripts relativos (brand.jsx,
+  home.jsx, etc.) los pediria desde la raiz -> 404. Esta etiqueta hace
+  que TODA URL relativa de este documento se resuelva contra el folder
+  legacy. Las URLs absolutas (/portal-agentes/login, /alquiloya-legacy/
+  assets/icono.png) ignoran el <base>, asi que no las afecta.
+-->
+<base href="/alquiloya-legacy/" />
 <title>AlquiloYa — Donde encontrás más rápido</title>
 <link rel="icon" type="image/png" href="/alquiloya-legacy/assets/icono.png" />
 <link rel="apple-touch-icon" href="/alquiloya-legacy/assets/icono.png" />
@@ -489,7 +499,7 @@
 <script type="text/babel" src="brand.jsx?v=mobile-1"></script>
 <script type="text/babel" src="data.jsx?v=mobile-1"></script>
 <script type="text/babel" src="api-data.jsx?v=per-endpoint-1"></script>
-<script type="text/babel" src="shared.jsx?v=referidos-link-1"></script>
+<script type="text/babel" src="shared.jsx?v=referidos-link-2"></script>
 <script type="text/babel" src="home.jsx?v=verified-real-1"></script>
 <script type="text/babel" src="catalog.jsx?v=mobile-1"></script>
 <script type="text/babel" src="detail.jsx?v=consultas-1"></script>
