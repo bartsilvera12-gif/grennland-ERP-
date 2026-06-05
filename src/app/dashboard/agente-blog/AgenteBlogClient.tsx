@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import RichTextEditor from "@/components/RichTextEditor";
 import type { AgentePostRow } from "@/lib/alquiloya/erp-agente-posts";
 
 type AgOpt = { id: string; nombre: string | null };
@@ -311,12 +312,11 @@ export default function AgenteBlogClient({
               </div>
               <div className="sm:col-span-2">
                 <label className={labelCls}>Contenido</label>
-                <textarea
-                  rows={10}
-                  className={inputCls + " font-mono text-[13px]"}
-                  placeholder="Markdown o texto plano. Soporta salto de línea simple."
+                <RichTextEditor
                   value={editing.contenido ?? ""}
-                  onChange={(e) => setEditing((x) => ({ ...x!, contenido: e.target.value }))}
+                  onChange={(html) => setEditing((x) => ({ ...x!, contenido: html }))}
+                  placeholder="Escribí tu artículo. Usá la barra de arriba para títulos, negrita, listas, citas y enlaces."
+                  minHeight={300}
                 />
               </div>
               <div>

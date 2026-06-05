@@ -235,7 +235,15 @@ function AgentBlogPanel({ posts }) {
           <p style={{ fontSize: 15.5, color: 'var(--ink-2)', marginTop: 14, lineHeight: 1.55, fontWeight: 500 }}>{active.resumen}</p>
         )}
         {active.contenido && (
-          <div style={{ fontSize: 15, color: 'var(--ink-2)', marginTop: 16, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{active.contenido}</div>
+          /^<(h\d|p|ul|ol|blockquote|pre|div)/i.test(String(active.contenido).trim()) ? (
+            <div
+              className="post-html"
+              style={{ fontSize: 15, color: 'var(--ink-2)', marginTop: 16, lineHeight: 1.7 }}
+              dangerouslySetInnerHTML={{ __html: active.contenido }}
+            />
+          ) : (
+            <div style={{ fontSize: 15, color: 'var(--ink-2)', marginTop: 16, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{active.contenido}</div>
+          )
         )}
       </div>
     );

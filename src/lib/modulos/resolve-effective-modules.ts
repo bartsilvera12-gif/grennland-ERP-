@@ -37,6 +37,20 @@ export function esRolPublicador(rol: string | null | undefined): boolean {
   return r === "publicador" || r.startsWith("publicador-");
 }
 
+/**
+ * Roles "referido_partner" / "referido" son cuentas externas del programa de
+ * referidos: usan EXCLUSIVAMENTE /portal-referidos/dashboard — NUNCA el ERP.
+ */
+export function esRolReferido(rol: string | null | undefined): boolean {
+  const r = (rol ?? "").trim().toLowerCase();
+  return r === "referido" || r === "referido_partner" || r.startsWith("referido-");
+}
+
+/** Cuentas externas (publicador o referido): bloqueadas del ERP. */
+export function esRolPortalExterno(rol: string | null | undefined): boolean {
+  return esRolPublicador(rol) || esRolReferido(rol);
+}
+
 async function allModuloIdsFromCatalog(supabase: ModulosSupabase): Promise<string[]> {
   const { data, error } = await supabase.from("modulos").select("id");
   if (error) throw new Error(error.message);
@@ -75,9 +89,10 @@ export async function resolveEffectiveModules(
 ): Promise<ModuloRow[]> {
   const rol = (usuario.rol ?? "").trim();
 
-  // Publicadores (agentes y propietarios del portal publico) NO pueden entrar
-  // al ERP. Lista vacia bloquea Sidebar + AuthGuard + middleware.
-  if (esRolPublicador(rol)) return [];
+  // Cuentas externas (publicadores del portal publico + referidos del programa
+  // de referidos) NO pueden entrar al ERP. Lista vacia bloquea Sidebar +
+  // AuthGuard + middleware.
+  if (esRolPortalExterno(rol)) return [];
 
   if (rol === "super_admin") {
     const { data, error } = await supabase.from("modulos").select("id, nombre, slug").order("slug");

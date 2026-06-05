@@ -93,6 +93,18 @@ function AuthGuardInner({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // GUARD CRITICO: referidos del programa tampoco entran al ERP — tienen
+      // su propio panel en /portal-referidos/dashboard.
+      const esReferido =
+        userRol === "referido" ||
+        userRol === "referido_partner" ||
+        userRol.startsWith("referido-");
+      if (esReferido && !cancelled) {
+        router.replace("/portal-referidos/dashboard");
+        setLoading(false);
+        return;
+      }
+
       setAccess({
         superAdmin,
         slugs: new Set(slugs),
