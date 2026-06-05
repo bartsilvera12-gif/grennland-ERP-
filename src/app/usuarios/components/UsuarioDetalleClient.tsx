@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import PasswordInput from "@/components/ui/PasswordInput";
 import {
   SectionCard,
   emptyUsuarioForm,
@@ -762,8 +763,7 @@ export default function UsuarioDetalleClient({
                           <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                             Nueva contraseña
                           </label>
-                          <input
-                            type="password"
+                          <PasswordInput
                             autoComplete="new-password"
                             value={pwdNew}
                             onChange={(e) => setPwdNew(e.target.value)}
@@ -778,8 +778,7 @@ export default function UsuarioDetalleClient({
                           <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
                             Confirmar
                           </label>
-                          <input
-                            type="password"
+                          <PasswordInput
                             autoComplete="new-password"
                             value={pwdNew2}
                             onChange={(e) => setPwdNew2(e.target.value)}

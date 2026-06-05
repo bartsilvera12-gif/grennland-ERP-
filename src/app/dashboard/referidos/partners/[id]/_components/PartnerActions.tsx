@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import { confirmDialog } from "@/lib/ui/dialogs";
+import PasswordInput from "@/components/ui/PasswordInput";
 
 /**
  * Acciones del detalle de un partner: activar/desactivar, eliminar (soft o hard
@@ -214,8 +215,7 @@ export function PartnerActions({
               onChange={(e) => setAccesoEmail(e.target.value)}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
             />
-            <input
-              type="password"
+            <PasswordInput
               required
               minLength={8}
               placeholder="Contraseña (mín. 8 caracteres)"
@@ -223,8 +223,7 @@ export function PartnerActions({
               onChange={(e) => setAccesoPass1(e.target.value)}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
             />
-            <input
-              type="password"
+            <PasswordInput
               required
               minLength={8}
               placeholder="Confirmar contraseña"

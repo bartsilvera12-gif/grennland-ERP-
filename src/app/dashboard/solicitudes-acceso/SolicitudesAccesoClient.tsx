@@ -77,22 +77,49 @@ export default function SolicitudesAccesoClient({
   >(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // Counts cruzados: cada grupo de chips refleja lo que pasaria si lo
+  // seleccionas considerando los OTROS filtros activos. Asi si "Agentes 1"
+  // aparece, hacer click realmente muestra 1 (no 0 como cuando los counts
+  // eran independientes).
+  const matchesText = (r: SolicitudAccesoRow, q: string) => {
+    if (!q) return true;
+    return (
+      (r.nombre ?? "").toLowerCase().includes(q) ||
+      (r.email ?? "").toLowerCase().includes(q) ||
+      (r.telefono ?? "").toLowerCase().includes(q) ||
+      (r.empresa ?? "").toLowerCase().includes(q) ||
+      (r.ciudad ?? "").toLowerCase().includes(q)
+    );
+  };
+
   const counts = useMemo(() => {
-    const c = { todas: rows.length, pendiente: 0, aprobada: 0, rechazada: 0 };
-    for (const r of rows) c[r.estado] += 1;
+    const q = search.trim().toLowerCase();
+    const c = { todas: 0, pendiente: 0, aprobada: 0, rechazada: 0 };
+    for (const r of rows) {
+      if (tipoFilter !== "todos" && r.tipo !== tipoFilter) continue;
+      if (!matchesText(r, q)) continue;
+      c.todas += 1;
+      c[r.estado] += 1;
+    }
     return c;
-  }, [rows]);
+  }, [rows, tipoFilter, search]);
 
   const tipoCounts = useMemo(() => {
+    const q = search.trim().toLowerCase();
     const c: Record<TipoFilter, number> = {
-      todos: rows.length,
+      todos: 0,
       agente: 0,
       propietario: 0,
       referido_partner: 0,
     };
-    for (const r of rows) c[r.tipo] += 1;
+    for (const r of rows) {
+      if (filter !== "todas" && r.estado !== filter) continue;
+      if (!matchesText(r, q)) continue;
+      c.todos += 1;
+      c[r.tipo] += 1;
+    }
     return c;
-  }, [rows]);
+  }, [rows, filter, search]);
 
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();

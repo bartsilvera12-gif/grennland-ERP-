@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { signIn, signOut } from "@/lib/auth";
+import PasswordInput from "@/components/ui/PasswordInput";
 
 /**
  * Login independiente para referidos/influencers/aliados de AlquiloYa.
@@ -86,8 +87,7 @@ export default function PortalReferidosLoginPage() {
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-[#0F172A]">Contraseña</label>
-              <input
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

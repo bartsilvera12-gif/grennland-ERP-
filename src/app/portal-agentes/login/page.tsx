@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { signIn } from "@/lib/auth";
+import PasswordInput from "@/components/ui/PasswordInput";
 
 /**
  * Login independiente para agentes/publicadores de AlquiloYa.
@@ -126,8 +127,7 @@ export default function PortalAgentesLoginPage() {
               <label className="mb-1.5 block text-sm font-medium text-[#0F172A]">
                 Contraseña
               </label>
-              <input
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"

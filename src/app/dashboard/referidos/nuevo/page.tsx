@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import PasswordInput from "@/components/ui/PasswordInput";
 
 const TIPOS = ["influencer", "aliado", "agente_referido", "otro"] as const;
 const MONEDAS = ["PYG", "USD"] as const;
@@ -346,8 +347,7 @@ export default function NuevoReferidoPage() {
               </div>
               <div className={fieldCls}>
                 <label className={labelCls}>Contraseña *</label>
-                <input
-                  type="password"
+                <PasswordInput
                   minLength={8}
                   className={inputCls}
                   value={form.acc_pass}
@@ -357,8 +357,7 @@ export default function NuevoReferidoPage() {
               </div>
               <div className={fieldCls}>
                 <label className={labelCls}>Confirmar contraseña *</label>
-                <input
-                  type="password"
+                <PasswordInput
                   minLength={8}
                   className={inputCls}
                   value={form.acc_pass2}
