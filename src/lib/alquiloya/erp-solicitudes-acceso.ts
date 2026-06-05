@@ -11,7 +11,7 @@ function q(table: string): string {
 
 export type SolicitudAccesoRow = {
   id: string;
-  tipo: "agente" | "propietario";
+  tipo: "agente" | "propietario" | "referido_partner";
   sub_tipo: string | null;
   nombre: string;
   email: string | null;

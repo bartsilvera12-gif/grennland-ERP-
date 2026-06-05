@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 
     const tipoRaw = s(body.tipo, 20);
-    if (tipoRaw !== "agente" && tipoRaw !== "propietario") {
+    if (tipoRaw !== "agente" && tipoRaw !== "propietario" && tipoRaw !== "referido_partner") {
       return NextResponse.json(errorResponse("tipo invalido"), { status: 400 });
     }
     const tipo = tipoRaw;
@@ -32,6 +32,11 @@ export async function POST(request: Request) {
         return NextResponse.json(errorResponse("sub_tipo invalido (Independiente|Inmobiliaria)"), { status: 400 });
       }
       subTipo = v;
+    } else if (tipo === "referido_partner") {
+      // Para referidos el sub_tipo guarda el canal: instagram | tiktok | whatsapp | web | otro.
+      const v = (s(body.sub_tipo, 40) ?? "").toLowerCase();
+      const allowed = ["instagram", "tiktok", "whatsapp", "web", "otro"];
+      subTipo = allowed.includes(v) ? v : "otro";
     }
 
     const nombre = s(body.nombre, 160);

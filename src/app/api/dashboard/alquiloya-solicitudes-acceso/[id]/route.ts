@@ -24,7 +24,7 @@ function s(v: unknown, max = 500): string | null {
 type SolicitudFull = {
   id: string;
   empresa_id: string;
-  tipo: "agente" | "propietario";
+  tipo: "agente" | "propietario" | "referido_partner";
   sub_tipo: string | null;
   nombre: string;
   email: string | null;
@@ -35,6 +35,20 @@ type SolicitudFull = {
   estado: "pendiente" | "aprobada" | "rechazada";
   plan_tier_solicitado: string | null;
 };
+
+/**
+ * Slug seguro para referral_links basado en el nombre del partner.
+ * Lowercase, sin acentos, solo [a-z0-9-], colapsa guiones consecutivos.
+ */
+function slugifyForReferral(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "ref";
+}
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -107,6 +121,9 @@ export async function PATCH(request: Request, ctx: Ctx) {
             : "now() + interval '30 days'";
 
       let resultadoId: string;
+      // partnerSlug solo aplica a referido_partner — lo necesitamos despues
+      // del INSERT en referral_partners para crear el referral_link.
+      let partnerSlugRef: string | null = null;
       if (sol.tipo === "agente") {
         const cargo = sol.sub_tipo ?? "Independiente";
         const r = await client.query<{ id: string }>(
@@ -118,7 +135,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
           [ALQUILOYA_EMPRESA_ID, sol.nombre, sol.email, sol.telefono, cargo, planId]
         );
         resultadoId = r.rows[0].id;
-      } else {
+      } else if (sol.tipo === "propietario") {
         const r = await client.query<{ id: string }>(
           `INSERT INTO ${t("propietarios")}
              (empresa_id, nombre, email, telefono, tipo_persona, estado, activo,
@@ -128,6 +145,54 @@ export async function PATCH(request: Request, ctx: Ctx) {
           [ALQUILOYA_EMPRESA_ID, sol.nombre, sol.email, sol.telefono, planId]
         );
         resultadoId = r.rows[0].id;
+      } else {
+        // sol.tipo === 'referido_partner'
+        // Crear partner + link unico con slug autogenerado + regla por defecto (10% recurrente 12m, tier 'estandar').
+        const baseSlug = slugifyForReferral(sol.nombre);
+        // Buscamos un slug libre: base, base-2, base-3, ...
+        let candidate = baseSlug;
+        for (let i = 2; i <= 30; i++) {
+          const { rows: clash } = await client.query<{ id: string }>(
+            `SELECT id FROM ${t("referral_links")}
+              WHERE empresa_id = $1::uuid AND lower(slug) = lower($2) LIMIT 1`,
+            [ALQUILOYA_EMPRESA_ID, candidate]
+          );
+          if (!clash || clash.length === 0) break;
+          candidate = `${baseSlug}-${i}`;
+        }
+        partnerSlugRef = candidate;
+
+        const rp = await client.query<{ id: string }>(
+          `INSERT INTO ${t("referral_partners")}
+             (empresa_id, nombre, email, telefono, tipo, notas, activo)
+           VALUES ($1::uuid, $2, $3, $4, $5, $6, true)
+           RETURNING id`,
+          [
+            ALQUILOYA_EMPRESA_ID,
+            sol.nombre,
+            sol.email,
+            sol.telefono,
+            sol.sub_tipo ?? "otro", // canal: instagram/tiktok/whatsapp/web/otro
+            sol.mensaje,
+          ]
+        );
+        resultadoId = rp.rows[0].id;
+
+        const rl = await client.query<{ id: string }>(
+          `INSERT INTO ${t("referral_links")}
+             (empresa_id, partner_id, slug, campania, cookie_dias, activo)
+           VALUES ($1::uuid, $2::uuid, $3, $4, 60, true)
+           RETURNING id`,
+          [ALQUILOYA_EMPRESA_ID, resultadoId, partnerSlugRef, null]
+        );
+        await client.query(
+          `INSERT INTO ${t("referral_commission_rules")}
+             (empresa_id, partner_id, link_id, tipo, valor, moneda,
+              recurrente, meses_recurrencia, vigente_desde)
+           VALUES ($1::uuid, $2::uuid, $3::uuid, 'porcentaje', 10, NULL,
+                   true, 12, now())`,
+          [ALQUILOYA_EMPRESA_ID, resultadoId, rl.rows[0].id]
+        );
       }
 
       // Crear auth.users + alquiloya.usuarios (con propietario_id/agente_id) si hay email.
@@ -154,16 +219,54 @@ export async function PATCH(request: Request, ctx: Ctx) {
           if (!created.user?.id) throw new Error("no se pudo crear el auth.user");
 
           const authUserId = created.user.id;
-          const rol = sol.tipo === "agente" ? "publicador-agente" : "publicador-propietario";
-          const insertUsuario = await client.query<{ id: string }>(
-            `INSERT INTO ${t("usuarios")}
-               (empresa_id, auth_user_id, email, nombre, rol,
-                ${sol.tipo === "agente" ? "agente_id" : "propietario_id"})
-             VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::uuid)
-             RETURNING id`,
-            [ALQUILOYA_EMPRESA_ID, authUserId, sol.email, sol.nombre, rol, resultadoId]
-          );
+          const rol =
+            sol.tipo === "agente"
+              ? "publicador-agente"
+              : sol.tipo === "propietario"
+                ? "publicador-propietario"
+                : "referido_partner";
+
+          // Columna a vincular en usuarios segun el tipo (NULL para referido,
+          // se vincula despues por referral_partners.usuario_id).
+          let insertUsuario;
+          if (sol.tipo === "agente") {
+            insertUsuario = await client.query<{ id: string }>(
+              `INSERT INTO ${t("usuarios")}
+                 (empresa_id, auth_user_id, email, nombre, rol, agente_id)
+               VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::uuid)
+               RETURNING id`,
+              [ALQUILOYA_EMPRESA_ID, authUserId, sol.email, sol.nombre, rol, resultadoId]
+            );
+          } else if (sol.tipo === "propietario") {
+            insertUsuario = await client.query<{ id: string }>(
+              `INSERT INTO ${t("usuarios")}
+                 (empresa_id, auth_user_id, email, nombre, rol, propietario_id)
+               VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::uuid)
+               RETURNING id`,
+              [ALQUILOYA_EMPRESA_ID, authUserId, sol.email, sol.nombre, rol, resultadoId]
+            );
+          } else {
+            insertUsuario = await client.query<{ id: string }>(
+              `INSERT INTO ${t("usuarios")}
+                 (empresa_id, auth_user_id, email, nombre, rol)
+               VALUES ($1::uuid, $2::uuid, $3, $4, $5)
+               RETURNING id`,
+              [ALQUILOYA_EMPRESA_ID, authUserId, sol.email, sol.nombre, rol]
+            );
+          }
           usuarioErpId = insertUsuario.rows[0]?.id ?? null;
+
+          // Para referido: vinculamos referral_partners.usuario_id para que
+          // /api/referido/me pueda resolver el partner por usuario.
+          if (sol.tipo === "referido_partner" && usuarioErpId) {
+            await client.query(
+              `UPDATE ${t("referral_partners")}
+                  SET usuario_id = $1::uuid, updated_at = now()
+                WHERE empresa_id = $2::uuid AND id = $3::uuid`,
+              [usuarioErpId, ALQUILOYA_EMPRESA_ID, resultadoId]
+            );
+          }
+
           portalCredentials = { email: sol.email, tempPassword };
         } catch (e) {
           // Best-effort: si falla, no abortamos la aprobacion. Se puede crear manualmente despues.
