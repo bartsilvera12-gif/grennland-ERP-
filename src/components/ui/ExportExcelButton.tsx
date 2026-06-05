@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { notify } from "@/lib/ui/dialogs";
 
 interface Props {
   url: string;
@@ -21,7 +22,7 @@ export default function ExportExcelButton({ url, label = "Exportar Excel", class
     try {
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) {
-        alert(`No se pudo exportar (${res.status}).`);
+        notify({ tone: "danger", title: "No se pudo exportar", message: `HTTP ${res.status}` });
         return;
       }
       const blob = await res.blob();
@@ -37,7 +38,7 @@ export default function ExportExcelButton({ url, label = "Exportar Excel", class
       document.body.removeChild(a);
       URL.revokeObjectURL(objUrl);
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Error de red al exportar.");
+      notify({ tone: "danger", title: "Error al exportar", message: e instanceof Error ? e.message : "Error de red." });
     } finally {
       setBusy(false);
     }

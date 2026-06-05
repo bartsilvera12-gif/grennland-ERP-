@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import type { TestimonioRow } from "@/lib/alquiloya/erp-testimonios";
+import { notify } from "@/lib/ui/dialogs";
 
 type Editing = Partial<TestimonioRow> & { isNew?: boolean };
 
@@ -97,7 +98,11 @@ export default function TestimoniosClient({ initial }: { initial: TestimonioRow[
       setDeleting(null);
       router.refresh();
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Error al eliminar");
+      notify({
+        tone: "danger",
+        title: "Error al eliminar",
+        message: e instanceof Error ? e.message : "Error desconocido",
+      });
     } finally {
       setBusyId(null);
     }

@@ -6,6 +6,7 @@ import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session"
 import ConfirmDialog from "@/components/ConfirmDialog";
 import RichTextEditor from "@/components/RichTextEditor";
 import type { AgentePostRow } from "@/lib/alquiloya/erp-agente-posts";
+import { notify } from "@/lib/ui/dialogs";
 
 type AgOpt = { id: string; nombre: string | null };
 type Editing = Partial<AgentePostRow> & { isNew?: boolean };
@@ -118,7 +119,11 @@ export default function AgenteBlogClient({
       setDeleting(null);
       router.refresh();
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Error al eliminar");
+      notify({
+        tone: "danger",
+        title: "Error al eliminar",
+        message: e instanceof Error ? e.message : "Error desconocido",
+      });
     } finally {
       setBusyId(null);
     }

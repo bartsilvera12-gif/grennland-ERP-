@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { notify } from "@/lib/ui/dialogs";
 
 export default function DeletePropiedadButton({ id, titulo }: { id: string; titulo: string | null }) {
   const router = useRouter();
@@ -21,7 +22,11 @@ export default function DeletePropiedadButton({ id, titulo }: { id: string; titu
       setOpen(false);
       router.refresh();
     } catch (e) {
-      window.alert(`No se pudo eliminar: ${e instanceof Error ? e.message : "error"}`);
+      notify({
+        tone: "danger",
+        title: "No se pudo eliminar",
+        message: e instanceof Error ? e.message : "error",
+      });
     } finally {
       setBusy(false);
     }

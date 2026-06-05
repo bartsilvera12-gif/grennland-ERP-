@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { notify } from "@/lib/ui/dialogs";
 
 type Duracion = 7 | 14 | 30 | 0; // 0 = sin vencimiento
 
@@ -74,7 +75,11 @@ export default function ToggleDestacadaButton({
       router.refresh();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Error";
-      window.alert(`No se pudo actualizar "${titulo ?? "esta propiedad"}": ${msg}`);
+      notify({
+        tone: "danger",
+        title: "No se pudo actualizar",
+        message: `${titulo ?? "esta propiedad"}: ${msg}`,
+      });
     } finally {
       setBusy(false);
     }

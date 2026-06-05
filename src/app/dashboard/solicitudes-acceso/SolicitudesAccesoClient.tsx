@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import type { SolicitudAccesoRow } from "@/lib/alquiloya/erp-solicitudes-acceso";
+import { confirmDialog } from "@/lib/ui/dialogs";
 
 type Filter = "todas" | "pendiente" | "aprobada" | "rechazada";
 
@@ -92,11 +93,19 @@ export default function SolicitudesAccesoClient({
       if (!res.ok || !data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
       if (action === "aprobar" && data.portal_credentials) {
         const { email, tempPassword } = data.portal_credentials;
-        window.alert(
-          `Cuenta del portal creada.\n\nEmail: ${email}\nContraseña temporal: ${tempPassword}\n\n` +
-          `IMPORTANTE: copiá esta contraseña ahora y enviásela al usuario por WhatsApp. ` +
-          `No se vuelve a mostrar.`
-        );
+        // Usamos confirmDialog (con solo botón Aceptar) para que las
+        // credenciales queden visibles hasta que el admin las copie.
+        // Un toast desaparecería antes de que pueda copiarlas.
+        await confirmDialog({
+          title: "Cuenta del portal creada",
+          message:
+            `Email: ${email}\n` +
+            `Contraseña temporal: ${tempPassword}\n\n` +
+            `IMPORTANTE: copiá esta contraseña ahora y enviásela al usuario por WhatsApp. No se vuelve a mostrar.`,
+          confirmText: "Listo, ya la copié",
+          cancelText: "Cerrar",
+          tone: "warning",
+        });
       }
       setRows((prev) =>
         prev.map((r) =>

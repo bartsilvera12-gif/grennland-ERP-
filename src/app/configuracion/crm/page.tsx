@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ConfigFormCard, ConfigSectionTitle } from "@/components/config/global-config-primitives";
 import { GlobalConfigSubpageShell } from "@/components/config/GlobalConfigSubpageShell";
 import { apiFetch } from "@/lib/api/fetch-with-supabase-session";
+import { confirmDialog } from "@/lib/ui/dialogs";
 import {
   createEtapa,
   deleteEtapa,
@@ -673,9 +674,13 @@ export default function ConfiguracionCrmPipelinePage() {
                           className="whitespace-nowrap text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
                           disabled={busyTipoServ}
                           onClick={async () => {
-                            if (!window.confirm("¿Eliminar permanentemente este segmento? (sin clientes vinculados)")) {
-                              return;
-                            }
+                            const okConfirm = await confirmDialog({
+                              title: "¿Eliminar este segmento?",
+                              message: "Solo se puede eliminar permanentemente porque no tiene clientes vinculados.",
+                              confirmText: "Eliminar",
+                              tone: "danger",
+                            });
+                            if (!okConfirm) return;
                             setMensajeTipos({ err: undefined, ok: undefined });
                             setBusyTipoServ(true);
                             if (process.env.NODE_ENV === "development") {

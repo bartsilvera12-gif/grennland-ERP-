@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { notify } from "@/lib/ui/dialogs";
 
 export default function ToggleActivoButton({
   id,
@@ -40,7 +41,11 @@ export default function ToggleActivoButton({
       setActivo(prev);
       const msg = e instanceof Error ? e.message : "Error";
       setErr(msg);
-      window.alert(`No se pudo ${next ? "activar" : "desactivar"} "${titulo ?? "esta propiedad"}": ${msg}`);
+      notify({
+        tone: "danger",
+        title: `No se pudo ${next ? "activar" : "desactivar"}`,
+        message: `${titulo ?? "esta propiedad"}: ${msg}`,
+      });
     } finally {
       setBusy(false);
     }

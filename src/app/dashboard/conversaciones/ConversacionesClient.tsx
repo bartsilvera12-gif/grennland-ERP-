@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
+import { confirmDialog } from "@/lib/ui/dialogs";
 import {
   trackInboxPollingList,
   trackInboxPollingThread,
@@ -1412,9 +1413,12 @@ export function ConversacionesClient({
 
     let confirmHumanOverride = false;
     if (sel.human_taken_over || sel.flow_status === "human") {
-      const ok = window.confirm(
-        "La conversación está en modo humano. ¿Reenviar igualmente el mensaje del paso actual del bot?"
-      );
+      const ok = await confirmDialog({
+        title: "Conversación en modo humano",
+        message: "¿Reenviar igualmente el mensaje del paso actual del bot?",
+        confirmText: "Reenviar",
+        tone: "warning",
+      });
       if (!ok) return;
       confirmHumanOverride = true;
     }
@@ -1442,9 +1446,12 @@ export function ConversacionesClient({
     try {
       let { res, json } = await postOnce(confirmHumanOverride);
       if (res.status === 409 && json.needs_human_override_confirmation) {
-        const ok = window.confirm(
-          "La conversación está en modo humano. ¿Reenviar igualmente el mensaje del paso actual del bot?"
-        );
+        const ok = await confirmDialog({
+          title: "Conversación en modo humano",
+          message: "¿Reenviar igualmente el mensaje del paso actual del bot?",
+          confirmText: "Reenviar",
+          tone: "warning",
+        });
         if (!ok) return;
         ({ res, json } = await postOnce(true));
       }

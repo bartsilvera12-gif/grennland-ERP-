@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { ChatChannelRow } from "@/lib/chat/actions";
+import { confirmDialog } from "@/lib/ui/dialogs";
 import type {
   ChatQueueAdminRow,
   QueueAgentRow,
@@ -194,7 +195,13 @@ export default function ColaEditor({
   }
 
   async function handleDeleteQueue() {
-    if (!confirm("¿Eliminar esta cola? Los agentes asociados se eliminarán.")) return;
+    const ok = await confirmDialog({
+      title: "¿Eliminar esta cola?",
+      message: "Los agentes asociados se eliminarán de la cola.",
+      confirmText: "Eliminar",
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       await apiDeleteQueue(queueId);
       onDeleted?.();
@@ -844,7 +851,12 @@ function AgentEditorRow({
   }
 
   async function remove() {
-    if (!confirm("¿Quitar este agente de la cola?")) return;
+    const ok = await confirmDialog({
+      title: "¿Quitar este agente de la cola?",
+      confirmText: "Quitar",
+      tone: "warning",
+    });
+    if (!ok) return;
     await apiRemoveQueueAgent(queueId, agent.id);
     onChange();
   }
