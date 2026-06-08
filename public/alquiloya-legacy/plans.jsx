@@ -53,7 +53,7 @@ function PlansPage({ onNav }) {
         ]}/>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 22, marginTop: 40, maxWidth: 960, margin: '40px auto 0' }}>
+      <div className="plans-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 22, marginTop: 40, maxWidth: 960, margin: '40px auto 0' }}>
         {filtered.map(p => <PlanCard key={p.tier} plan={p} onPick={() => setPicked({ tier: p.tier, name: p.name, audience })}/>)}
       </div>
 
@@ -240,9 +240,10 @@ function CompareTable() {
     textAlign: 'center',
   });
   return (
-    <div style={{ marginTop: 56 }}>
+    <div style={{ marginTop: 56 }} className="plans-compare">
       <SectionHead eyebrow="Comparativa" title="Todo lo que incluye cada plan" />
-      <div className="card" style={{ marginTop: 24, padding: 0, overflow: 'hidden' }}>
+      <div className="card plans-compare-card" style={{ marginTop: 24, padding: 0, overflow: 'hidden' }}>
+        <div className="plans-compare-inner">
         <div style={{ display: 'grid', gridTemplateColumns: '1.4fr repeat(4, 1fr)', background: 'var(--blue)', color: '#fff', padding: '16px 18px', fontWeight: 700, fontSize: 13 }}>
           <div>Características / Beneficios</div>
           {cols.map(c => (
@@ -261,6 +262,7 @@ function CompareTable() {
             <div style={cellStyle(d)}>{d}</div>
           </div>
         ))}
+        </div>
       </div>
     </div>
   );

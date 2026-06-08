@@ -224,10 +224,10 @@
 
   /* ===== Responsive / adaptive layer (visual only) ===== */
   img, video, svg { max-width: 100%; height: auto; }
-  /* Evita scroll horizontal por elementos posicionados con right/bottom negativos */
-  @media (max-width: 760px) {
-    html, body { overflow-x: hidden; }
-  }
+  /* Evita scroll horizontal por elementos posicionados con right/bottom negativos
+     o por contenedores que exceden el viewport. Aplica GLOBAL (desktop + mobile),
+     antes solo aplicaba <=760px y dejaba pasar la barra blanca en >760px. */
+  html, body { overflow-x: hidden; max-width: 100%; }
 
   /* Tablet */
   @media (max-width: 1100px) {
@@ -442,6 +442,55 @@
     .home-grid-4 { grid-template-columns: 1fr !important; }
   }
 
+  /* === Planes: ajustes finos en mobile ===
+     El catch-all general (linea ~308) ya colapsa el grid 2x2 de PlanCard a 1col.
+     Aca afinamos gap, padding y typografia para que se lea bien en celular,
+     y forzamos a la tabla comparativa "Todo lo que incluye cada plan" a hacer
+     scroll horizontal en vez de stackearse verticalmente (queda ilegible si
+     stackea: 5 columnas con 14 filas se aplastan). */
+  @media (max-width: 760px) {
+    .plans-grid {
+      gap: 14px !important;
+      margin-top: 24px !important;
+    }
+    .plans-grid .card {
+      padding: 22px 18px !important;
+    }
+    .plans-grid .card h3,
+    .plans-grid .card > div[style*="font-size: 26"] {
+      font-size: 22px !important;
+    }
+    .plans-grid .card .col.gap-12 {
+      gap: 10px !important;
+    }
+    .plans-grid .card .col.gap-12 .row.gap-10 span:last-child {
+      font-size: 13.5px !important;
+      line-height: 1.4 !important;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      min-width: 0;
+    }
+    /* Tabla comparativa: scroll horizontal en lugar de stackearse.
+       Usamos `!important` en min-width porque el catch-all anterior
+       (linea ~342) tiene una regla con !important que anula min-width
+       en cualquier elemento con inline min-width. Aca declaramos via
+       clase y forzamos para ganarle al catch-all. */
+    .plans-compare-card {
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch;
+    }
+    .plans-compare-inner {
+      min-width: 720px !important;
+      width: 720px !important;
+      max-width: none !important;
+    }
+    /* Anula el catch-all 1fr para los grids internos de la tabla — necesitan
+       mantener sus 5 columnas (1.4fr + 4*1fr) para no perder la estructura. */
+    .plans-compare-inner [style*="grid-template-columns"] {
+      grid-template-columns: 1.4fr repeat(4, 1fr) !important;
+    }
+  }
+
   /* === FIX responsive tablet (761–1024px): usar el mismo menú hamburguesa que en mobile === */
   @media (max-width: 1024px) {
     .nav-hamburger { display: inline-flex !important; }
@@ -500,11 +549,11 @@
 <script type="text/babel" src="data.jsx?v=mobile-1"></script>
 <script type="text/babel" src="api-data.jsx?v=per-endpoint-1"></script>
 <script type="text/babel" src="shared.jsx?v=referidos-link-2"></script>
-<script type="text/babel" src="home.jsx?v=verified-real-1"></script>
+<script type="text/babel" src="home.jsx?v=hero-depto-1"></script>
 <script type="text/babel" src="catalog.jsx?v=mobile-1"></script>
 <script type="text/babel" src="detail.jsx?v=consultas-1"></script>
 <script type="text/babel" src="temporal.jsx?v=mobile-1"></script>
-<script type="text/babel" src="plans.jsx?v=modal-portal-1"></script>
+<script type="text/babel" src="plans.jsx?v=mobile-fix-2"></script>
 <script type="text/babel" src="publish.jsx?v=confirm-1"></script>
 <script type="text/babel" src="posters.jsx?v=mobile-1"></script>
 <script type="text/babel" src="admin.jsx?v=real-empty-1"></script>

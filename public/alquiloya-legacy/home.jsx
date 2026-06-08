@@ -97,13 +97,22 @@ function HeroSearch({ onSubmit, verifiedCount }) {
   const [ciudad, setCiudad] = React.useState('Asunción');
   const [barrio, setBarrio] = React.useState('Todos los barrios');
   const [tipo, setTipo] = React.useState('depto');
-  // Flat list of all cities across all departments, for the Hero's "Ciudad" picker
+  // Lista completa de ciudades (por si el usuario no eligio departamento aun)
+  // y lista filtrada por departamento (cuando si lo eligio).
   const ALL_CITIES = React.useMemo(() => {
     const out = [];
     DEPARTAMENTOS.forEach(d => (CIUDADES[d] || []).forEach(c => out.push(c)));
     return Array.from(new Set(out));
   }, []);
   const cityToDepto = (c) => DEPARTAMENTOS.find(d => (CIUDADES[d] || []).includes(c)) || 'Central';
+  // Opciones de Departamento (con prefijo "Todos" por si no quiere filtrar).
+  const DEPARTAMENTO_OPTIONS = React.useMemo(() => ['Todos los deptos', ...DEPARTAMENTOS], []);
+  // Ciudades filtradas por departamento. Si "Todos los deptos" -> todas.
+  const ciudadesFiltradas = React.useMemo(() => {
+    if (depto === 'Todos los deptos') return ALL_CITIES;
+    const list = CIUDADES[depto] || [];
+    return list.length > 0 ? list : ALL_CITIES;
+  }, [depto, ALL_CITIES]);
   const PRICE_MIN = 500000, PRICE_MAX = 20000000;
   const AREA_MIN = 20, AREA_MAX = 500;
   const [priceMin, setPriceMin] = React.useState(PRICE_MIN);
@@ -115,13 +124,26 @@ function HeroSearch({ onSubmit, verifiedCount }) {
     const list = BARRIOS_BY_CIUDAD[ciudad] || [];
     return ['Todos los barrios', ...list];
   }, [ciudad]);
-  // Auto-resync depto y barrio cuando cambia la ciudad
+  // Auto-resync barrio cuando cambia la ciudad. Ya NO sobreescribimos depto
+  // automaticamente — el usuario lo elige explicitamente desde su propio
+  // select. Si el dpto seleccionado es "Todos los deptos" igual derivamos
+  // un valor para el payload de submit.
   React.useEffect(() => {
-    setDepto(cityToDepto(ciudad));
     if (!barriosCiudad.includes(barrio)) setBarrio('Todos los barrios');
   }, [ciudad]);
+  // Si cambia el departamento y la ciudad actual no pertenece a el,
+  // ajustamos la ciudad al primer valor disponible para no quedar inconsistente.
+  React.useEffect(() => {
+    if (depto === 'Todos los deptos') return;
+    if (!ciudadesFiltradas.includes(ciudad)) {
+      setCiudad(ciudadesFiltradas[0] || 'Asunción');
+    }
+  }, [depto, ciudadesFiltradas]);
   const submit = () => {
-    window.__pendingSearch = { tipo, depto, ciudad, barrio, priceMin, priceMax, areaMin, areaMax };
+    // Si el usuario eligio "Todos los deptos" derivamos el depto de la ciudad
+    // (mantiene compat con el catalogo que espera un departamento concreto).
+    const deptoEfectivo = depto === 'Todos los deptos' ? cityToDepto(ciudad) : depto;
+    window.__pendingSearch = { tipo, depto: deptoEfectivo, ciudad, barrio, priceMin, priceMax, areaMin, areaMax };
     onSubmit && onSubmit();
   };
   return (
@@ -154,8 +176,9 @@ function HeroSearch({ onSubmit, verifiedCount }) {
         boxShadow: '0 24px 48px rgba(11,22,34,.10), 0 4px 12px rgba(11,22,34,.06)',
         overflow: 'hidden',
       }}>
-        <div className="hero-search-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1.2fr 1fr auto', alignItems: 'stretch' }}>
-          <SearchCell label="Ciudad" value={ciudad} options={ALL_CITIES} onChange={setCiudad} icon="pin" divider/>
+        <div className="hero-search-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1.2fr 1fr auto', alignItems: 'stretch' }}>
+          <SearchCell label="Departamento" value={depto} options={DEPARTAMENTO_OPTIONS} onChange={setDepto} icon="pin" divider/>
+          <SearchCell label="Ciudad" value={ciudad} options={ciudadesFiltradas} onChange={setCiudad} divider/>
           <SearchCell label="Barrio" value={barrio} options={barriosCiudad} onChange={setBarrio} divider/>
           <RangeCell
             label="Rango de precios, Gs."
@@ -947,32 +970,53 @@ function OwnersBlock({ onNav }) {
             </div>
           </div>
           <div style={{ position: 'relative' }}>
-            <div className="card" style={{ padding: 18, color: 'var(--ink)', boxShadow: 'var(--shadow-lg)' }}>
-              <div className="row gap-12">
-                {featured && featured.foto_url ? (
-                  <img src={featured.foto_url} alt={featured.autor} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }}/>
-                ) : (
-                  <Avatar name={featured ? featured.autor : 'Mariana López'} size={42} color="#0058A5"/>
-                )}
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{featured ? featured.autor : 'Mariana López'}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
-                    {featured
-                      ? [featured.rol, featured.ciudad].filter(Boolean).join(' · ') || 'Cliente AlquiloYa'
-                      : 'Propietaria · Asunción'}
+            {featured ? (
+              <div className="card" style={{ padding: 18, color: 'var(--ink)', boxShadow: 'var(--shadow-lg)' }}>
+                <div className="row gap-12">
+                  {featured.foto_url ? (
+                    <img src={featured.foto_url} alt={featured.autor} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }}/>
+                  ) : (
+                    <Avatar name={featured.autor} size={42} color="#0058A5"/>
+                  )}
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>{featured.autor}</div>
+                    <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                      {[featured.rol, featured.ciudad].filter(Boolean).join(' · ') || 'Cliente AlquiloYa'}
+                    </div>
                   </div>
+                  {featured.destacado && (
+                    <span className="badge badge-verified" style={{ marginLeft: 'auto' }}><I.check s={10}/> Verificada</span>
+                  )}
                 </div>
-                {(!featured || featured.destacado) && (
-                  <span className="badge badge-verified" style={{ marginLeft: 'auto' }}><I.check s={10}/> Verificada</span>
-                )}
+                <div style={{ fontSize: 14, color: 'var(--ink-2)', marginTop: 14, fontStyle: 'italic', lineHeight: 1.5 }}>
+                  &quot;{featured.contenido}&quot;
+                </div>
+                <div className="row gap-4" style={{ marginTop: 12, color: 'var(--yellow)' }}>
+                  {Array.from({ length: Number(featured.calificacion) || 5 }).map((_, i) => <I.star key={i} s={14}/>)}
+                </div>
               </div>
-              <div style={{ fontSize: 14, color: 'var(--ink-2)', marginTop: 14, fontStyle: 'italic', lineHeight: 1.5 }}>
-                &quot;{featured ? featured.contenido : 'Publiqué mi departamento un martes y el viernes ya tenía visitas confirmadas. Lo recomiendo 100%.'}&quot;
+            ) : (
+              /* Placeholder honesto cuando no hay testimonios cargados:
+                 evita el hueco blanco Y evita mostrar un testimonio falso. */
+              <div className="card" style={{ padding: 22, color: 'var(--ink)', boxShadow: 'var(--shadow-lg)', textAlign: 'center' }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: '50%',
+                  background: 'var(--blue-50)', color: 'var(--blue)',
+                  display: 'grid', placeItems: 'center', margin: '4px auto 12px',
+                }}>
+                  <I.chat s={26}/>
+                </div>
+                <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 16, color: 'var(--ink)' }}>
+                  Próximamente, historias reales.
+                </div>
+                <div style={{ fontSize: 13.5, color: 'var(--ink-3)', marginTop: 8, lineHeight: 1.55 }}>
+                  Pronto compartiremos experiencias de propietarios e inquilinos que confiaron en AlquiloYa.
+                </div>
+                <div className="row gap-4" style={{ marginTop: 14, justifyContent: 'center', color: 'var(--yellow)', opacity: .55 }}>
+                  {Array.from({ length: 5 }).map((_, i) => <I.star key={i} s={14}/>)}
+                </div>
               </div>
-              <div className="row gap-4" style={{ marginTop: 12, color: 'var(--yellow)' }}>
-                {Array.from({ length: featured ? (Number(featured.calificacion) || 5) : 5 }).map((_, i) => <I.star key={i} s={14}/>)}
-              </div>
-            </div>
+            )}
             <div style={{ position: 'absolute', right: -16, bottom: -16, background: 'var(--yellow)', color: 'var(--ink)', padding: '10px 16px', borderRadius: 12, fontFamily: 'Montserrat', fontWeight: 800, fontSize: 13, boxShadow: 'var(--shadow)' }}>
               <I.bolt s={14}/> Alquilado en 4 días
             </div>
