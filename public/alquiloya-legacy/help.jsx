@@ -92,28 +92,40 @@ function HelpPage({ onNav }) {
         </div>
       </section>
 
-      {/* Quick contact cards */}
+      {/* Quick contact cards — centralizado en window.CONTACTO_ALQUILOYA */}
       <div className="container" style={{ marginTop: -40, position: 'relative' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-          <ContactCard
-            icon="whats" color="#25D366"
-            title="WhatsApp"
-            desc="Respondemos en menos de 10 minutos en horario hábil"
-            cta="Escribir a +595 981 555 000"
-          />
-          <ContactCard
-            icon="chat" color="var(--blue)"
-            title="Chat con VIVIO"
-            desc="Asistente IA disponible 24/7. Te resuelve dudas frecuentes al instante"
-            cta="Abrir chat"
-          />
-          <ContactCard
-            icon="doc" color="#6e3ad1"
-            title="Email"
-            desc="Para consultas detalladas o adjuntar documentación"
-            cta="ayuda@alquiloya.com.py"
-          />
-        </div>
+        {(() => {
+          const C = (typeof window !== 'undefined' && window.CONTACTO_ALQUILOYA) || {
+            whatsapp: '595981555000',
+            whatsappLabel: '+595 981 555 000',
+            emailAyuda: 'ayuda@alquiloya.com.py',
+          };
+          const emailHelp = C.emailAyuda || C.email || 'ayuda@alquiloya.com.py';
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+              <ContactCard
+                icon="whats" color="#25D366"
+                title="WhatsApp"
+                desc="Respondemos en menos de 10 minutos en horario hábil"
+                cta={'Escribir a ' + C.whatsappLabel}
+                href={'https://wa.me/' + C.whatsapp}
+              />
+              <ContactCard
+                icon="chat" color="var(--blue)"
+                title="Chat con VIVIO"
+                desc="Asistente IA disponible 24/7. Te resuelve dudas frecuentes al instante"
+                cta="Abrir chat"
+              />
+              <ContactCard
+                icon="doc" color="#6e3ad1"
+                title="Email"
+                desc="Para consultas detalladas o adjuntar documentación"
+                cta={emailHelp}
+                href={'mailto:' + emailHelp}
+              />
+            </div>
+          );
+        })()}
       </div>
 
       {/* FAQ — two column: sidebar of categories + numbered question list */}
@@ -162,13 +174,25 @@ function HelpPage({ onNav }) {
               </div>
               <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 14, marginTop: 12 }}>¿Necesitás ayuda?</div>
               <div className="muted" style={{ fontSize: 11.5, marginTop: 4, lineHeight: 1.45 }}>Te respondemos en menos de 24 hs hábiles.</div>
-              <div className="col gap-6" style={{ marginTop: 12, fontSize: 12, color: 'var(--ink-2)' }}>
-                <div className="row gap-6"><I.whats s={12}/> +595 981 555 000</div>
-                <div className="row gap-6"><I.user s={12}/> ayuda@alquiloya.com.py</div>
-              </div>
-              <button className="btn btn-blue" style={{ width: '100%', justifyContent: 'center', marginTop: 12, fontSize: 12.5, padding: '8px 12px' }}>
-                Escribinos →
-              </button>
+              {(() => {
+                const C = (typeof window !== 'undefined' && window.CONTACTO_ALQUILOYA) || {
+                  whatsapp: '595981555000',
+                  whatsappLabel: '+595 981 555 000',
+                  emailAyuda: 'ayuda@alquiloya.com.py',
+                };
+                const emailH = C.emailAyuda || C.email || 'ayuda@alquiloya.com.py';
+                return (
+                  <>
+                    <div className="col gap-6" style={{ marginTop: 12, fontSize: 12, color: 'var(--ink-2)' }}>
+                      <div className="row gap-6"><I.whats s={12}/> {C.whatsappLabel}</div>
+                      <div className="row gap-6"><I.user s={12}/> {emailH}</div>
+                    </div>
+                    <a className="btn btn-blue" href={'https://wa.me/' + C.whatsapp} target="_blank" rel="noopener noreferrer" style={{ width: '100%', justifyContent: 'center', marginTop: 12, fontSize: 12.5, padding: '8px 12px' }}>
+                      Escribinos →
+                    </a>
+                  </>
+                );
+              })()}
             </div>
           </aside>
 
@@ -192,18 +216,28 @@ function HelpPage({ onNav }) {
         <div className="card" style={{ padding: 36, background: 'linear-gradient(135deg, var(--yellow-50), #fff)', border: '1px solid #f1d97a', textAlign: 'center' }}>
           <h3 style={{ fontSize: 24 }}>¿No encontraste la respuesta?</h3>
           <p className="muted" style={{ marginTop: 8, fontSize: 14.5 }}>Nuestro equipo de soporte responde de lunes a sábado, de 8:00 a 20:00.</p>
-          <div className="row gap-12" style={{ justifyContent: 'center', marginTop: 22 }}>
-            <button className="btn btn-wa btn-lg"><I.whats s={16}/> Escribir por WhatsApp</button>
-            <button className="btn btn-blue btn-lg"><I.chat s={16}/> Hablar con VIVIO</button>
-            <button className="btn btn-outline btn-lg">Enviar email</button>
-          </div>
+          {(() => {
+            const C = (typeof window !== 'undefined' && window.CONTACTO_ALQUILOYA) || {
+              whatsapp: '595981555000',
+              emailAyuda: 'ayuda@alquiloya.com.py',
+            };
+            const emailH = C.emailAyuda || C.email || 'ayuda@alquiloya.com.py';
+            return (
+              <div className="row gap-12" style={{ justifyContent: 'center', marginTop: 22 }}>
+                <a className="btn btn-wa btn-lg" href={'https://wa.me/' + C.whatsapp} target="_blank" rel="noopener noreferrer"><I.whats s={16}/> Escribir por WhatsApp</a>
+                <button className="btn btn-blue btn-lg"><I.chat s={16}/> Hablar con VIVIO</button>
+                <a className="btn btn-outline btn-lg" href={'mailto:' + emailH}>Enviar email</a>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
   );
 }
 
-function ContactCard({ icon, color, title, desc, cta }) {
+function ContactCard({ icon, color, title, desc, cta, href }) {
+  const ctaStyle = { marginTop: 10, fontSize: 12, padding: '6px 12px' };
   return (
     <div className="card" style={{ padding: 16, textAlign: 'center' }}>
       <div style={{
@@ -214,7 +248,11 @@ function ContactCard({ icon, color, title, desc, cta }) {
       </div>
       <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 14, marginTop: 10 }}>{title}</div>
       <p className="muted" style={{ fontSize: 11.5, marginTop: 4, lineHeight: 1.45 }}>{desc}</p>
-      <button className="btn btn-outline" style={{ marginTop: 10, fontSize: 12, padding: '6px 12px' }}>{cta}</button>
+      {href ? (
+        <a className="btn btn-outline" href={href} target={href.startsWith('http') ? '_blank' : undefined} rel={href.startsWith('http') ? 'noopener noreferrer' : undefined} style={ctaStyle}>{cta}</a>
+      ) : (
+        <button className="btn btn-outline" style={ctaStyle}>{cta}</button>
+      )}
     </div>
   );
 }

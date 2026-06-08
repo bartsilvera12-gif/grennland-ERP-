@@ -83,13 +83,21 @@ export async function GET(request: Request) {
         activas: number;
         publicadas: number;
         destacadas: number;
+        pendientes: number;
       }>(
         pool,
         `SELECT
            count(*)::int AS total,
            count(*) FILTER (WHERE activo = true)::int AS activas,
            count(*) FILTER (WHERE activo = true AND visible_web = true)::int AS publicadas,
-           count(*) FILTER (WHERE destacada = true)::int AS destacadas
+           count(*) FILTER (WHERE destacada = true)::int AS destacadas,
+           -- Pendientes de aprobacion: criterio identico a listErpPropiedadesPendientes
+           -- (activo=false AND visible_web=false AND estado != 'rechazada' or NULL).
+           count(*) FILTER (
+             WHERE activo = false
+               AND visible_web = false
+               AND (estado IS NULL OR estado <> 'rechazada')
+           )::int AS pendientes
          FROM ${t("propiedades")} WHERE empresa_id = $1::uuid`,
         [ALQUILOYA_EMPRESA_ID]
       ),
@@ -242,7 +250,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       data: {
-        propiedades: totales.rows[0] ?? { total: 0, activas: 0, publicadas: 0, destacadas: 0 },
+        propiedades: totales.rows[0] ?? { total: 0, activas: 0, publicadas: 0, destacadas: 0, pendientes: 0 },
         por_tipo: porTipo.rows,
         por_ciudad: porCiudad.rows,
         por_plan: porPlan,

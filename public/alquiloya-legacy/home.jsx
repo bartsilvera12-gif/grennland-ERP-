@@ -22,7 +22,7 @@ function Hero({ onNav, verifiedCount }) {
       {/* background house image with very low opacity */}
       <div style={{
         position: 'absolute', inset: 0,
-        backgroundImage: `url(https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=1920&auto=format&fit=crop&q=70)`,
+        backgroundImage: `url(https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=1920&auto=format&fit=crop&q=60)`,
         backgroundSize: 'cover', backgroundPosition: 'center',
         opacity: 0.28,
         pointerEvents: 'none',
@@ -682,7 +682,7 @@ function Categories({ properties = PROPERTIES, onNav }) {
               background: 'linear-gradient(90deg, var(--blue) 0%, var(--yellow) 100%)',
             }}/>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <img src={c.img} alt={c.label} style={{ width: 84, height: 84, objectFit: 'contain' }}/>
+              <img src={c.img} alt={c.label} loading="lazy" decoding="async" style={{ width: 84, height: 84, objectFit: 'contain' }}/>
               <span style={{
                 fontFamily: 'Montserrat', fontWeight: 900, fontSize: 24, color: 'var(--blue)',
                 opacity: .92
@@ -931,7 +931,7 @@ function OwnersBlock({ onNav }) {
         {/* Property photo on the right half with white overlay */}
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
-          backgroundImage: 'url(https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1600&auto=format&fit=crop&q=70)',
+          backgroundImage: 'url(https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1600&auto=format&fit=crop&q=60)',
           backgroundSize: 'cover',
           backgroundPosition: 'center right',
           maskImage: 'linear-gradient(90deg, transparent 0%, transparent 35%, #000 60%, #000 100%)',
@@ -974,7 +974,7 @@ function OwnersBlock({ onNav }) {
               <div className="card" style={{ padding: 18, color: 'var(--ink)', boxShadow: 'var(--shadow-lg)' }}>
                 <div className="row gap-12">
                   {featured.foto_url ? (
-                    <img src={featured.foto_url} alt={featured.autor} style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }}/>
+                    <img src={featured.foto_url} alt={featured.autor} loading="lazy" decoding="async" style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }}/>
                   ) : (
                     <Avatar name={featured.autor} size={42} color="#0058A5"/>
                   )}

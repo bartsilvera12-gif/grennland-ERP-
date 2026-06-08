@@ -149,12 +149,23 @@ function Footer({ onNav }) {
             { label: 'Acceso referidos', href: '/portal-referidos/login' },
             { label: 'Centro de ayuda', onClick: () => onNav('help') },
           ]} />
-          <FootCol title="Contacto" items={[
-            { label: 'Info@alquiloya.com.py', href: 'mailto:Info@alquiloya.com.py' },
-            { label: '0983 000 292', href: 'https://wa.me/595983000292' },
-            { label: 'Asunción, Paraguay', href: 'https://maps.google.com/?q=Asuncion+Paraguay', external: true },
-            { label: 'Lunes a Sábado 08:00 a 20:00' },
-          ]} />
+          <FootCol title="Contacto" items={(() => {
+            // Centralizado en data.jsx (window.CONTACTO_ALQUILOYA).
+            // Mantiene los mismos valores actuales para no cambiar nada visible.
+            const C = (typeof window !== 'undefined' && window.CONTACTO_ALQUILOYA) || {
+              email: 'Info@alquiloya.com.py',
+              telefono: '0983 000 292',
+              telefonoWa: '595983000292',
+              direccion: 'Asunción, Paraguay',
+              horario: 'Lunes a Sábado 08:00 a 20:00',
+            };
+            return [
+              { label: C.email, href: 'mailto:' + C.email },
+              { label: C.telefono, href: 'https://wa.me/' + C.telefonoWa },
+              { label: C.direccion, href: 'https://maps.google.com/?q=' + encodeURIComponent(C.direccion), external: true },
+              { label: C.horario },
+            ];
+          })()} />
         </div>
         <div style={{ borderTop: '1px solid #1b2a3a', marginTop: 40, paddingTop: 20, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 12.5, color: '#6b7785', flexShrink: 0 }}>© 2026 AlquiloYa · Todos los derechos reservados</div>
@@ -164,7 +175,7 @@ function Footer({ onNav }) {
           <div className="row gap-16" style={{ fontSize: 12.5, flexShrink: 0 }}>
             <a href="https://instagram.com/alquiloya" target="_blank" rel="noopener noreferrer" style={{ color: '#9aa4b1', textDecoration: 'none' }}>Instagram</a>
             <a href="https://facebook.com/alquiloya" target="_blank" rel="noopener noreferrer" style={{ color: '#9aa4b1', textDecoration: 'none' }}>Facebook</a>
-            <a href="https://wa.me/595983000292" target="_blank" rel="noopener noreferrer" style={{ color: '#9aa4b1', textDecoration: 'none' }}>WhatsApp</a>
+            <a href={'https://wa.me/' + ((typeof window !== 'undefined' && window.CONTACTO_ALQUILOYA && window.CONTACTO_ALQUILOYA.telefonoWa) || '595983000292')} target="_blank" rel="noopener noreferrer" style={{ color: '#9aa4b1', textDecoration: 'none' }}>WhatsApp</a>
             <a href="https://tiktok.com/@alquiloya" target="_blank" rel="noopener noreferrer" style={{ color: '#9aa4b1', textDecoration: 'none' }}>TikTok</a>
           </div>
         </div>
@@ -721,7 +732,10 @@ function FileInput({ label, file, onChange, compact }) {
 // llamadas a una API (Sendpulse / OpenAI / Claude) sin tocar el componente.
 // ────────────────────────────────────────────────────────────────────────────
 
-const VIVIO_WA = '595981555000'; // WhatsApp de soporte AlquiloYa
+// WhatsApp de soporte AlquiloYa — centralizado en data.jsx (CONTACTO_ALQUILOYA).
+// Mantenemos fallback al valor actual por si data.jsx aun no cargo cuando
+// VIVIO inicializa.
+const VIVIO_WA = (typeof window !== 'undefined' && window.CONTACTO_ALQUILOYA && window.CONTACTO_ALQUILOYA.whatsapp) || '595981555000';
 
 const VIVIO_INITIAL_STATE = {
   step: 'intro',

@@ -286,6 +286,7 @@ function NavItem({
   collapsed,
   expanded,
   onToggleExpand,
+  badgeCount,
 }: {
   item: MenuItem;
   itemId: string;
@@ -296,6 +297,8 @@ function NavItem({
   collapsed: boolean;
   expanded: boolean;
   onToggleExpand: () => void;
+  /** Si esta presente y > 0 muestra un pill numerico al lado del label. */
+  badgeCount?: number;
 }) {
   const Icon = item.icon;
   const p = usePathname() ?? "";
@@ -423,6 +426,15 @@ function NavItem({
       {!collapsed && (
         <>
           <span className="flex-1 truncate">{item.label}</span>
+          {typeof badgeCount === "number" && badgeCount > 0 ? (
+            <span
+              className="ml-1 shrink-0 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold leading-none text-amber-300 ring-1 ring-amber-400/30"
+              title={`${badgeCount} pendiente${badgeCount === 1 ? "" : "s"}`}
+              aria-label={`${badgeCount} pendientes`}
+            >
+              {badgeCount > 99 ? "99+" : badgeCount}
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={(e) => { e.preventDefault(); onToggleFavorito(itemId); }}
@@ -437,6 +449,12 @@ function NavItem({
           </button>
         </>
       )}
+      {collapsed && typeof badgeCount === "number" && badgeCount > 0 ? (
+        <span
+          aria-hidden="true"
+          className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-amber-400 ring-2 ring-[#0f172a]"
+        />
+      ) : null}
     </Link>
   );
 }
@@ -453,6 +471,9 @@ export default function Sidebar() {
   });
   const [cargando, setCargando] = useState(true);
   const [esSuperAdmin, setEsSuperAdmin] = useState(false);
+  /** Cantidad de propiedades pendientes de aprobacion — alimenta el badge
+   *  del item "Pendientes de aprobacion" en el sidebar. 0 = no se muestra. */
+  const [propiedadesPendientesCount, setPropiedadesPendientesCount] = useState<number>(0);
   /** Filtro visual del menú (no altera permisos ni rutas). */
   const [menuSearchQuery, setMenuSearchQuery] = useState("");
   const { setSidebarReady } = useBoot();
@@ -624,6 +645,31 @@ export default function Sidebar() {
   const showMenuNoResults =
     !cargando && normalizeMenuSearch(menuSearchQuery).length > 0 && !anyMenuVisible;
 
+  /**
+   * Trae el count de propiedades pendientes desde /api/dashboard/alquiloya-summary
+   * para alimentar el badge del item "Pendientes de aprobacion". Cache de 60s
+   * compartido con otros consumidores. Best-effort: si falla no rompe nada.
+   * Se reintenta cuando el sidebar se monta y cuando cambia el pathname (asi
+   * al volver desde la pantalla de pendientes vemos el count actualizado).
+   */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const body = await cachedSessionFetch<{
+          success?: boolean;
+          data?: { propiedades?: { pendientes?: number } };
+        }>("/api/dashboard/alquiloya-summary", 60 * 1000);
+        if (cancelled) return;
+        const n = body?.data?.propiedades?.pendientes;
+        setPropiedadesPendientesCount(typeof n === "number" && n > 0 ? n : 0);
+      } catch {
+        if (!cancelled) setPropiedadesPendientesCount(0);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [pathname]);
+
   useEffect(() => {
     const q = menuSearchQuery.trim();
     if (!q) return;
@@ -727,6 +773,7 @@ export default function Sidebar() {
                   collapsed={collapsed}
                   expanded={expandedItems[item.key] ?? false}
                   onToggleExpand={() => toggleExpand(item.key)}
+                  badgeCount={item.key === "propiedades-pendientes" ? propiedadesPendientesCount : undefined}
                 />
               ))}
             </div>
@@ -763,6 +810,7 @@ export default function Sidebar() {
                 collapsed={collapsed}
                 expanded={expandedItems[item.key] ?? false}
                 onToggleExpand={() => toggleExpand(item.key)}
+                badgeCount={item.key === "propiedades-pendientes" ? propiedadesPendientesCount : undefined}
               />
             ))
           )}

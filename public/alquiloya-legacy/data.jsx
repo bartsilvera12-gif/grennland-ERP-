@@ -1,5 +1,32 @@
 // Mock data — properties, departamentos, ciudades, etc.
 
+/**
+ * Centralizacion de contactos publicos de AlquiloYa.
+ *
+ * Esta constante es la UNICA fuente de verdad de los telefonos / WhatsApp /
+ * email / direccion que aparecen en la web publica (footer, ayuda, chatbot
+ * VIVIO, etc.). Cuando el cliente confirme los datos reales, editamos solo
+ * aca y se propaga a todos los lugares que la consumen.
+ *
+ * Los valores actuales corresponden a los que ya estaban hardcodeados en
+ * shared.jsx y help.jsx — no cambia nada visible al usuario en esta tanda.
+ */
+const CONTACTO_ALQUILOYA = {
+  whatsapp: '595981555000',       // E.164 sin "+" — usado en wa.me/{}
+  whatsappLabel: '+595 981 555 000', // visible al usuario
+  telefono: '0983 000 292',       // telefono visible en footer
+  telefonoWa: '595983000292',     // E.164 del telefono de footer para wa.me
+  email: 'Info@alquiloya.com.py',
+  emailAyuda: 'ayuda@alquiloya.com.py', // email especifico del help center
+  direccion: 'Asunción, Paraguay',
+  horario: 'Lunes a Sábado 08:00 a 20:00',
+};
+// Exponer en window para que el resto de los .jsx (cargados como scripts
+// independientes via Babel runtime) puedan acceder sin imports.
+if (typeof window !== 'undefined') {
+  window.CONTACTO_ALQUILOYA = CONTACTO_ALQUILOYA;
+}
+
 const DEPARTAMENTOS = [
   'Central', 'Alto Paraná', 'Itapúa', 'Cordillera', 'Caaguazú', 'San Pedro',
   'Paraguarí', 'Guairá', 'Caazapá', 'Misiones', 'Ñeembucú', 'Concepción', 'Amambay', 'Canindeyú',
