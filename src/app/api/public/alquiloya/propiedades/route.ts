@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import type { PoolClient } from "pg";
 import { listPublicPropiedades } from "@/lib/alquiloya/public-api";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
+import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { createServiceRoleClient } from "@/lib/supabase/service-admin";
+import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -93,6 +96,68 @@ type Body = {
 
 export async function POST(request: Request) {
   try {
+    // ── Gate de cuenta activa ───────────────────────────────────────────────
+    // A pedido del cliente: para publicar tenes que tener cuenta de agente con
+    // plan activo. Antes esto era un endpoint anonimo que creaba propiedades
+    // con agente_id=NULL — esas propiedades despues aparecian en el detalle
+    // con un "agente" inventado por el fallback de la legacy data.jsx (ver
+    // public/alquiloya-legacy/api-data.jsx normalizeProperty), pero nunca se
+    // veian en el perfil publico real de ese agente.
+    const authUser = await getAuthUserForApiRoute(request);
+    if (!authUser?.id) {
+      return NextResponse.json(
+        { error: "Necesitas iniciar sesion con una cuenta de agente activa para publicar." },
+        { status: 401 }
+      );
+    }
+
+    const supabase = createServiceRoleClient();
+    const usuarioErp = await resolveUsuarioErpFromAuthUser(supabase, authUser);
+    if (!usuarioErp || usuarioErp.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+      return NextResponse.json(
+        { error: "Tu usuario no esta habilitado para publicar en AlquiloYa." },
+        { status: 403 }
+      );
+    }
+
+    // Resolver agente_id desde usuarios.agente_id (misma logica que /api/agente/me).
+    const { data: uExt } = await supabase
+      .from("usuarios")
+      .select("agente_id")
+      .eq("id", usuarioErp.id)
+      .limit(1)
+      .maybeSingle();
+    const agenteId = (uExt as { agente_id?: string | null } | null)?.agente_id ?? null;
+    if (!agenteId) {
+      return NextResponse.json(
+        { error: "Tu cuenta no tiene perfil de agente. Pedi alta al admin." },
+        { status: 403 }
+      );
+    }
+
+    // Validar que el agente este activo y, si tiene plan_vencimiento_at, que
+    // no este vencido. Si el campo es NULL lo tratamos como "sin vencimiento".
+    const { data: agRow } = await supabase
+      .from("agentes")
+      .select("id, activo, plan_vencimiento_at")
+      .eq("id", agenteId)
+      .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+      .limit(1)
+      .maybeSingle();
+    if (!agRow || (agRow as { activo?: boolean }).activo !== true) {
+      return NextResponse.json(
+        { error: "Tu cuenta de agente esta inactiva. Contactanos para reactivarla." },
+        { status: 403 }
+      );
+    }
+    const venc = (agRow as { plan_vencimiento_at?: string | null }).plan_vencimiento_at ?? null;
+    if (venc && new Date(venc).getTime() < Date.now()) {
+      return NextResponse.json(
+        { error: "Tu plan esta vencido. Renovalo para volver a publicar." },
+        { status: 402 }
+      );
+    }
+
     const body = (await request.json().catch(() => ({}))) as Body;
 
     // Sanitización + validaciones
@@ -201,7 +266,8 @@ export async function POST(request: Request) {
         );
       }
 
-      // 2. Insertar propiedad — siempre como NO publicada/inactiva
+      // 2. Insertar propiedad — siempre como NO publicada/inactiva, linkeada
+      // al agente_id resuelto desde la sesion (ya no se crea con agente_id=NULL).
       const ins = await client.query<{ id: string; codigo: string | null }>(
         `INSERT INTO "alquiloya"."propiedades" (
            empresa_id, propietario_id, agente_id, codigo, titulo, descripcion,
@@ -211,19 +277,20 @@ export async function POST(request: Request) {
            destacada, visible_web, activo, lat, lng
          )
          VALUES (
-           $1::uuid, $2::uuid, NULL,
+           $1::uuid, $2::uuid, $3::uuid,
            'AY-PUB-' || to_char(now(),'YYYYMMDDHH24MISS') || '-' || floor(random()*1000)::int,
-           $3, $4, $5, $6,
+           $4, $5, $6, $7,
            'inactiva',
-           $7, $8, $9,
-           $10, COALESCE($11,'PYG'), $12, $13, $14,
-           $15, $16,
-           false, false, false, $17, $18
+           $8, $9, $10,
+           $11, COALESCE($12,'PYG'), $13, $14, $15,
+           $16, $17,
+           false, false, false, $18, $19
          )
          RETURNING id, codigo`,
         [
           ALQUILOYA_EMPRESA_ID,
           propietarioId,
+          agenteId,
           titulo,
           s(body.descripcion, 4000),
           tipo,

@@ -148,9 +148,16 @@
     const fallback = findFallbackProperty(row);
     const cover = sanitizeImageUrl(row.cover?.url || row.cover) || fallback?.cover || null;
     const features = featuresFromRow(row, fallback);
+    // El fallback a `fallback?.agent` venia de la data mock (data.jsx) y le
+    // pegaba "Mariana López / Diego Aguilar / ..." a cualquier propiedad real
+    // que no tuviera agente_id en la base. Resultado: la propiedad aparecia
+    // en el detalle con "Mariana Lopez" como agente, pero en el perfil
+    // publico de Mariana NO estaba (porque no le pertenece). Sacamos el
+    // fallback a mock — si no hay agente real, devolvemos null y la UI
+    // muestra "Propietario directo" o similar.
     const agent = row.agente
       ? normalizeAgent(row.agente)
-      : agents.find(a => a.apiId === row.agente_id || a.id === row.agente_id) || fallback?.agent || null;
+      : agents.find(a => a.apiId === row.agente_id || a.id === row.agente_id) || null;
     const price = toNumber(row.precio ?? row.price, fallback?.price ?? 0);
     const tipo = row.tipo || fallback?.tipo || 'depto';
 
