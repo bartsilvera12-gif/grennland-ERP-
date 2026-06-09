@@ -16,6 +16,22 @@ function t(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
 }
 
+// Cache module-level: una vez parcheado el schema (o confirmado que ya esta),
+// no volvemos a chequear hasta el proximo cold start.
+let usuariosPropietarioIdSchemaReady = false;
+
+// Espejo idempotente de supabase/migrations/20260627120000_alquiloya_usuarios_propietario_id.sql
+// Se ejecuta on-demand si la columna falta en produccion. Sin esto, la query
+// SELECT propietario_id FROM usuarios fallaba con SQLSTATE 42703.
+const BOOTSTRAP_USUARIOS_PROPIETARIO_ID_SQL = `
+ALTER TABLE alquiloya.usuarios
+  ADD COLUMN IF NOT EXISTS propietario_id uuid;
+
+CREATE INDEX IF NOT EXISTS usuarios_propietario_id_idx
+  ON alquiloya.usuarios (empresa_id, propietario_id)
+  WHERE propietario_id IS NOT NULL;
+`;
+
 type Ctx = { params: Promise<{ id: string }> };
 
 /**
@@ -67,7 +83,33 @@ export async function POST(request: Request, ctx: Ctx) {
       );
     }
 
-    // 2) Buscar usuarios.propietario_id = id para reutilizar auth_user_id.
+    // 2) Bootstrap on-demand de alquiloya.usuarios.propietario_id si falta.
+    // La migracion 20260627120000_alquiloya_usuarios_propietario_id.sql no
+    // estaba aplicada en produccion — sin esto, la query siguiente fallaba
+    // con SQLSTATE 42703 "column propietario_id does not exist".
+    if (!usuariosPropietarioIdSchemaReady) {
+      try {
+        await queryWithRetry(pool, BOOTSTRAP_USUARIOS_PROPIETARIO_ID_SQL, []);
+        usuariosPropietarioIdSchemaReady = true;
+      } catch (bootErr) {
+        const code = (bootErr as { code?: string })?.code ?? "";
+        console.error(
+          "[propietarios/reset-password] bootstrap fail",
+          "code=" + code,
+          bootErr instanceof Error ? bootErr.message : bootErr
+        );
+        return NextResponse.json(
+          {
+            error:
+              "No pudimos preparar el schema de usuarios. Avisa al admin." +
+              (code ? ` (codigo ${code})` : ""),
+          },
+          { status: 503 }
+        );
+      }
+    }
+
+    // 3) Buscar usuarios.propietario_id = id para reutilizar auth_user_id.
     const { rows: usuarioRows } = await queryWithRetry<{
       id: string;
       auth_user_id: string;
