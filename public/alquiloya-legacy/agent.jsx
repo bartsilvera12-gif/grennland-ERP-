@@ -1,17 +1,43 @@
 // Perfil público de agente — visible para cualquier visitante
 
 function AgentProfilePage({ slug, onNav, onProperty }) {
-  const { agents, properties } = useAlquiloYaPublicData();
-  const baseAgent = agents.find(a => a.slug === slug || a.id === slug || a.apiId === slug) || agents[0] || AGENTS[0];
+  const { agents } = useAlquiloYaPublicData();
+  // Buscamos el agente solicitado por slug / id / apiId. Si NO se encuentra,
+  // NO caemos a un agente mock (eso producia el bug de "Mariana Lopez" como
+  // default visible). Pedimos detalle solo cuando hay match real.
+  const baseAgent = agents.find(a => a.slug === slug || a.id === slug || a.apiId === slug) || null;
   const apiAgent = useAlquiloYaPublicAgent(baseAgent?.id);
   const agent = apiAgent || baseAgent;
+
+  // Hooks declarados ANTES del early return para no romper reglas de hooks.
   const [tab, setTab] = React.useState('propiedades');
   const tabsRef = React.useRef(null);
   const [copied, setCopied] = React.useState(false);
-  const props = (agent.propiedades && agent.propiedades.length
-    ? agent.propiedades
-    : properties.filter(p => p.agent?.id === agent.id || p.agent?.apiId === agent.id || p.agent?.name === agent.name)
-  ).slice(0, 9);
+
+  if (!agent) {
+    // Estado vacio honesto cuando el slug no corresponde a ningun agente real.
+    return (
+      <div className="fade-in container" style={{ padding: '64px 32px', textAlign: 'center', minHeight: '50vh', display: 'grid', placeItems: 'center' }}>
+        <div style={{ maxWidth: 480 }}>
+          <div className="tag" style={{ color: 'var(--blue)' }}>Agente</div>
+          <h2 style={{ marginTop: 8, fontSize: 26 }}>No encontramos este agente</h2>
+          <p className="muted" style={{ marginTop: 12, fontSize: 14.5, lineHeight: 1.55 }}>
+            Probá volver al listado y elegir otro agente, o usá el buscador para encontrar inmuebles.
+          </p>
+          <div className="row gap-12" style={{ marginTop: 22, justifyContent: 'center' }}>
+            <button className="btn btn-blue" onClick={() => onNav('home')}>Volver al inicio</button>
+            <button className="btn btn-ghost" onClick={() => onNav('catalog')}>Ver alquileres</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Solo usamos las propiedades que vienen del endpoint del agente
+  // (que ya filtra por activo + visible_web). Antes habia un fallback que
+  // matcheaba por nombre y podia traer propiedades incorrectas si caia al
+  // mock — lo removimos.
+  const props = (Array.isArray(agent.propiedades) ? agent.propiedades : []).slice(0, 9);
   const firstName = agent.name.split(' ')[0];
 
   const hasTips = Array.isArray(agent.tips) && agent.tips.length > 0;
