@@ -75,6 +75,26 @@ export async function POST(request: Request) {
     const pool = getChatPostgresPool();
     if (!pool) return NextResponse.json(errorResponse("Pool no disponible"), { status: 500 });
 
+    // Verificamos que la tabla exista antes de insertar — sino el error
+    // generico "relation does not exist" deja al cliente sin info util.
+    const { rows: existsRows } = await queryWithRetry<{ exists: boolean }>(
+      pool,
+      `SELECT EXISTS (
+         SELECT 1 FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'alquiloya' AND c.relname = 'solicitudes_servicio' AND c.relkind = 'r'
+       ) AS exists`,
+      []
+    );
+    if (!existsRows[0]?.exists) {
+      return NextResponse.json(
+        errorResponse(
+          "El modulo de solicitudes de servicio aun no esta configurado. Contactanos por WhatsApp para coordinar tu compra."
+        ),
+        { status: 503 }
+      );
+    }
+
     const { rows } = await queryWithRetry<{ id: string }>(
       pool,
       `INSERT INTO "alquiloya"."solicitudes_servicio"
@@ -89,10 +109,25 @@ export async function POST(request: Request) {
     );
     return NextResponse.json(successResponse({ id: rows[0].id }));
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // pg error con code: SQLSTATE conocidos para devolver mensajes
+    // mas accionables al cliente (sin filtrar internals sensibles).
+    const code = (err as { code?: string })?.code ?? "";
     console.error(
       "[api/public/alquiloya/solicitudes-servicio POST]",
-      err instanceof Error ? err.message : err
+      "code=" + code,
+      "msg=" + msg
     );
-    return NextResponse.json(errorResponse("No se pudo registrar la solicitud"), { status: 500 });
+    // 42P01 = undefined_table, 42703 = undefined_column, 23502 = NOT NULL,
+    // 23503 = FK violation, 23514 = CHECK constraint.
+    let userMsg = "No se pudo registrar la solicitud";
+    if (code === "42P01") userMsg = "El modulo de solicitudes aun no esta configurado en la base. Contactanos por WhatsApp.";
+    else if (code === "42703") userMsg = "Hay un campo desactualizado en la base. Avisanos por WhatsApp.";
+    else if (code === "23502") userMsg = "Falta un dato requerido. Revisa el formulario o coordina por WhatsApp.";
+    else if (code === "23514") userMsg = "El tipo de solicitud no es valido. Coordina por WhatsApp.";
+    return NextResponse.json(
+      errorResponse(userMsg + (code ? ` (codigo ${code})` : "")),
+      { status: 500 }
+    );
   }
 }
