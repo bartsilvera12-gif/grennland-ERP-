@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Playwright E2E artefactos locales
 e2e-super-admin*.png
+
+# Precompilado de la web legacy (generado por scripts/build-legacy-jsx.cjs en cada build)
+public/alquiloya-legacy/build/

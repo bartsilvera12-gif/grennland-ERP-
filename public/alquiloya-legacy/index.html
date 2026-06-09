@@ -558,30 +558,37 @@
 </head>
 <body>
 <div id="root"></div>
-<!-- Builds de producción de React: minificados, ~7x más chicos y mucho más rápidos. -->
-<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
-<!-- P2A: chatbot no es critico para el render inicial -->
-<script defer src="vivio-sendpulse.js?v=mobile-1"></script>
+<!--
+  PERF: los .jsx ahora se precompilan a build/*.js con esbuild durante el
+  `next build` (ver scripts/build-legacy-jsx.cjs). Esto elimina:
+    - @babel/standalone del navegador (~2.9MB de descarga)
+    - la transpilación de ~517KB de JSX en runtime, que bloqueaba el hilo
+      principal varios segundos en celular.
+  Todos los scripts son clásicos con `defer`: se ejecutan EN ORDEN de
+  documento después del parse, sin bloquear el primer paint. El orden es
+  load-bearing (cada archivo usa globals definidos por los anteriores).
+-->
+<!-- Builds de producción de React: minificados, ~7x más chicos. -->
+<script defer src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script defer src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+<!-- Chatbot (define SENDPULSE_CONFIG/vivioSendpulse usado por shared) -->
+<script defer src="build/vivio-sendpulse.js?v=perf-1"></script>
 
-<!-- Scripts criticos del primer paint (home): sin defer, orden estricto -->
-<script type="text/babel" src="brand.jsx?v=mobile-1"></script>
-<script type="text/babel" src="data.jsx?v=contacto-real-1"></script>
-<script type="text/babel" src="api-data.jsx?v=per-endpoint-1"></script>
-<script type="text/babel" src="shared.jsx?v=wa-launcher-1"></script>
-<script type="text/babel" src="home.jsx?v=hero-depto-1"></script>
-
-<!-- Scripts no criticos (otras vistas) — defer para paralelizar fetch -->
-<script type="text/babel" src="catalog.jsx?v=mobile-1"></script>
-<script type="text/babel" src="detail.jsx?v=consultas-1"></script>
-<script defer type="text/babel" src="temporal.jsx?v=mobile-1"></script>
-<script defer type="text/babel" src="plans.jsx?v=stacked-mobile-1"></script>
-<script defer type="text/babel" src="publish.jsx?v=confirm-1"></script>
-<script defer type="text/babel" src="posters.jsx?v=mobile-1"></script>
-<script defer type="text/babel" src="admin.jsx?v=back-button-1"></script>
-<script defer type="text/babel" src="agent.jsx?v=no-mock-fallback-1"></script>
-<script defer type="text/babel" src="help.jsx?v=contacto-real-1"></script>
-<script type="text/babel" src="app.jsx?v=wa-launcher-1"></script>
+<!-- Núcleo + páginas, orden estricto de dependencias -->
+<script defer src="build/brand.js?v=perf-1"></script>
+<script defer src="build/data.js?v=perf-1"></script>
+<script defer src="build/api-data.js?v=perf-1"></script>
+<script defer src="build/shared.js?v=perf-1"></script>
+<script defer src="build/home.js?v=perf-1"></script>
+<script defer src="build/catalog.js?v=perf-1"></script>
+<script defer src="build/detail.js?v=perf-1"></script>
+<script defer src="build/temporal.js?v=perf-1"></script>
+<script defer src="build/plans.js?v=perf-1"></script>
+<script defer src="build/publish.js?v=perf-1"></script>
+<script defer src="build/posters.js?v=perf-1"></script>
+<script defer src="build/admin.js?v=perf-1"></script>
+<script defer src="build/agent.js?v=perf-1"></script>
+<script defer src="build/help.js?v=perf-1"></script>
+<script defer src="build/app.js?v=perf-1"></script>
 </body>
 </html>

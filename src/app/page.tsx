@@ -66,15 +66,18 @@ import {
   isDashboardTabSlug,
   type DashboardTabSlug,
 } from "@/lib/dashboard/resolve-effective-dashboard-views";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import dynamic from "next/dynamic";
+
+// PERF: recharts (~400KB) se carga lazy — solo cuando se renderiza la pestaña
+// Financiero, no en el bundle inicial del dashboard. Ver
+// src/components/dashboard/charts/CobradoLineChart.tsx.
+const CobradoLineChart = dynamic(
+  () => import("@/components/dashboard/charts/CobradoLineChart"),
+  {
+    ssr: false,
+    loading: () => <div className="h-full w-full animate-pulse rounded-lg bg-slate-100" />,
+  }
+);
 
 // ── ZENTRA (solo dashboard / esta página) ─────────────────────────────────────
 const Z = {
@@ -1645,59 +1648,7 @@ function DashFinanciero({
           <p className="mt-6 text-sm text-slate-500">Sin rango de fechas válido.</p>
         ) : (
           <div className="mt-5 h-[300px] w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={cobradoPorDiaSerie} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
-                <CartesianGrid stroke="#e2e8f0" vertical={false} />
-                <XAxis
-                  dataKey="fecha"
-                  tick={{ fill: "#64748b", fontSize: 10 }}
-                  tickLine={false}
-                  axisLine={{ stroke: "#cbd5e1" }}
-                  tickFormatter={(ymd: string) => {
-                    if (!ymd || ymd.length < 10) return ymd;
-                    return `${ymd.slice(8, 10)}/${ymd.slice(5, 7)}`;
-                  }}
-                  minTickGap={28}
-                />
-                <YAxis
-                  tick={{ fill: "#64748b", fontSize: 10 }}
-                  tickLine={false}
-                  axisLine={{ stroke: "#cbd5e1" }}
-                  tickFormatter={(v: number) => formatGsM(Number(v))}
-                  width={52}
-                />
-                <Tooltip
-                  cursor={{ stroke: "rgba(79,174,178,0.25)", strokeWidth: 1 }}
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const row = payload[0].payload as {
-                      fecha: string;
-                      monto: number;
-                      count: number;
-                    };
-                    return (
-                      <div className="rounded-lg border border-[#4FAEB2]/45 bg-white px-3 py-2 text-xs text-slate-800 shadow-lg">
-                        <p className="font-medium text-slate-500">{formatFecha(row.fecha)}</p>
-                        <p className="mt-1.5 text-sm font-semibold tabular-nums text-slate-900">
-                          Gs. {formatGs(row.monto)}
-                        </p>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                          {row.count} pago{row.count === 1 ? "" : "s"}
-                        </p>
-                      </div>
-                    );
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="monto"
-                  stroke={finAccent}
-                  strokeWidth={2.5}
-                  dot={false}
-                  activeDot={{ r: 5, fill: finAccent, stroke: "#fff", strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <CobradoLineChart data={cobradoPorDiaSerie} accent={finAccent} />
           </div>
         )}
       </div>

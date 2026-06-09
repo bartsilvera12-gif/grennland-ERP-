@@ -7,7 +7,8 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build:legacy": "node scripts/build-legacy-jsx.cjs",
+    "build": "node scripts/build-legacy-jsx.cjs && next build",
     "start": "next start",
     "lint": "eslint",
     "test:modulos": "tsx scripts/test-modulos-kevin.ts",
