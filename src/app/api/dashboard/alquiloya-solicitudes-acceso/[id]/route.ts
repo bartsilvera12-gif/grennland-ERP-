@@ -12,6 +12,28 @@ const ALQUILOYA_SCHEMA = "alquiloya";
 const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Cache module-level: una vez parcheado el schema (o confirmado que ya esta),
+// no volvemos a chequear hasta el proximo cold start.
+let planesVencimientoSchemaReady = false;
+
+// Espejo idempotente de supabase/migrations/20260627120000_alquiloya_planes_vencimiento.sql
+// Se ejecuta on-demand si las columnas faltan en produccion.
+const BOOTSTRAP_PLANES_VENCIMIENTO_SQL = `
+ALTER TABLE alquiloya.agentes
+  ADD COLUMN IF NOT EXISTS plan_publicacion_id uuid,
+  ADD COLUMN IF NOT EXISTS plan_vencimiento_at timestamptz;
+
+ALTER TABLE alquiloya.propietarios
+  ADD COLUMN IF NOT EXISTS plan_vencimiento_at timestamptz;
+
+CREATE INDEX IF NOT EXISTS agentes_plan_publicacion_id_idx
+  ON alquiloya.agentes (empresa_id, plan_publicacion_id);
+CREATE INDEX IF NOT EXISTS propietarios_plan_vencimiento_idx
+  ON alquiloya.propietarios (empresa_id, plan_vencimiento_at);
+CREATE INDEX IF NOT EXISTS agentes_plan_vencimiento_idx
+  ON alquiloya.agentes (empresa_id, plan_vencimiento_at);
+`;
+
 function t(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
 }
@@ -97,6 +119,35 @@ export async function PATCH(request: Request, ctx: Ctx) {
     }
 
     // aprobar → crear agente o propietario y vincular resultado_id
+
+    // Bootstrap on-demand de las columnas plan_vencimiento_at /
+    // plan_publicacion_id en agentes/propietarios. La migracion canonica
+    // (20260627120000_alquiloya_planes_vencimiento.sql) no esta aplicada en
+    // todas las DBs de produccion — sin esto el INSERT mas abajo fallaba con
+    // "column plan_vencimiento_at of relation propietarios does not exist".
+    // Toda la DDL es idempotente (ALTER TABLE / CREATE INDEX IF NOT EXISTS).
+    if (!planesVencimientoSchemaReady) {
+      try {
+        await queryWithRetry(pool, BOOTSTRAP_PLANES_VENCIMIENTO_SQL, []);
+        planesVencimientoSchemaReady = true;
+      } catch (bootErr) {
+        const code = (bootErr as { code?: string })?.code ?? "";
+        console.error(
+          "[api/dashboard/alquiloya-solicitudes-acceso] bootstrap fail",
+          "code=" + code,
+          bootErr instanceof Error ? bootErr.message : bootErr
+        );
+        return NextResponse.json(
+          {
+            error:
+              "No pudimos preparar el schema de planes. Avisa al admin." +
+              (code ? ` (codigo ${code})` : ""),
+          },
+          { status: 503 }
+        );
+      }
+    }
+
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
