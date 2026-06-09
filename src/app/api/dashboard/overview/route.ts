@@ -196,11 +196,12 @@ export async function GET(request: Request) {
       hasSolAcceso ? safeCount(`SELECT count(*)::int AS n FROM ${sq("solicitudes_acceso")} WHERE empresa_id=$1::uuid AND estado='pendiente'`) : Z,
       hasSolServ ? safeCount(`SELECT count(*)::int AS n FROM ${sq("solicitudes_servicio")} WHERE empresa_id=$1::uuid AND estado='pendiente'`) : Z,
       hasResenas ? safeCount(`SELECT count(*)::int AS n FROM ${sq("agente_resenas")} WHERE empresa_id=$1::uuid AND estado='pendiente'`) : Z,
-      // Propiedades pendientes para publicar: a pedido del cliente, en
-      // "Atencion requerida" mostramos las publicaciones que estan esperando
-      // que el admin las apruebe (estado='inactiva' o activo=false), no las
-      // captaciones en seguimiento.
-      hasPropiedades ? safeCount(`SELECT count(*)::int AS n FROM ${sq("propiedades")} WHERE empresa_id=$1::uuid AND (activo=false OR COALESCE(estado,'') = 'inactiva')`) : Z,
+      // Propiedades pendientes de aprobacion: usamos el MISMO criterio que
+      // la pantalla /dashboard/propiedades-pendientes (countErpPropiedadesPendientes
+      // en erp-propiedades.ts) para que el numero de la alerta y el listado al
+      // que linkea coincidan. Antes la query era mas amplia (activo=false OR
+      // estado='inactiva') y daba 13 mientras el listado mostraba menos.
+      hasPropiedades ? safeCount(`SELECT count(*)::int AS n FROM ${sq("propiedades")} WHERE empresa_id=$1::uuid AND activo = false AND visible_web = false AND (estado IS NULL OR estado IN ('inactiva'))`) : Z,
       hasConsultasProp ? safeCount(`SELECT count(*)::int AS n FROM ${sq("consultas_propiedad")} WHERE empresa_id=$1::uuid AND activo=true AND COALESCE(estado,'') NOT IN ('cerrada','atendida','descartada')`) : Z,
       hasPropietarios ? safeCount(`SELECT count(*)::int AS n FROM ${sq("propietarios")} WHERE empresa_id=$1::uuid AND activo=true AND COALESCE(plan_vencimiento_at, now() + interval '100 years') < now()`) : Z,
       hasAgentes ? safeCount(`SELECT count(*)::int AS n FROM ${sq("agentes")} WHERE empresa_id=$1::uuid AND activo=true AND COALESCE(plan_vencimiento_at, now() + interval '100 years') < now()`) : Z,
@@ -226,7 +227,7 @@ export async function GET(request: Request) {
     if (cSolAcceso > 0) alertas.push({ key: "solicitudes_acceso", label: "Solicitudes de acceso", count: cSolAcceso, severity: "warning", href: "/dashboard/solicitudes-acceso" });
     if (cSolServ > 0) alertas.push({ key: "solicitudes_servicio", label: "Servicios pendientes", count: cSolServ, severity: "warning", href: "/dashboard/solicitudes-servicio" });
     if (cResenas > 0) alertas.push({ key: "resenas_pendientes", label: "Reseñas a moderar", count: cResenas, severity: "info", href: "/dashboard/agente-resenas" });
-    if (cPropPend > 0) alertas.push({ key: "propiedades_pendientes", label: "Propiedades pendientes", count: cPropPend, severity: "warning", href: "/dashboard/propiedades-pendientes" });
+    if (cPropPend > 0) alertas.push({ key: "propiedades_pendientes", label: "Pendientes de aprobación", count: cPropPend, severity: "warning", href: "/dashboard/propiedades-pendientes" });
     if (cConsultasPend > 0) alertas.push({ key: "consultas_sin_responder", label: "Consultas sin responder", count: cConsultasPend, severity: "warning", href: "/dashboard/propiedades" });
     const vencidos = (cVencidosProp as number) + (cVencidosAg as number);
     const porVencer7 = (cVenc7Prop as number) + (cVenc7Ag as number);
