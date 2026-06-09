@@ -164,9 +164,9 @@ const MENU_STRUCTURE: MenuItem[] = [
       { label: "Equipos y supervisión", href: "/configuracion/omnicanal-equipos" },
     ],
   },
-  // Planes incluye sub-items: Packs de impulsos + Solicitudes de servicio
-  // (pedidos de compra de impulsos / cambio de plan, que es donde tiene
-  // sentido funcional — no debajo de Agentes inmobiliarios).
+  // Planes: pantalla unificada con tabs (Planes de publicacion + Packs de
+  // impulsos en /planes), mas Solicitudes de servicio como sub-item.
+  // La ruta /dashboard/impulsos-packs sigue activa para bookmarks viejos.
   {
     key: "planes",
     slug: "planes",
@@ -175,7 +175,7 @@ const MENU_STRUCTURE: MenuItem[] = [
     icon: FileText,
     children: [
       { label: "Planes de publicación", href: "/planes", exactMatch: true },
-      { label: "Packs de impulsos", href: "/dashboard/impulsos-packs" },
+      { label: "Packs de impulsos", href: "/planes?tab=packs" },
       { label: "Solicitudes de servicio", href: "/dashboard/solicitudes-servicio" },
     ],
   },

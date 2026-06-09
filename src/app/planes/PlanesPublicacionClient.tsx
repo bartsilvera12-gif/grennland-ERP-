@@ -293,7 +293,7 @@ function audienceFromTarget(target: string | null | undefined): "owner" | "agent
   return "agent";
 }
 
-export default function PlanesPublicacionClient() {
+export default function PlanesPublicacionClient({ hideHeader = false }: { hideHeader?: boolean } = {}) {
   const [planes, setPlanes] = useState<Plan[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [editing, setEditing] = useState<Plan | null>(null);
@@ -331,14 +331,16 @@ export default function PlanesPublicacionClient() {
   const agentCount = useMemo(() => ordered.filter((p) => audienceFromTarget(p.target) === "agent").length, [ordered]);
 
   return (
-    <div className="px-6 py-6">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Planes de publicación</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Estos planes se exhiben en <code className="rounded bg-slate-100 px-1 text-[12px] text-slate-700">/publico#plans</code>.
-          Los cambios aparecen automáticamente en la web pública.
-        </p>
-      </header>
+    <div className={hideHeader ? "" : "px-6 py-6"}>
+      {!hideHeader ? (
+        <header className="mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Planes de publicación</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Estos planes se exhiben en <code className="rounded bg-slate-100 px-1 text-[12px] text-slate-700">/publico#plans</code>.
+            Los cambios aparecen automáticamente en la web pública.
+          </p>
+        </header>
+      ) : null}
 
       {err ? (
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{err}</div>
