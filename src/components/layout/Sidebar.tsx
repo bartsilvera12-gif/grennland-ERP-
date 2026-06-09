@@ -164,7 +164,9 @@ const MENU_STRUCTURE: MenuItem[] = [
       { label: "Equipos y supervisión", href: "/configuracion/omnicanal-equipos" },
     ],
   },
-  // Planes incluye ahora "Packs de impulsos" como sub-item (a pedido del cliente).
+  // Planes incluye sub-items: Packs de impulsos + Solicitudes de servicio
+  // (pedidos de compra de impulsos / cambio de plan, que es donde tiene
+  // sentido funcional — no debajo de Agentes inmobiliarios).
   {
     key: "planes",
     slug: "planes",
@@ -174,6 +176,7 @@ const MENU_STRUCTURE: MenuItem[] = [
     children: [
       { label: "Planes de publicación", href: "/planes", exactMatch: true },
       { label: "Packs de impulsos", href: "/dashboard/impulsos-packs" },
+      { label: "Solicitudes de servicio", href: "/dashboard/solicitudes-servicio" },
     ],
   },
   // Oculto a pedido del cliente (ruta /gestion-clientes sigue activa por si se reactiva):
@@ -224,8 +227,9 @@ const MENU_STRUCTURE: MenuItem[] = [
   //   href: "/dashboard/testimonios",
   //   icon: Star,
   // },
-  // Agentes inmobiliarios incluye "Solicitudes de acceso" y
-  // "Solicitudes de servicio" como sub-items.
+  // Agentes inmobiliarios incluye "Solicitudes de acceso" como sub-item.
+  // "Solicitudes de servicio" (pedidos de impulsos / cambio de plan) se
+  // movio a Planes (mas arriba en este menu).
   // "Reseñas de agentes" se oculta del sidebar a pedido del cliente y se
   // accede directamente desde el editor del agente. La ruta /dashboard/
   // agente-resenas sigue activa.
@@ -238,7 +242,6 @@ const MENU_STRUCTURE: MenuItem[] = [
     children: [
       { label: "Listado de agentes", href: "/dashboard/agentes-inmobiliarios", exactMatch: true },
       { label: "Solicitudes de acceso", href: "/dashboard/solicitudes-acceso" },
-      { label: "Solicitudes de servicio", href: "/dashboard/solicitudes-servicio" },
     ],
   },
   // Solicitudes de acceso movida como sub-item de Agentes (arriba):
