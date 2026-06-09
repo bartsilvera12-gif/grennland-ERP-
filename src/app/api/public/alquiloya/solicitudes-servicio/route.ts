@@ -9,6 +9,69 @@ export const dynamic = "force-dynamic";
 const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Cache module-level: una vez que confirmamos que la tabla existe (o la
+// bootstrapeamos), no volvemos a hacer la check. Se invalida con el cold
+// start del proceso (deploy o reinicio del container).
+let solicitudesServicioReady = false;
+
+// Espejo idempotente de supabase/migrations/20260626120000_alquiloya_solicitudes_servicio.sql
+// Se ejecuta on-demand si la tabla no existe en la DB de produccion.
+// Mantener sincronizado con el archivo de migracion.
+const BOOTSTRAP_SOLICITUDES_SERVICIO_SQL = `
+CREATE SCHEMA IF NOT EXISTS alquiloya;
+
+CREATE TABLE IF NOT EXISTS alquiloya.solicitudes_servicio (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  empresa_id      uuid NOT NULL,
+  kind            text NOT NULL CHECK (kind IN ('cambio_plan','impulsos','verificacion')),
+  nombre          text NOT NULL,
+  email           text,
+  telefono        text,
+  propiedad_id    uuid,
+  propietario_id  uuid,
+  agente_id       uuid,
+  plan_tier       text,
+  pack_id         text,
+  pack_qty        int,
+  monto           numeric(14,2),
+  mensaje         text,
+  estado          text NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente','aprobada','rechazada')),
+  motivo_rechazo  text,
+  revisado_por    uuid,
+  revisado_at     timestamptz,
+  resultado_id    uuid,
+  metadata        jsonb,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS solicitudes_servicio_empresa_idx
+  ON alquiloya.solicitudes_servicio (empresa_id);
+CREATE INDEX IF NOT EXISTS solicitudes_servicio_estado_idx
+  ON alquiloya.solicitudes_servicio (empresa_id, estado, created_at DESC);
+CREATE INDEX IF NOT EXISTS solicitudes_servicio_kind_idx
+  ON alquiloya.solicitudes_servicio (empresa_id, kind);
+
+CREATE OR REPLACE FUNCTION alquiloya.solicitudes_servicio_set_updated_at()
+RETURNS trigger LANGUAGE plpgsql AS $func$
+BEGIN NEW.updated_at := now(); RETURN NEW; END
+$func$;
+
+DO $do$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger
+    WHERE tgname = 'solicitudes_servicio_set_updated_at'
+      AND tgrelid = 'alquiloya.solicitudes_servicio'::regclass
+  ) THEN
+    EXECUTE 'CREATE TRIGGER solicitudes_servicio_set_updated_at
+             BEFORE UPDATE ON alquiloya.solicitudes_servicio
+             FOR EACH ROW EXECUTE FUNCTION alquiloya.solicitudes_servicio_set_updated_at()';
+  END IF;
+END
+$do$;
+`;
+
 type Kind = "cambio_plan" | "impulsos" | "verificacion";
 
 function s(v: unknown, max = 500): string | null {
@@ -75,24 +138,44 @@ export async function POST(request: Request) {
     const pool = getChatPostgresPool();
     if (!pool) return NextResponse.json(errorResponse("Pool no disponible"), { status: 500 });
 
-    // Verificamos que la tabla exista antes de insertar — sino el error
-    // generico "relation does not exist" deja al cliente sin info util.
-    const { rows: existsRows } = await queryWithRetry<{ exists: boolean }>(
-      pool,
-      `SELECT EXISTS (
-         SELECT 1 FROM pg_class c
-         JOIN pg_namespace n ON n.oid = c.relnamespace
-         WHERE n.nspname = 'alquiloya' AND c.relname = 'solicitudes_servicio' AND c.relkind = 'r'
-       ) AS exists`,
-      []
-    );
-    if (!existsRows[0]?.exists) {
-      return NextResponse.json(
-        errorResponse(
-          "El modulo de solicitudes de servicio aun no esta configurado. Contactanos por WhatsApp para coordinar tu compra."
-        ),
-        { status: 503 }
+    // Verificamos que la tabla exista; si no, la bootstrapeamos en el momento.
+    // Asi el cliente que apreta "Comprar impulsos" no se queda colgado por una
+    // migracion que nadie corrio en la DB de produccion. Toda la DDL es
+    // idempotente (CREATE TABLE/INDEX/TRIGGER IF NOT EXISTS), asi que llamarla
+    // varias veces no rompe nada — pero igual cacheamos el resultado en memoria
+    // del proceso para evitar overhead en el caso comun (tabla ya existe).
+    if (!solicitudesServicioReady) {
+      const { rows: existsRows } = await queryWithRetry<{ exists: boolean }>(
+        pool,
+        `SELECT EXISTS (
+           SELECT 1 FROM pg_class c
+           JOIN pg_namespace n ON n.oid = c.relnamespace
+           WHERE n.nspname = 'alquiloya' AND c.relname = 'solicitudes_servicio' AND c.relkind = 'r'
+         ) AS exists`,
+        []
       );
+      if (!existsRows[0]?.exists) {
+        try {
+          await queryWithRetry(pool, BOOTSTRAP_SOLICITUDES_SERVICIO_SQL, []);
+        } catch (bootErr) {
+          // Si el bootstrap falla, le devolvemos al cliente un mensaje claro
+          // y el codigo SQLSTATE para soporte. No retry-eamos automaticamente.
+          const code = (bootErr as { code?: string })?.code ?? "";
+          console.error(
+            "[api/public/alquiloya/solicitudes-servicio] bootstrap fail",
+            "code=" + code,
+            bootErr instanceof Error ? bootErr.message : bootErr
+          );
+          return NextResponse.json(
+            errorResponse(
+              "No pudimos preparar el modulo de solicitudes. Contactanos por WhatsApp para coordinar tu compra." +
+                (code ? ` (codigo ${code})` : "")
+            ),
+            { status: 503 }
+          );
+        }
+      }
+      solicitudesServicioReady = true;
     }
 
     const { rows } = await queryWithRetry<{ id: string }>(
