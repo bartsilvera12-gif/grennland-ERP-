@@ -3,31 +3,22 @@
 import Link from "next/link";
 import type { Alerta } from "./GerencialOverview";
 
-const TONO: Record<Alerta["severity"], { bg: string; ring: string; text: string; textSoft: string; numText: string; hover: string }> = {
-  danger: {
-    bg: "bg-rose-50",
-    ring: "ring-rose-200",
-    text: "text-rose-700",
-    textSoft: "text-rose-600/80",
-    numText: "text-rose-900",
-    hover: "hover:bg-rose-100",
-  },
-  warning: {
-    bg: "bg-amber-50",
-    ring: "ring-amber-200",
-    text: "text-amber-700",
-    textSoft: "text-amber-600/80",
-    numText: "text-amber-900",
-    hover: "hover:bg-amber-100",
-  },
-  info: {
-    bg: "bg-blue-50",
-    ring: "ring-blue-200",
-    text: "text-blue-700",
-    textSoft: "text-blue-600/80",
-    numText: "text-blue-900",
-    hover: "hover:bg-blue-100",
-  },
+// Paleta unificada teal — a pedido del cliente, todas las cards del
+// dashboard usan el mismo color que "Propiedades" para mantener un tema
+// visual consistente. La severidad (danger/warning/info) se conserva en
+// los datos por si en el futuro queremos diferenciar por icono o badge.
+const TEAL_TONE = {
+  bg: "bg-teal-50",
+  ring: "ring-teal-200",
+  text: "text-teal-700",
+  textSoft: "text-teal-600/80",
+  numText: "text-teal-900",
+  hover: "hover:bg-teal-100",
+};
+const TONO: Record<Alerta["severity"], typeof TEAL_TONE> = {
+  danger: TEAL_TONE,
+  warning: TEAL_TONE,
+  info: TEAL_TONE,
 };
 
 export default function AlertasStrip({ alertas }: { alertas: Alerta[] }) {

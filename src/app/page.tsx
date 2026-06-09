@@ -3136,7 +3136,7 @@ function DashPropiedades() {
           ]}
         />
         <DensoKpi
-          accent="indigo"
+          accent="teal"
           icon={<Icon.Target className="h-5 w-5" />}
           label="Agentes"
           value={data.agentes.activos}
@@ -3151,7 +3151,7 @@ function DashPropiedades() {
           ]}
         />
         <DensoKpi
-          accent="sky"
+          accent="teal"
           icon={<Icon.Chat className="h-5 w-5" />}
           label="Consultas"
           value={data.consultas.total}
@@ -3169,7 +3169,7 @@ function DashPropiedades() {
           ]}
         />
         <DensoKpi
-          accent="amber"
+          accent="teal"
           icon={<Icon.CheckCircle className="h-5 w-5" />}
           label="Tasa publicación"
           value={
@@ -3255,7 +3255,7 @@ function DashPropiedades() {
           <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <ActionPendiente
               href="/dashboard/propiedades-pendientes"
-              accent="rose"
+              accent="teal"
               icon={<ListChecks className="h-5 w-5" />}
               label="Pendientes de publicación"
               value={data.propiedades.pendientes ?? 0}
@@ -3263,7 +3263,7 @@ function DashPropiedades() {
             />
             <ActionPendiente
               href="/dashboard/solicitudes-acceso"
-              accent="amber"
+              accent="teal"
               icon={<InboxIcon className="h-5 w-5" />}
               label="Solicitudes de acceso"
               value={data.acciones_pendientes.solicitudes_acceso}
@@ -3271,7 +3271,7 @@ function DashPropiedades() {
             />
             <ActionPendiente
               href="/dashboard/solicitudes-servicio"
-              accent="sky"
+              accent="teal"
               icon={<WrenchIcon className="h-5 w-5" />}
               label="Solicitudes de servicio"
               value={data.acciones_pendientes.solicitudes_servicio}
@@ -3279,7 +3279,7 @@ function DashPropiedades() {
             />
             <ActionPendiente
               href="/dashboard/agente-resenas"
-              accent="violet"
+              accent="teal"
               icon={<MessageSquareQuote className="h-5 w-5" />}
               label="Reseñas a moderar"
               value={data.acciones_pendientes.agente_resenas}
@@ -3287,7 +3287,7 @@ function DashPropiedades() {
             />
             <ActionPendiente
               href="/dashboard/agentes-inmobiliarios/captaciones"
-              accent="emerald"
+              accent="teal"
               icon={<TargetIcon className="h-5 w-5" />}
               label="Captaciones abiertas"
               value={data.acciones_pendientes.captaciones}
