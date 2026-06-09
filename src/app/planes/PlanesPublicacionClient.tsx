@@ -283,10 +283,23 @@ function EditModal({
   );
 }
 
+/** Decide a que segmento pertenece un plan segun el campo `target`. */
+function audienceFromTarget(target: string | null | undefined): "owner" | "agent" {
+  const t = (target ?? "").toLowerCase();
+  // Dueños directos / propietarios → owner; el resto (agente / inmobiliaria / top pro) → agent.
+  if (t.includes("dueño") || t.includes("dueno") || t.includes("propietar") || t.includes("owner")) {
+    return "owner";
+  }
+  return "agent";
+}
+
 export default function PlanesPublicacionClient() {
   const [planes, setPlanes] = useState<Plan[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [editing, setEditing] = useState<Plan | null>(null);
+  /** Segmento mostrado: dueños directos (default) o agentes/inmobiliarias.
+   *  Mismo split visual que la web publica (/publico#plans). */
+  const [audience, setAudience] = useState<"owner" | "agent">("owner");
 
   useEffect(() => {
     let cancelled = false;
@@ -309,6 +322,14 @@ export default function PlanesPublicacionClient() {
     [planes]
   );
 
+  /** Filtrado por audiencia para el render. */
+  const filtered = useMemo(
+    () => ordered.filter((p) => audienceFromTarget(p.target) === audience),
+    [ordered, audience]
+  );
+  const ownerCount = useMemo(() => ordered.filter((p) => audienceFromTarget(p.target) === "owner").length, [ordered]);
+  const agentCount = useMemo(() => ordered.filter((p) => audienceFromTarget(p.target) === "agent").length, [ordered]);
+
   return (
     <div className="px-6 py-6">
       <header className="mb-6">
@@ -326,11 +347,59 @@ export default function PlanesPublicacionClient() {
       {planes == null && !err ? (
         <p className="text-sm text-slate-500">Cargando planes…</p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {ordered.map((p) => (
-            <PlanCard key={p.id} plan={p} onEdit={() => setEditing(p)} />
-          ))}
-        </div>
+        <>
+          {/* Segmento Dueños / Agentes — espejo de /publico#plans */}
+          <div className="mb-5 inline-flex rounded-full border border-slate-200 bg-white p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setAudience("owner")}
+              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                audience === "owner"
+                  ? "bg-[#4FAEB2] text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              Dueños directos
+              <span
+                className={`rounded-full px-1.5 text-[10px] ${
+                  audience === "owner" ? "bg-white/20" : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                {ownerCount}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAudience("agent")}
+              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-colors ${
+                audience === "agent"
+                  ? "bg-[#4FAEB2] text-white shadow-sm"
+                  : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              Agentes e inmobiliarias
+              <span
+                className={`rounded-full px-1.5 text-[10px] ${
+                  audience === "agent" ? "bg-white/20" : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                {agentCount}
+              </span>
+            </button>
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
+              No hay planes en este segmento todavía.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {filtered.map((p) => (
+                <PlanCard key={p.id} plan={p} onEdit={() => setEditing(p)} />
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {editing ? (
