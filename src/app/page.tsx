@@ -1186,9 +1186,13 @@ function FinMontoGs({
       ? `− Gs. ${formatGs(Math.abs(monto))}`
       : `Gs. ${formatGs(monto)}`;
   if (kpi) {
+    // A pedido del cliente: las cards de Financiero deben tener el mismo
+    // tamaño de fuente que las cards de Propiedades (DensoKpi → text-3xl).
+    // Antes esto usaba un clamp con container query que las dejaba mucho
+    // mas chicas (max 1.45rem) y se veian desbalanceadas en el dashboard.
     return (
       <p
-        className={`min-w-0 w-full text-left font-bold leading-none tabular-nums whitespace-nowrap [font-size:clamp(0.65rem,5.5cqi+0.15rem,1.45rem)] ${className}`}
+        className={`min-w-0 w-full text-left text-3xl font-bold leading-none tabular-nums tracking-tight ${className}`}
         title={texto}
       >
         {texto}

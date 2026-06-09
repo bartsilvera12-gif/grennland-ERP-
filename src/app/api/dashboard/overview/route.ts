@@ -179,7 +179,7 @@ export async function GET(request: Request) {
 
     const [
       // Counts para alertas
-      cSolAcceso, cSolServ, cResenas, cCaptaciones, cConsultasPend,
+      cSolAcceso, cSolServ, cResenas, cPropPend, cConsultasPend,
       cVencidosProp, cVencidosAg, cVenc7Prop, cVenc7Ag,
       cPagos, cStock,
       // KPIs propiedades
@@ -196,7 +196,11 @@ export async function GET(request: Request) {
       hasSolAcceso ? safeCount(`SELECT count(*)::int AS n FROM ${sq("solicitudes_acceso")} WHERE empresa_id=$1::uuid AND estado='pendiente'`) : Z,
       hasSolServ ? safeCount(`SELECT count(*)::int AS n FROM ${sq("solicitudes_servicio")} WHERE empresa_id=$1::uuid AND estado='pendiente'`) : Z,
       hasResenas ? safeCount(`SELECT count(*)::int AS n FROM ${sq("agente_resenas")} WHERE empresa_id=$1::uuid AND estado='pendiente'`) : Z,
-      hasCaptaciones ? safeCount(`SELECT count(*)::int AS n FROM ${sq("agente_captaciones")} WHERE empresa_id=$1::uuid AND COALESCE(estado,'') NOT IN ('cerrada','finalizada','descartada')`) : Z,
+      // Propiedades pendientes para publicar: a pedido del cliente, en
+      // "Atencion requerida" mostramos las publicaciones que estan esperando
+      // que el admin las apruebe (estado='inactiva' o activo=false), no las
+      // captaciones en seguimiento.
+      hasPropiedades ? safeCount(`SELECT count(*)::int AS n FROM ${sq("propiedades")} WHERE empresa_id=$1::uuid AND (activo=false OR COALESCE(estado,'') = 'inactiva')`) : Z,
       hasConsultasProp ? safeCount(`SELECT count(*)::int AS n FROM ${sq("consultas_propiedad")} WHERE empresa_id=$1::uuid AND activo=true AND COALESCE(estado,'') NOT IN ('cerrada','atendida','descartada')`) : Z,
       hasPropietarios ? safeCount(`SELECT count(*)::int AS n FROM ${sq("propietarios")} WHERE empresa_id=$1::uuid AND activo=true AND COALESCE(plan_vencimiento_at, now() + interval '100 years') < now()`) : Z,
       hasAgentes ? safeCount(`SELECT count(*)::int AS n FROM ${sq("agentes")} WHERE empresa_id=$1::uuid AND activo=true AND COALESCE(plan_vencimiento_at, now() + interval '100 years') < now()`) : Z,
@@ -222,7 +226,7 @@ export async function GET(request: Request) {
     if (cSolAcceso > 0) alertas.push({ key: "solicitudes_acceso", label: "Solicitudes de acceso", count: cSolAcceso, severity: "warning", href: "/dashboard/solicitudes-acceso" });
     if (cSolServ > 0) alertas.push({ key: "solicitudes_servicio", label: "Servicios pendientes", count: cSolServ, severity: "warning", href: "/dashboard/solicitudes-servicio" });
     if (cResenas > 0) alertas.push({ key: "resenas_pendientes", label: "Reseñas a moderar", count: cResenas, severity: "info", href: "/dashboard/agente-resenas" });
-    if (cCaptaciones > 0) alertas.push({ key: "captaciones", label: "Captaciones abiertas", count: cCaptaciones, severity: "info", href: "/dashboard/agentes-inmobiliarios/captaciones" });
+    if (cPropPend > 0) alertas.push({ key: "propiedades_pendientes", label: "Propiedades pendientes", count: cPropPend, severity: "warning", href: "/dashboard/propiedades-pendientes" });
     if (cConsultasPend > 0) alertas.push({ key: "consultas_sin_responder", label: "Consultas sin responder", count: cConsultasPend, severity: "warning", href: "/dashboard/propiedades" });
     const vencidos = (cVencidosProp as number) + (cVencidosAg as number);
     const porVencer7 = (cVenc7Prop as number) + (cVenc7Ag as number);
