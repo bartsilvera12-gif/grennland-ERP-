@@ -186,10 +186,22 @@ function FullGalleryModal({ property, onClose }) {
 
 function GalleryAgentSidebar({ property }) {
   const { agents } = useAlquiloYaPublicData();
-  const agent = property.agent || agents[0] || AGENTS[0];
-  const agentRecord = agents.find(a => a.id === agent.id || a.apiId === agent.id || a.name === agent.name);
+  // Mismo razonamiento que en AgentCard: si la propiedad no tiene agente real,
+  // NO usar fallback al mock; mostramos propietario directo. Igual definimos
+  // los hooks ANTES del early return para no romper las reglas de hooks.
+  const agent = property.agent || null;
   const [phoneRevealed, setPhoneRevealed] = React.useState(false);
   const [form, setForm] = React.useState({ name: '', phone: '', email: '', message: 'Hola, vi esta propiedad en AlquiloYa y me interesa recibir más información. ¿Podría coordinar una visita?' });
+  if (!agent) {
+    return (
+      <div>
+        <div className="card" style={{ padding: 16, textAlign: 'center' }}>
+          <div className="muted xs">Publicación de propietario directo.</div>
+        </div>
+      </div>
+    );
+  }
+  const agentRecord = agents.find(a => a.id === agent.id || a.apiId === agent.id || a.name === agent.name);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const phone = agent.phone || agent.whatsapp || '';
   return (
@@ -446,9 +458,64 @@ function AgentCard({ agent, price, tipo, onNav, property }) {
   }
   function onClickMensaje() { registerConsulta('web'); onClickWhatsApp(); }
   const { agents } = useAlquiloYaPublicData();
-  agent = agent || agents[0] || AGENTS[0];
-  const agentRecord = agents.find(a => a.id === agent.id || a.apiId === agent.id || a.name === agent.name);
+  // Antes el card caia a `agents[0] || AGENTS[0]` cuando la propiedad no tenia
+  // agente, lo que pegaba "Mariana López" (primera de la lista mock) a
+  // cualquier publicacion sin agente_id. Ahora si no hay agente real,
+  // renderizamos un card "Propietario directo" sin datos inventados.
+  const hasRealAgent = !!agent;
+  const agentRecord = hasRealAgent
+    ? agents.find(a => a.id === agent.id || a.apiId === agent.id || a.name === agent.name)
+    : null;
+  // Stats del agente: si tenemos el agentRecord real, leemos sus contadores;
+  // si no, mostramos guiones para no inventar datos. Antes eran 3 strings
+  // hardcodeados ("~ 12 min", "14", "Ene. 2024") que aparecian para todos.
+  const agentSince = agentRecord?.createdAt || agentRecord?.created_at || null;
+  const sinceLabel = agentSince
+    ? new Date(agentSince).toLocaleDateString('es-PY', { month: 'short', year: 'numeric' })
+    : '—';
+  const propsCountLabel = agentRecord?.propertiesCount != null
+    ? String(agentRecord.propertiesCount)
+    : (agentRecord?.propiedades_count != null ? String(agentRecord.propiedades_count) : '—');
+  const responseLabel = agentRecord?.tiempo_respuesta || agentRecord?.responseTime || '—';
+  const ratingLabel = agentRecord?.rating != null ? agentRecord.rating : '—';
+  const reviewsLabel = agentRecord?.reviews != null ? agentRecord.reviews : 0;
   const openProfile = () => agentRecord && onNav && onNav('agent/' + agentRecord.slug);
+  if (!hasRealAgent) {
+    return (
+      <div className="card" style={{ padding: 22 }}>
+        <div className="row gap-12" style={{ alignItems: 'center' }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: '50%',
+            background: 'rgba(0,88,165,0.08)', color: 'var(--blue)',
+            display: 'grid', placeItems: 'center'
+          }}>
+            <I.user s={22}/>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Propietario directo</div>
+            <div className="muted xs">Publicación sin agente intermediario</div>
+          </div>
+        </div>
+        <div className="col gap-10" style={{ marginTop: 16 }}>
+          <button type="button" className="btn btn-wa btn-lg" style={{ justifyContent: 'center' }} onClick={onClickWhatsApp}><I.whats s={18}/> Consultar por WhatsApp</button>
+          <button type="button" className="btn btn-blue" style={{ justifyContent: 'center' }} onClick={onClickVisita}><I.cal s={16}/> Solicitar visita</button>
+          <button type="button" className="btn btn-outline" style={{ justifyContent: 'center' }} onClick={onClickMensaje}><I.chat s={16}/> Enviar mensaje</button>
+        </div>
+        <div style={{ marginTop: 16, padding: 12, background: 'var(--yellow-50)', borderRadius: 10, fontSize: 12.5, color: '#8a5e00', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <I.shield s={14}/>
+          <span>Tu contacto va directo al propietario. AlquiloYa no cobra comisión por cierre.</span>
+        </div>
+        {tipo === 'temporal' && (
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--line-2)' }}>
+            <div className="muted xs">Disponibilidad temporal</div>
+            <button className="btn btn-primary" style={{ justifyContent: 'center', width: '100%', marginTop: 8 }}>
+              Ver calendario y reservar <I.arrow s={14}/>
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="card" style={{ padding: 22 }}>
       <div className="row gap-12">
@@ -461,7 +528,7 @@ function AgentCard({ agent, price, tipo, onNav, property }) {
           <div className="muted xs">{agent.type} verificado</div>
           <div className="row gap-4" style={{ color: 'var(--yellow)', marginTop: 4 }}>
             {[1,2,3,4,5].map(i => <I.star key={i} s={10}/>)}
-            <span style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 4 }}>{agentRecord ? agentRecord.rating : 4.9} · {agentRecord ? agentRecord.reviews : 28} reseñas</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-3)', marginLeft: 4 }}>{ratingLabel} · {reviewsLabel} reseñas</span>
           </div>
           {agentRecord && (
             <button onClick={openProfile} style={{ background: 'none', border: 'none', padding: 0, marginTop: 6, color: 'var(--blue)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
@@ -471,9 +538,9 @@ function AgentCard({ agent, price, tipo, onNav, property }) {
         </div>
       </div>
       <div className="card-soft" style={{ padding: 14, marginTop: 16, fontSize: 13 }}>
-        <div className="row between"><span className="muted">Tiempo medio de respuesta</span><strong>~ 12 min</strong></div>
-        <div className="row between" style={{ marginTop: 4 }}><span className="muted">Inmuebles publicados</span><strong>14</strong></div>
-        <div className="row between" style={{ marginTop: 4 }}><span className="muted">Miembro desde</span><strong>Ene. 2024</strong></div>
+        <div className="row between"><span className="muted">Tiempo medio de respuesta</span><strong>{responseLabel}</strong></div>
+        <div className="row between" style={{ marginTop: 4 }}><span className="muted">Inmuebles publicados</span><strong>{propsCountLabel}</strong></div>
+        <div className="row between" style={{ marginTop: 4 }}><span className="muted">Miembro desde</span><strong>{sinceLabel}</strong></div>
       </div>
       <div className="col gap-10" style={{ marginTop: 16 }}>
         <button type="button" className="btn btn-wa btn-lg" style={{ justifyContent: 'center' }} onClick={onClickWhatsApp}><I.whats s={18}/> Consultar por WhatsApp</button>
