@@ -146,7 +146,18 @@ export async function POST(request: Request, ctx: Ctx) {
       });
     }
 
-    // Caso B — no hay fila en usuarios: creamos auth.user + usuarios.
+    // Caso B — no hay fila en usuarios para este propietario. Tres
+    // sub-escenarios posibles:
+    //   B1) Email nuevo en auth.users → createUser + INSERT usuarios.
+    //   B2) auth.users ya existe pero sin fila en usuarios (huerfana de
+    //       creacion previa) → updatePassword + INSERT usuarios.
+    //   B3) auth.users existe Y hay una fila en usuarios para ese
+    //       auth_user_id pero sin propietario_id seteado (ej. creada como
+    //       agente o sin vinculo) → updatePassword + UPDATE usuarios para
+    //       linkear propietario_id.
+    let authUserId: string | null = null;
+    let usuarioRowId: string | null = null;
+
     const { data: created, error: createErr } = await supabase.auth.admin.createUser({
       email: prop.email,
       password: tempPassword,
@@ -157,23 +168,93 @@ export async function POST(request: Request, ctx: Ctx) {
         tipo: "propietario",
       },
     });
-    if (createErr) {
+
+    if (created?.user?.id && !createErr) {
+      // B1 — usuario nuevo.
+      authUserId = created.user.id;
+    } else if (createErr && /already\s+(been\s+)?registered/i.test(createErr.message)) {
+      // B2/B3 — el email ya existe en auth.users. Buscamos su id y
+      // reseteamos la contraseña en lugar de crearlo de nuevo.
+      const { data: list, error: listErr } = await supabase.auth.admin.listUsers({
+        page: 1,
+        perPage: 200,
+      });
+      if (listErr) {
+        return NextResponse.json(
+          { error: `No se pudo buscar el usuario existente: ${listErr.message}` },
+          { status: 500 }
+        );
+      }
+      const existing = list.users.find(
+        (u) => (u.email ?? "").toLowerCase() === prop.email!.toLowerCase()
+      );
+      if (!existing?.id) {
+        return NextResponse.json(
+          {
+            error:
+              "El email ya esta registrado pero no pudimos resolverlo. Pedi soporte al admin.",
+          },
+          { status: 500 }
+        );
+      }
+      authUserId = existing.id;
+      const { error: updErr } = await supabase.auth.admin.updateUserById(authUserId, {
+        password: tempPassword,
+      });
+      if (updErr) {
+        return NextResponse.json(
+          { error: `No se pudo resetear la contraseña: ${updErr.message}` },
+          { status: 500 }
+        );
+      }
+      // Buscamos si hay una fila en alquiloya.usuarios para ese auth_user_id
+      // (escenario B3): si la hay y NO tiene propietario_id, la linkeamos.
+      const { rows: byAuth } = await queryWithRetry<{
+        id: string;
+        propietario_id: string | null;
+      }>(
+        pool,
+        `SELECT id, propietario_id FROM ${t("usuarios")}
+          WHERE empresa_id=$1::uuid AND auth_user_id=$2::uuid LIMIT 1`,
+        [ALQUILOYA_EMPRESA_ID, authUserId]
+      );
+      if (byAuth[0]) {
+        usuarioRowId = byAuth[0].id;
+        if (!byAuth[0].propietario_id) {
+          await queryWithRetry(
+            pool,
+            `UPDATE ${t("usuarios")}
+                SET propietario_id = $1::uuid, updated_at = now()
+              WHERE id = $2::uuid`,
+            [id, usuarioRowId]
+          );
+        } else if (byAuth[0].propietario_id !== id) {
+          return NextResponse.json(
+            {
+              error:
+                "Ese email ya esta vinculado a OTRO propietario. Cambia el email del propietario antes de generar acceso.",
+            },
+            { status: 409 }
+          );
+        }
+      }
+    } else {
       return NextResponse.json(
-        { error: `No se pudo crear la cuenta: ${createErr.message}` },
+        { error: `No se pudo crear la cuenta: ${createErr?.message ?? "error desconocido"}` },
         { status: 500 }
       );
     }
-    if (!created.user?.id) {
-      return NextResponse.json({ error: "no se pudo crear el auth.user" }, { status: 500 });
-    }
 
-    await queryWithRetry(
-      pool,
-      `INSERT INTO ${t("usuarios")}
-         (empresa_id, auth_user_id, email, nombre, rol, propietario_id)
-       VALUES ($1::uuid, $2::uuid, $3, $4, 'publicador-propietario', $5::uuid)`,
-      [ALQUILOYA_EMPRESA_ID, created.user.id, prop.email, prop.nombre, id]
-    );
+    // Si todavia no insertamos en alquiloya.usuarios (B1 y B2), lo hacemos.
+    if (!usuarioRowId) {
+      await queryWithRetry(
+        pool,
+        `INSERT INTO ${t("usuarios")}
+           (empresa_id, auth_user_id, email, nombre, rol, propietario_id)
+         VALUES ($1::uuid, $2::uuid, $3, $4, 'publicador-propietario', $5::uuid)`,
+        [ALQUILOYA_EMPRESA_ID, authUserId, prop.email, prop.nombre, id]
+      );
+    }
 
     return NextResponse.json({
       success: true,
