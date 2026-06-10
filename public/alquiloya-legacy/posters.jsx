@@ -48,7 +48,12 @@ function PostersPage({ route, onNav }) {
         const r = await fetch('/api/propietario/propiedades', { cache: 'no-store', credentials: 'include' });
         if (r.ok) {
           const b = await r.json();
-          if (b?.success && Array.isArray(b.propiedades)) body = b;
+          // IMPORTANTE: /api/propietario/propiedades devuelve {success:true,
+          // propiedades:[]} TAMBIEN cuando el usuario NO es propietario (un
+          // agente). Por eso solo aceptamos este resultado si trae items;
+          // si viene vacio, seguimos al endpoint de agente. Sino, un agente
+          // con inmuebles veia 0 (el [] del propietario cortaba la cadena).
+          if (b?.success && Array.isArray(b.propiedades) && b.propiedades.length) body = b;
         }
       } catch { /* try next */ }
       if (!body) {

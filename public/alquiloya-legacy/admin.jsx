@@ -327,7 +327,11 @@ function AdminAgentPage({ route, onNav }) {
         const r = await fetch('/api/propietario/propiedades', { cache: 'no-store', credentials: 'include' });
         if (r.ok) {
           const b = await r.json();
-          if (b?.success && Array.isArray(b.propiedades)) body = b;
+          // /api/propietario/propiedades devuelve {success:true, propiedades:[]}
+          // tambien para un agente (no es propietario). Solo lo aceptamos si
+          // trae items; si viene vacio seguimos al endpoint de agente. Sino,
+          // un agente con inmuebles veia 0 publicaciones.
+          if (b?.success && Array.isArray(b.propiedades) && b.propiedades.length) body = b;
         }
       } catch { /* try next */ }
       if (!body) {

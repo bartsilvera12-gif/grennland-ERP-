@@ -32,6 +32,63 @@ function fmtGs(n: number | null): string {
   return "Gs. " + n.toLocaleString("es-PY");
 }
 
+// Normaliza un telefono a formato internacional Paraguay para wa.me.
+function waPhone(raw: string | null): string | null {
+  if (!raw) return null;
+  let p = String(raw).replace(/\D/g, "");
+  if (!p) return null;
+  if (!p.startsWith("595")) {
+    if (p.startsWith("0")) p = "595" + p.slice(1);
+    else if (p.length <= 10) p = "595" + p;
+  }
+  return p;
+}
+
+// Mensaje pre-armado para contactar al solicitante por su compra.
+function mensajeContacto(r: SolicitudServicioRow): string {
+  const detalle =
+    r.kind === "impulsos"
+      ? `tu compra de ${r.pack_qty ?? ""} impulso${r.pack_qty === 1 ? "" : "s"}${r.monto ? ` (${fmtGs(r.monto)})` : ""}`
+      : r.kind === "cambio_plan"
+        ? `tu cambio al plan ${r.plan_nombre ?? r.plan_tier ?? ""}`
+        : "tu solicitud de verificación";
+  return `Hola ${r.nombre}, te escribo de AlquiloYa por ${detalle}. Coordinemos el pago para activarlo. ¡Gracias!`;
+}
+
+/** Botones WhatsApp / Email con mensaje pre-armado para coordinar el pago. */
+function ContactoSolicitante({ r, compact = false }: { r: SolicitudServicioRow; compact?: boolean }) {
+  const phone = waPhone(r.telefono);
+  const msg = encodeURIComponent(mensajeContacto(r));
+  const waHref = phone ? `https://wa.me/${phone}?text=${msg}` : null;
+  const mailHref = r.email
+    ? `mailto:${r.email}?subject=${encodeURIComponent("AlquiloYa · " + KIND_LABEL[r.kind])}&body=${encodeURIComponent(mensajeContacto(r))}`
+    : null;
+  if (!waHref && !mailHref) {
+    return <span className="text-[11px] text-slate-400">Sin contacto</span>;
+  }
+  const sz = compact ? "px-2 py-1 text-[11px]" : "px-3 py-1.5 text-xs";
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      {waHref ? (
+        <a href={waHref} target="_blank" rel="noopener noreferrer"
+          className={`inline-flex items-center gap-1 rounded-md bg-[#25D366] font-semibold text-white hover:bg-[#1ebd5b] ${sz}`}
+          title={`WhatsApp a ${r.telefono}`}>
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.371-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347M12.05 21.785h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884a9.82 9.82 0 0 1 6.988 2.898 9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884"/></svg>
+          {compact ? "WA" : "WhatsApp"}
+        </a>
+      ) : null}
+      {mailHref ? (
+        <a href={mailHref}
+          className={`inline-flex items-center gap-1 rounded-md bg-slate-700 font-semibold text-white hover:bg-slate-800 ${sz}`}
+          title={`Email a ${r.email}`}>
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+          Email
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
 function EstadoBadge({ estado }: { estado: SolicitudServicioRow["estado"] }) {
   const map: Record<SolicitudServicioRow["estado"], string> = {
     pendiente: "bg-amber-100 text-amber-700 ring-amber-200",
@@ -172,6 +229,9 @@ export default function SolicitudesServicioClient({
                   <td className="hidden px-3 py-2 text-slate-700 md:table-cell">
                     <div>{r.email ?? "—"}</div>
                     <div className="text-[11px] text-slate-500">{r.telefono ?? ""}</div>
+                    {(r.email || r.telefono) ? (
+                      <div className="mt-1.5"><ContactoSolicitante r={r} compact /></div>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2 text-slate-700">
                     {r.kind === "cambio_plan" ? (
@@ -221,6 +281,18 @@ export default function SolicitudesServicioClient({
           <div className="relative w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-200">
             <h3 className="text-base font-semibold text-slate-900">Aprobar {KIND_LABEL[pending.row.kind].toLowerCase()}</h3>
             <p className="mt-1 text-sm text-slate-600">Solicitante: <strong>{pending.row.nombre}</strong></p>
+
+            {/* Contacto para coordinar el pago ANTES de aplicar. */}
+            {(pending.row.email || pending.row.telefono) ? (
+              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Coordinar el pago</div>
+                <div className="mt-1 text-xs text-slate-600">
+                  {pending.row.telefono ? <span className="mr-3">📱 {pending.row.telefono}</span> : null}
+                  {pending.row.email ? <span>✉️ {pending.row.email}</span> : null}
+                </div>
+                <div className="mt-2"><ContactoSolicitante r={pending.row} /></div>
+              </div>
+            ) : null}
 
             {(pending.row.kind === "cambio_plan" || pending.row.kind === "impulsos") ? (
               <div className="mt-4">
