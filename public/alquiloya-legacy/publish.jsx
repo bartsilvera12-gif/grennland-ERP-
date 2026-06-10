@@ -11,24 +11,40 @@ function PublishPage() {
   // Sin esto, durante el render inicial isLoggedPublisher es false y mostrariamos
   // el muro de "Ingresar" aunque el usuario SI este logueado — flash desagradable.
   const [authChecked, setAuthChecked] = React.useState(false);
+  // hasSession: hay sesion Supabase aunque el usuario no sea agente/propietario.
+  // Util para diferenciar "no logueado" de "logueado pero sin perfil de publicador".
+  const [hasSession, setHasSession] = React.useState(false);
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
+      let sessionDetected = false;
       try {
         const r = await fetch('/api/agente/me', { cache: 'no-store', credentials: 'include' });
         if (r.ok) {
+          // /api/agente/me devuelve 200 incluso sin agente vinculado — lo que importa es
+          // que no haya devuelto 401. Eso significa que la sesion Supabase esta viva.
+          sessionDetected = true;
           const b = await r.json();
-          if (!cancelled && b?.agente) { setCtxAgente(b.agente); setAuthChecked(true); return; }
+          if (!cancelled && b?.agente) {
+            setCtxAgente(b.agente);
+            setHasSession(true);
+            setAuthChecked(true);
+            return;
+          }
         }
       } catch { /* ignore */ }
       try {
         const r2 = await fetch('/api/propietario/me', { cache: 'no-store', credentials: 'include' });
         if (r2.ok) {
+          sessionDetected = true;
           const b2 = await r2.json();
           if (!cancelled && b2?.propietario) setCtxPropietario(b2.propietario);
         }
       } catch { /* ignore */ }
-      if (!cancelled) setAuthChecked(true);
+      if (!cancelled) {
+        setHasSession(sessionDetected);
+        setAuthChecked(true);
+      }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -181,24 +197,52 @@ function PublishPage() {
             <I.shield s={28}/>
           </div>
           <div className="tag" style={{ justifyContent: 'center' }}>Publicar inmueble</div>
-          <h2 style={{ marginTop: 8, fontSize: 26 }}>Necesitás una cuenta activa</h2>
-          <p style={{ marginTop: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>
-            Para publicar una propiedad en AlquiloYa tenés que iniciar sesión con
-            una cuenta de agente o propietario con plan activo. Así nos aseguramos
-            de que cada publicación tenga un responsable verificado.
-          </p>
-          <div className="row gap-12" style={{ justifyContent: 'center', marginTop: 24, flexWrap: 'wrap' }}>
-            <a className="btn btn-primary" href="/portal-agentes/login">
-              <I.user s={16}/> Ingresar
-            </a>
-            <a className="btn btn-outline" href="/portal-agentes">
-              Solicitar acceso
-            </a>
-          </div>
-          <p style={{ marginTop: 20, fontSize: 12, color: 'var(--ink-4)' }}>
-            ¿No tenés cuenta todavía? Pedí el acceso y nuestro equipo te contacta
-            para activarte.
-          </p>
+          {hasSession ? (
+            <>
+              <h2 style={{ marginTop: 8, fontSize: 26 }}>Tu cuenta no es de publicador</h2>
+              <p style={{ marginTop: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>
+                Estás logueado, pero tu usuario no tiene perfil de agente ni de propietario
+                vinculado. Para publicar tenés que entrar con una cuenta de agente o
+                propietario, o pedirle al admin del ERP que vincule tu usuario a un perfil de publicador.
+              </p>
+              <div className="row gap-12" style={{ justifyContent: 'center', marginTop: 24, flexWrap: 'wrap' }}>
+                <a className="btn btn-primary" href="/portal-agentes/login">
+                  <I.user s={16}/> Cambiar de cuenta
+                </a>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={async () => {
+                    try { await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'include' }); } catch {}
+                    window.location.href = '/portal-agentes/login';
+                  }}
+                >
+                  Cerrar sesión
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2 style={{ marginTop: 8, fontSize: 26 }}>Necesitás una cuenta activa</h2>
+              <p style={{ marginTop: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>
+                Para publicar una propiedad en AlquiloYa tenés que iniciar sesión con
+                una cuenta de agente o propietario con plan activo. Así nos aseguramos
+                de que cada publicación tenga un responsable verificado.
+              </p>
+              <div className="row gap-12" style={{ justifyContent: 'center', marginTop: 24, flexWrap: 'wrap' }}>
+                <a className="btn btn-primary" href="/portal-agentes/login">
+                  <I.user s={16}/> Ingresar
+                </a>
+                <a className="btn btn-outline" href="/portal-agentes">
+                  Solicitar acceso
+                </a>
+              </div>
+              <p style={{ marginTop: 20, fontSize: 12, color: 'var(--ink-4)' }}>
+                ¿No tenés cuenta todavía? Pedí el acceso y nuestro equipo te contacta
+                para activarte.
+              </p>
+            </>
+          )}
         </div>
       </div>
     );
