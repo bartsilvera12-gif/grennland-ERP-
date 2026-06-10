@@ -1505,8 +1505,22 @@ function BrochurePage2({ property, contacto }) {
             </div>
           ) : null}
           <div style={{ marginTop: 6, borderRadius: 4, overflow: 'hidden' }}>
-            {/* Sin pines numerados inventados: 1 marcador si hay coords, ninguno si no. */}
-            <MiniMap height={90} pins={hasCoords ? 1 : 0}/>
+            {/* Mapa REAL: coords exactas -> punto; sin coords pero con ciudad
+                conocida -> centrado en la ciudad; ultimo recurso -> mapa
+                neutro. Usa los helpers exportados por detail.jsx. */}
+            {(() => {
+              const Leaflet = typeof window !== 'undefined' ? window.LeafletReadOnlyMap : null;
+              const cityCoords = typeof window !== 'undefined' && window.CITY_COORDS && window.normalizeCity
+                ? window.CITY_COORDS[window.normalizeCity(p.ciudad || p.city)]
+                : null;
+              if (Leaflet && hasCoords) {
+                return <Leaflet lat={p.lat} lng={p.lng} height={110} approximate/>;
+              }
+              if (Leaflet && cityCoords) {
+                return <Leaflet lat={cityCoords[0]} lng={cityCoords[1]} height={110} approximate zoom={13} radius={1500}/>;
+              }
+              return <MiniMap height={110} pins={0}/>;
+            })()}
           </div>
           <div className="muted" style={{ fontSize: 8, marginTop: 4 }}>La ubicación exacta se comparte al coordinar la visita.</div>
         </div>

@@ -462,7 +462,12 @@ function LeafletReadOnlyMap({ lat, lng, height = 280, approximate = false, zoom 
       L.marker([lat, lng]).addTo(m);
     }
     mapRef.current = m;
-    return () => { try { m.remove(); } catch {} mapRef.current = null; };
+    // Si el contenedor se dimensiona despues del montaje (modales, tabs,
+    // brochure), Leaflet puede quedar gris hasta un resize. invalidateSize
+    // fuerza el recalculo de tiles.
+    const t1 = setTimeout(() => { try { m.invalidateSize(); } catch {} }, 120);
+    const t2 = setTimeout(() => { try { m.invalidateSize(); } catch {} }, 450);
+    return () => { clearTimeout(t1); clearTimeout(t2); try { m.remove(); } catch {} mapRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lat, lng, zoom, radius]);
   return <div ref={ref} style={{ height, width: '100%', background: 'var(--bg-2)' }}/>;
@@ -669,4 +674,6 @@ function AgentCard({ agent, price, tipo, onNav, property }) {
   );
 }
 
-Object.assign(window, { DetailPage });
+// Exportamos tambien el mapa read-only y el lookup de ciudades para que el
+// brochure (publish.jsx, cargado despues) pueda mostrar la ubicacion real.
+Object.assign(window, { DetailPage, LeafletReadOnlyMap, CITY_COORDS, normalizeCity });
