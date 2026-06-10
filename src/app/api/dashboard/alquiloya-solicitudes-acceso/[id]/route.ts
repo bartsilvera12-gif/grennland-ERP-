@@ -248,13 +248,18 @@ export async function PATCH(request: Request, ctx: Ctx) {
         );
       }
 
-      // Crear auth.users + alquiloya.usuarios (con propietario_id/agente_id) si hay email.
-      // Si no hay email no podemos crear cuenta -> queda solo el registro y se completa manual.
+      // Crear cuenta de acceso (auth.users + alquiloya.usuarios) + correo SOLO
+      // para quienes entran a un portal: AGENTES y REFERIDOS. Los PROPIETARIOS
+      // NO inician sesion en ningun portal, asi que se aprueban solo como
+      // registro en alquiloya.propietarios (ya creado arriba) — sin cuenta de
+      // login y sin correo de acceso. (Pedido del cliente: el acceso es solo
+      // para agentes.)
       let portalCredentials: { email: string; tempPassword: string } | null = null;
-      let emailSent = false; // true si pudimos disparar el correo automatico via Supabase Auth
+      let emailSent = false; // true si pudimos disparar el correo automatico
       let emailError: string | null = null;
       let usuarioErpId: string | null = null;
-      if (sol.email) {
+      const creaAcceso = sol.tipo !== "propietario";
+      if (sol.email && creaAcceso) {
         try {
           const supabase = createServiceRoleClient();
           // Genera password temporal (12 chars alfanumericos + 2 simbolos).
