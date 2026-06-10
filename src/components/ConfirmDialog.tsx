@@ -54,13 +54,13 @@ export default function ConfirmDialog({
         aria-hidden="true"
       />
       <div className="relative w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-200">
-        <h3 id="confirm-dialog-title" className="text-base font-semibold text-slate-900">
+        <h3 id="confirm-dialog-title" className="text-center text-base font-semibold text-slate-900">
           {title}
         </h3>
         {description ? (
-          <div className="mt-2 text-sm leading-relaxed text-slate-600">{description}</div>
+          <div className="mt-2 text-center text-sm leading-relaxed text-slate-600">{description}</div>
         ) : null}
-        <div className="mt-5 flex items-center justify-end gap-2">
+        <div className="mt-5 flex items-center justify-center gap-2">
           <button
             type="button"
             onClick={onCancel}
