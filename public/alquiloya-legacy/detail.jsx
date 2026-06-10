@@ -145,7 +145,6 @@ function FullGalleryModal({ property, onClose }) {
           {[
             ['fotos', 'Fotos'],
             ['mapa', 'Mapa'],
-            ['street', 'Street View'],
           ].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} style={{
               padding: '10px 18px', borderRadius: 10, border: 'none',
@@ -206,30 +205,28 @@ function FullGalleryModal({ property, onClose }) {
             </div>
             )
           )}
-          {tab === 'mapa' && (
-            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              {(typeof property.lat === 'number' && typeof property.lng === 'number') ? (
-                <LeafletReadOnlyMap lat={property.lat} lng={property.lng} height={520} approximate/>
-              ) : (
-                <MiniMap height={520}/>
-              )}
-              <div style={{ padding: 16, fontSize: 14 }}>
-                <div style={{ fontWeight: 700 }}><I.pin s={14}/> {property.address}</div>
-                <div className="muted xs" style={{ marginTop: 4 }}>{property.ciudad} · {property.depto}</div>
+          {tab === 'mapa' && (() => {
+            const hasCoords = typeof property.lat === 'number' && typeof property.lng === 'number';
+            const cityCentroid = !hasCoords ? CITY_COORDS[normalizeCity(property.ciudad)] : null;
+            return (
+              <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                {hasCoords ? (
+                  <LeafletReadOnlyMap lat={property.lat} lng={property.lng} height={520} approximate/>
+                ) : cityCentroid ? (
+                  <LeafletReadOnlyMap lat={cityCentroid[0]} lng={cityCentroid[1]} height={520} approximate zoom={13} radius={1500}/>
+                ) : (
+                  <MiniMap height={520} pins={0}/>
+                )}
+                <div style={{ padding: 16, fontSize: 14 }}>
+                  <div style={{ fontWeight: 700 }}><I.pin s={14}/> {property.address}</div>
+                  <div className="muted xs" style={{ marginTop: 4 }}>
+                    {[property.ciudad, property.depto].filter(Boolean).join(' · ')}
+                    {!hasCoords ? ' — ubicación referencial de la zona' : ''}
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
-          {tab === 'street' && (
-            <div className="card" style={{ padding: 60, textAlign: 'center', minHeight: 480 }}>
-              <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--blue-50)', color: 'var(--blue)', display: 'grid', placeItems: 'center', margin: '0 auto' }}>
-                <I.pin s={36}/>
-              </div>
-              <h3 style={{ fontSize: 20, marginTop: 18 }}>Street View próximamente</h3>
-              <p className="muted" style={{ fontSize: 14, marginTop: 8, maxWidth: 380, margin: '8px auto 0' }}>
-                Estamos integrando Google Street View para que puedas explorar la cuadra antes de visitar.
-              </p>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* Sidebar */}
