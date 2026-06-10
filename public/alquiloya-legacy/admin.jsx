@@ -1,6 +1,6 @@
 // Administradores — Global y Propietario/Agente
 
-function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displayName, displayEmail, planInfo, children }) {
+function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displayName, displayEmail, planInfo, planLoading, children }) {
   const items = kind === 'global' ? [
     { id: 'admin-global', label: 'Dashboard', icon: 'grid' },
     { id: 'admin-global-properties', label: 'Inmuebles', icon: 'house' },
@@ -75,7 +75,14 @@ function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displ
           </nav>
           {kind === 'agent' && (
             <>
-              {planInfo && planInfo.name ? (
+              {planLoading ? (
+                // Skeleton mientras carga: evita que aparezca "Sin plan asignado"
+                // y desaparezca al resolverse el plan real.
+                <div style={{ marginTop: 24, padding: 14, background: 'var(--bg-2)', borderRadius: 12, border: '1px dashed var(--line-2)' }}>
+                  <div style={{ height: 14, width: '60%', background: 'var(--bg-3)', borderRadius: 4 }}/>
+                  <div style={{ height: 30, marginTop: 10, background: 'var(--bg-3)', borderRadius: 8 }}/>
+                </div>
+              ) : planInfo && planInfo.name ? (
                 <div style={{ marginTop: 24, padding: 14, background: 'var(--yellow-50)', borderRadius: 12, fontSize: 12.5 }}>
                   <div style={{ fontWeight: 700, color: '#8a5e00' }}>Plan {planInfo.name}</div>
                   {planInfo.vencimiento ? (
@@ -490,6 +497,7 @@ function AdminAgentPage({ route, onNav }) {
     <AdminLayout
       kind="agent"
       role={meData ? (isPropietario ? 'propietario' : 'agente') : undefined}
+      planLoading={meData === null}
       route={route}
       onNav={onNav}
       title={titles[view][0]}

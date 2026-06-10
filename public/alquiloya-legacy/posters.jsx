@@ -174,6 +174,7 @@ function PostersPage({ route, onNav }) {
     <AdminLayout
       kind="agent"
       role={meKind ? (isPropietario ? 'propietario' : 'agente') : undefined}
+      planLoading={meKind === null}
       route={route || 'admin-agent-qr'}
       onNav={onNav}
       displayName={meInfo.nombre || 'Mi cuenta'}
