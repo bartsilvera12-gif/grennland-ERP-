@@ -286,11 +286,22 @@ function AdminAgentPage({ route, onNav }) {
   const [meData, setMeData] = React.useState(null); // { propietario, usuario, agente }
   const [meError, setMeError] = React.useState(null);
 
-  // Cargar perfil real: primero intenta propietario, luego cae a agente.
+  // Cargar perfil real: agente PRIMERO (si la cuenta tiene agente_id ese es su
+  // rol, aunque tambien aparezca como propietario por mismo email). Sino el
+  // sidebar pierde Captaciones/Mi blog cuando navega a Carteles QR.
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
+        const r2 = await fetch('/api/agente/me', { cache: 'no-store', credentials: 'include' });
+        if (r2.ok) {
+          const body2 = await r2.json();
+          if (cancelled) return;
+          if (body2?.agente) {
+            setMeData({ kind: 'agente', usuario: body2.usuario, agente: body2.agente });
+            return;
+          }
+        }
         const r = await fetch('/api/propietario/me', { cache: 'no-store', credentials: 'include' });
         if (r.ok) {
           const body = await r.json();
@@ -298,15 +309,6 @@ function AdminAgentPage({ route, onNav }) {
           if (body?.propietario) {
             setMeData({ kind: 'propietario', usuario: body.usuario, propietario: body.propietario });
             setImpulsesPaid(Number(body.propietario.impulsos_saldo) || 0);
-            return;
-          }
-        }
-        const r2 = await fetch('/api/agente/me', { cache: 'no-store', credentials: 'include' });
-        if (r2.ok) {
-          const body2 = await r2.json();
-          if (cancelled) return;
-          if (body2?.agente) {
-            setMeData({ kind: 'agente', usuario: body2.usuario, agente: body2.agente });
             return;
           }
         }
@@ -1404,6 +1406,7 @@ function CapturesSection({ onNav }) {
 
 function CaptarPropietarioModal({ onClose, onSaved }) {
   const [form, setForm] = React.useState({
+    propietario_id: null, // si selecciona uno existente, guardamos su id
     propietario_nombre: '', propietario_email: '', propietario_telefono: '',
     propiedad_titulo: '', tipo_propiedad: '', ciudad: '', barrio: '',
     precio_estimado: '', mensaje: '',
@@ -1411,6 +1414,59 @@ function CaptarPropietarioModal({ onClose, onSaved }) {
   const [busy, setBusy] = React.useState(false);
   const [feedback, setFeedback] = React.useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Selector de propietarios existentes.
+  const [search, setSearch] = React.useState('');
+  const [searchResults, setSearchResults] = React.useState([]);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [searchLoading, setSearchLoading] = React.useState(false);
+  // Debounce: 250ms despues de tipear, dispara el fetch.
+  React.useEffect(() => {
+    let cancelled = false;
+    if (!searchOpen) return;
+    const t = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const q = encodeURIComponent(search.trim());
+        const r = await fetch('/api/agente/propietarios' + (q ? ('?q=' + q) : ''), {
+          cache: 'no-store', credentials: 'include',
+        });
+        if (!r.ok) { if (!cancelled) setSearchResults([]); return; }
+        const b = await r.json().catch(() => ({}));
+        if (!cancelled && b && b.success && Array.isArray(b.propietarios)) {
+          setSearchResults(b.propietarios);
+        }
+      } catch {
+        if (!cancelled) setSearchResults([]);
+      } finally {
+        if (!cancelled) setSearchLoading(false);
+      }
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [search, searchOpen]);
+
+  function pickExisting(p) {
+    setForm(f => ({
+      ...f,
+      propietario_id: p.id,
+      propietario_nombre: p.nombre || '',
+      propietario_email: p.email || '',
+      propietario_telefono: p.telefono || '',
+      ciudad: f.ciudad || p.ciudad || '',
+    }));
+    setSearch('');
+    setSearchOpen(false);
+    setFeedback(null);
+  }
+  function clearExisting() {
+    setForm(f => ({
+      ...f,
+      propietario_id: null,
+      propietario_nombre: '',
+      propietario_email: '',
+      propietario_telefono: '',
+    }));
+  }
   const submit = async (e) => {
     e.preventDefault();
     if (busy) return;

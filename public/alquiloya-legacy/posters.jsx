@@ -78,21 +78,25 @@ function PostersPage({ route, onNav }) {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch('/api/propietario/me', { cache: 'no-store', credentials: 'include' });
-        if (r.ok) {
-          const b = await r.json();
-          if (!cancelled && b?.propietario) {
-            setMeKind('propietario');
-            setMeInfo({ nombre: b.propietario.nombre || '', email: b.propietario.email || b.usuario?.email || '' });
-            return;
-          }
-        }
+        // Agente PRIMERO. Si el usuario tiene perfil de agente, ese es su rol —
+        // aunque tambien aparezca en propietarios (caso comun: el agente cargo
+        // una propiedad propia y quedo como propietario tambien). Resolver
+        // como agente garantiza ver Captaciones / Mi blog en el sidebar.
         const r2 = await fetch('/api/agente/me', { cache: 'no-store', credentials: 'include' });
         if (r2.ok) {
           const b2 = await r2.json();
           if (!cancelled && b2?.agente) {
             setMeKind('agente');
             setMeInfo({ nombre: b2.agente.nombre || '', email: b2.agente.email || b2.usuario?.email || '' });
+            return;
+          }
+        }
+        const r = await fetch('/api/propietario/me', { cache: 'no-store', credentials: 'include' });
+        if (r.ok) {
+          const b = await r.json();
+          if (!cancelled && b?.propietario) {
+            setMeKind('propietario');
+            setMeInfo({ nombre: b.propietario.nombre || '', email: b.propietario.email || b.usuario?.email || '' });
           }
         }
       } catch { /* ignore */ }
