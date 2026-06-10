@@ -2,12 +2,20 @@
 
 function HomePage({ onNav, onProperty }) {
   const { properties } = useAlquiloYaPublicData();
-  const featured = properties.filter(p => p.featured || p.verified).slice(0, 6);
+  // "Propiedades destacadas" = SOLO las que tienen impulso/destaque vigente
+  // (p.featured viene de `destacada AND destacada_hasta vigente` en la API).
+  // Antes incluia `|| p.verified`, lo que metia cualquier inmueble verificado
+  // aunque no tuviera impulso — bug reportado por el cliente.
+  const featured = properties.filter(p => p.featured).slice(0, 6);
   const verifiedCount = properties.filter(p => p.verified).length;
   return (
     <div className="fade-in">
       <Hero onNav={onNav} verifiedCount={verifiedCount}/>
-      <Featured properties={featured} onProperty={onProperty} onNav={onNav}/>
+      {/* Si no hay ninguna propiedad destacada, no mostramos la seccion
+          (sino quedaba el titulo con la grilla vacia). */}
+      {featured.length > 0 && (
+        <Featured properties={featured} onProperty={onProperty} onNav={onNav}/>
+      )}
       <Categories properties={properties} onNav={onNav}/>
       <CatalogPreview properties={properties} onProperty={onProperty} onNav={onNav}/>
       <OwnersBlock onNav={onNav}/>
