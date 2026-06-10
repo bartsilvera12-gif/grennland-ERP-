@@ -1381,6 +1381,102 @@ function Toggle({ checked, onChange }) {
   );
 }
 
+// Genera el brochure imprimible (2 paginas A4). Abre una ventana con HTML
+// estatico y dispara print() — el usuario elige "Guardar como PDF". Es el
+// camino confiable: html2canvas se rompe con imagenes cross-origin (cover de
+// Unsplash, tiles de OSM, QR de qrserver) por canvas tainted.
+function printBrochure(property, contacto) {
+  const p = property || {};
+  const title = p.title || p.titulo || 'Propiedad';
+  const address = [p.barrio || p.neighborhood, p.ciudad || p.city].filter(Boolean).join(', ');
+  const priceNum = Number(p.price ?? p.precio) || 0;
+  const opVenta = (p.operacion || '') === 'venta';
+  const beds = p.beds ?? p.dormitorios, baths = p.baths ?? p.banos, m2 = p.m2 ?? p.superficie_m2;
+  const desc = (p.desc || p.descripcion || '').replace(/</g, '');
+  const cover = p.cover || p.cover_url || null;
+  const feats = Array.isArray(p.features) ? p.features : [];
+  const pid = p.apiId || p.id || '';
+  const origin = (typeof window !== 'undefined' && window.location && window.location.origin) || 'https://alquiloya.com.py';
+  const qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=0&data=' + encodeURIComponent(origin + '/?prop=' + encodeURIComponent(pid));
+  // Mapa estatico (mejor esfuerzo) centrado en coords o ciudad.
+  const cc = (typeof window !== 'undefined' && window.CITY_COORDS && window.normalizeCity)
+    ? window.CITY_COORDS[window.normalizeCity(p.ciudad || p.city)] : null;
+  const lat = typeof p.lat === 'number' ? p.lat : (cc ? cc[0] : null);
+  const lng = typeof p.lng === 'number' ? p.lng : (cc ? cc[1] : null);
+  const mapSrc = (lat != null && lng != null)
+    ? `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=13&size=560x200&markers=${lat},${lng},lightblue1`
+    : null;
+  const cName = (contacto && contacto.nombre) || '';
+  const cPhone = (contacto && (contacto.telefono || contacto.whatsapp)) || '';
+  const footer = [cName, cPhone].filter(Boolean).join(' · ');
+  const fmt = (n) => 'Gs. ' + Number(n || 0).toLocaleString('es-PY');
+
+  const w = window.open('', '_blank', 'width=900,height=1100');
+  if (!w) { window.alert('Habilitá las ventanas emergentes para descargar el PDF.'); return; }
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title} · AlquiloYa</title>
+  <style>
+    *{box-sizing:border-box;margin:0;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    body{background:#fff;color:#0b1622}
+    .page{width:210mm;min-height:297mm;padding:0;margin:0 auto;page-break-after:always;display:flex;flex-direction:column}
+    .hd{background:#0058A5;color:#fff;font-weight:900;letter-spacing:.04em;padding:18px 28px;font-size:22px;display:flex;justify-content:space-between;align-items:center}
+    .badge{background:#0058A5;border:1px solid #fff;border-radius:999px;font-size:11px;padding:3px 10px}
+    .cover{width:100%;height:300px;object-fit:cover;display:block;background:#eef2f7}
+    .noimg{width:100%;height:300px;background:#eef2f7;color:#8893a1;display:flex;align-items:center;justify-content:center;font-size:14px}
+    .body{padding:28px;flex:1}
+    .title{font-size:26px;font-weight:800}
+    .addr{color:#5b6573;margin-top:4px;font-size:14px}
+    .price{font-size:30px;font-weight:900;color:#0058A5;margin-top:14px}
+    .price small{font-size:14px;font-weight:500;color:#5b6573}
+    .specs{display:flex;gap:18px;margin-top:14px;font-size:14px;color:#2a3543}
+    .desc{margin-top:18px;font-size:13px;line-height:1.55;color:#5b6573}
+    .gallery{margin-top:18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+    .gallery img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:4px}
+    .sec-title{font-size:16px;font-weight:800;margin-bottom:8px}
+    .feats{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;color:#2a3543}
+    .map{width:100%;height:200px;object-fit:cover;border-radius:6px;border:1px solid #e7ebf0;background:#eef2f7}
+    .note{font-size:11px;color:#8893a1;margin-top:6px}
+    .qrbox{display:flex;gap:14px;align-items:center;margin-top:28px}
+    .qrbox img{width:120px;height:120px}
+    .ft{background:#0058A5;color:#fff;text-align:center;padding:14px;font-weight:800;font-style:italic;font-size:12px;margin-top:auto}
+    @page{size:A4;margin:0}
+  </style></head><body>
+  <div class="page">
+    <div class="hd"><span>ALQUILOYA</span>${(p.verified||p.verificada)?'<span class="badge">✓ Verificado</span>':''}</div>
+    ${cover ? `<img class="cover" src="${cover}" alt=""/>` : `<div class="noimg">Sin imagen</div>`}
+    <div class="body">
+      <div class="title">${title}</div>
+      ${address?`<div class="addr">📍 ${address}</div>`:''}
+      ${priceNum>0?`<div class="price">${fmt(priceNum)}<small>${opVenta?'':' / mes'}</small></div>`:''}
+      <div class="specs">
+        ${beds!=null?`<span>🛏 ${beds} dorm</span>`:''}
+        ${baths!=null?`<span>🛁 ${baths} baño${Number(baths)===1?'':'s'}</span>`:''}
+        ${(m2!=null&&Number(m2)>0)?`<span>📐 ${m2} m²</span>`:''}
+      </div>
+      ${desc?`<div class="desc">${desc}</div>`:''}
+      ${feats.length?`<div class="gallery"></div>`:''}
+    </div>
+    <div class="ft">ALQUILOYA.COM.PY · ¡DONDE ENCONTRÁS MÁS RÁPIDO!</div>
+  </div>
+  <div class="page">
+    <div class="hd"><span>ALQUILOYA</span></div>
+    <div class="body">
+      ${feats.length?`<div class="sec-title">Características destacadas</div><div class="feats">${feats.slice(0,10).map(f=>`<div>✓ ${String(f).replace(/</g,'')}</div>`).join('')}</div><div style="height:22px"></div>`:''}
+      <div class="sec-title">Ubicación</div>
+      ${address?`<div class="addr" style="margin-bottom:8px">📍 ${address}</div>`:''}
+      ${mapSrc?`<img class="map" src="${mapSrc}" alt="Mapa"/>`:`<div class="map" style="display:flex;align-items:center;justify-content:center;color:#8893a1">Mapa no disponible</div>`}
+      <div class="note">La ubicación exacta se comparte al coordinar la visita.</div>
+      <div class="qrbox">
+        <img src="${qrSrc}" alt="QR"/>
+        <div><div style="font-weight:700">Escaneá para ver online</div><div style="font-size:12px;color:#5b6573">Más fotos, calendario y contacto directo por WhatsApp</div></div>
+      </div>
+    </div>
+    <div class="ft">${footer ? footer + ' · ' : ''}ALQUILOYA.COM.PY</div>
+  </div>
+  </body></html>`);
+  w.document.close();
+  w.onload = () => { setTimeout(() => { w.focus(); w.print(); }, 600); };
+}
+
 // El brochure ahora se genera con los datos REALES de la propiedad + el
 // contacto del publicador. `property` y `contacto` son opcionales: si no se
 // pasan (preview generico), cae a una muestra de ejemplo.
@@ -1400,7 +1496,7 @@ function BrochurePreviewModal({ onClose, property, contacto }) {
             <div className="xs" style={{ opacity: .8 }}>2 páginas · A4 · Generado automáticamente</div>
           </div>
           <div className="row gap-10">
-            <button className="btn btn-primary"><I.doc s={14}/> Descargar PDF</button>
+            <button className="btn btn-primary" onClick={() => printBrochure(property, contacto)}><I.doc s={14}/> Descargar PDF</button>
             <button onClick={onClose} className="btn" style={{ background: 'rgba(255,255,255,.2)', color: '#fff' }}>Cerrar</button>
           </div>
         </div>
