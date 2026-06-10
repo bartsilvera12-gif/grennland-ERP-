@@ -10,9 +10,12 @@ function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displ
   ] : [
     { id: 'admin-agent', label: 'Resumen', icon: 'grid' },
     { id: 'admin-agent-properties', label: 'Mis propiedades', icon: 'house' },
-    // Captaciones y Blog solo aplican a agentes/inmobiliarias, no a propietarios.
-    ...(role === 'propietario' ? [] : [{ id: 'admin-agent-captures', label: 'Captaciones', icon: 'shield' }]),
-    ...(role === 'propietario' ? [] : [{ id: 'admin-agent-blog', label: 'Mi blog', icon: 'doc' }]),
+    // Captaciones y Blog SOLO para agentes. Mientras el rol no esta resuelto
+    // (role indefinido durante la carga) NO los mostramos: asi un propietario
+    // no ve esos items aparecer y desaparecer. Para agentes aparecen al
+    // resolverse el rol (additivo, menos molesto que mostrarlos y sacarlos).
+    ...(role === 'agente' ? [{ id: 'admin-agent-captures', label: 'Captaciones', icon: 'shield' }] : []),
+    ...(role === 'agente' ? [{ id: 'admin-agent-blog', label: 'Mi blog', icon: 'doc' }] : []),
     { id: 'admin-agent-qr', label: 'Carteles QR', icon: 'qr' },
     { id: 'admin-agent-profile', label: 'Mi perfil', icon: 'user' },
   ];
@@ -481,7 +484,7 @@ function AdminAgentPage({ route, onNav }) {
   return (
     <AdminLayout
       kind="agent"
-      role={isPropietario ? 'propietario' : 'agente'}
+      role={meData ? (isPropietario ? 'propietario' : 'agente') : undefined}
       route={route}
       onNav={onNav}
       title={titles[view][0]}
@@ -742,7 +745,23 @@ function AdminAgentPage({ route, onNav }) {
 
       {view === 'queries' && <QueriesSection/>}
 
-      {view === 'profile' && (() => {
+      {view === 'profile' && !meData && (
+        // Skeleton mientras resuelve la sesion — evita el flash "Agente / A /
+        // 0 publicaciones" antes de tener los datos reales del perfil.
+        <div>
+          <div className="tag">Perfil</div>
+          <h3 style={{ fontSize: 20, marginTop: 4 }}>Mi perfil</h3>
+          <div className="card" style={{ padding: 22, marginTop: 16, display: 'flex', gap: 18, alignItems: 'center' }}>
+            <div style={{ width: 68, height: 68, borderRadius: '50%', background: '#eef2f7', flexShrink: 0 }}/>
+            <div style={{ flex: 1 }}>
+              <div style={{ height: 14, width: '40%', borderRadius: 6, background: '#eef2f7', marginBottom: 10 }}/>
+              <div style={{ height: 10, width: '60%', borderRadius: 6, background: '#f0f3f7' }}/>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {view === 'profile' && meData && (() => {
         const profile = isPropietario ? meData?.propietario : meData?.agente;
         const profileName = profile?.nombre || meData?.usuario?.nombre || (isPropietario ? 'Propietario' : 'Agente');
         const profileSubLines = [];
