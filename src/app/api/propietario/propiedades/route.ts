@@ -49,9 +49,23 @@ export async function GET(request: Request) {
          (p.destacada AND (p.destacada_hasta IS NULL OR p.destacada_hasta > now())) AS destacada,
          p.destacada_hasta::text AS destacada_hasta,
          p.visible_web, p.activo,
+         p.created_at::text AS created_at,
          cover.url AS cover_url,
-         COALESCE(fcnt.n, 0)::int AS fotos_count
+         COALESCE(fcnt.n, 0)::int AS fotos_count,
+         -- Info plan gratis: para que el panel del propietario muestre el banner
+         -- "tu plan gratis vence en X dias / vencio, compra un plan".
+         (pp.billing = 'gratis' OR pp.tier ILIKE 'gratuito%') AS plan_es_gratis,
+         GREATEST(
+           0,
+           30 - EXTRACT(DAY FROM (now() - p.created_at))::int
+         ) AS plan_gratis_dias_restantes,
+         (
+           (pp.billing = 'gratis' OR pp.tier ILIKE 'gratuito%')
+           AND p.created_at < now() - interval '30 days'
+         ) AS plan_gratis_expirado
        FROM ${t("propiedades")} p
+       LEFT JOIN ${t("propietarios")} pr ON pr.id = p.propietario_id
+       LEFT JOIN ${t("planes_publicacion")} pp ON pp.id = pr.plan_publicacion_id
        LEFT JOIN LATERAL (
          SELECT pf.url
          FROM ${t("propiedad_fotos")} pf

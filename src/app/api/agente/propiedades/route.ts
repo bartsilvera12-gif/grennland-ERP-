@@ -38,6 +38,9 @@ type PropiedadAgenteRow = {
   cover_url: string | null;
   fotos_count: number;
   created_at: string | null;
+  plan_es_gratis: boolean | null;
+  plan_gratis_dias_restantes: number | null;
+  plan_gratis_expirado: boolean | null;
 };
 
 /**
@@ -91,8 +94,16 @@ export async function GET(request: Request) {
           p.destacada, p.visible_web, p.activo,
           cover.url AS cover_url,
           COALESCE(fcnt.n, 0)::int AS fotos_count,
-          p.created_at::text AS created_at
+          p.created_at::text AS created_at,
+          (pp.billing = 'gratis' OR pp.tier ILIKE 'gratuito%') AS plan_es_gratis,
+          GREATEST(0, 30 - EXTRACT(DAY FROM (now() - p.created_at))::int) AS plan_gratis_dias_restantes,
+          (
+            (pp.billing = 'gratis' OR pp.tier ILIKE 'gratuito%')
+            AND p.created_at < now() - interval '30 days'
+          ) AS plan_gratis_expirado
         FROM ${t("propiedades")} p
+        LEFT JOIN ${t("propietarios")} pr ON pr.id = p.propietario_id
+        LEFT JOIN ${t("planes_publicacion")} pp ON pp.id = pr.plan_publicacion_id
         LEFT JOIN LATERAL (
           SELECT pf.url FROM ${t("propiedad_fotos")} pf
           WHERE pf.empresa_id = p.empresa_id

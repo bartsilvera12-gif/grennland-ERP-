@@ -351,6 +351,10 @@ function AdminAgentPage({ route, onNav }) {
         visible_web: !!p.visible_web,
         destacada: !!p.destacada,
         fotos_count: p.fotos_count || 0,
+        // Info del plan gratis para mostrar banner "tu plan vence en X dias / vencio".
+        plan_es_gratis: !!p.plan_es_gratis,
+        plan_gratis_dias_restantes: typeof p.plan_gratis_dias_restantes === 'number' ? p.plan_gratis_dias_restantes : null,
+        plan_gratis_expirado: !!p.plan_gratis_expirado,
         _real: true,
       }));
       // Marcamos como cargado AUNQUE este vacio. Empty array = "tengo sesion pero 0 propiedades".
@@ -557,8 +561,52 @@ function AdminAgentPage({ route, onNav }) {
               if (propFilter !== 'all' && propFilter !== status) return null;
               const vistas = 120 + i * 87;
               const consultas = 2 + i * 3;
+              // Banner plan gratis: aviso si quedan <=7 dias o ya vencio.
+              const showPlanGratisWarning = p._real && p.plan_es_gratis && !p.plan_gratis_expirado
+                && typeof p.plan_gratis_dias_restantes === 'number'
+                && p.plan_gratis_dias_restantes <= 7;
+              const showPlanGratisExpired = p._real && p.plan_es_gratis && p.plan_gratis_expirado;
+              const planBanner = showPlanGratisExpired ? (
+                <div style={{
+                  padding: '10px 14px', borderRadius: 10, marginBottom: 8,
+                  background: '#fff4f4', border: '1px solid #f1c4c4',
+                  borderLeft: '3px solid #d93838',
+                  display: 'flex', alignItems: 'center', gap: 12, fontSize: 12.5, color: 'var(--ink-2)',
+                }}>
+                  <span style={{ fontSize: 16 }}>⚠</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong>Tu publicación gratuita venció.</strong> Esta propiedad ya no se muestra en el sitio.
+                    Comprá un plan pago para volver a publicarla.
+                  </div>
+                  <button onClick={() => onNav && onNav('plans')} style={{
+                    padding: '6px 12px', borderRadius: 8, background: '#d93838',
+                    color: '#fff', border: 'none', cursor: 'pointer',
+                    fontWeight: 700, fontSize: 12, fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  }}>Ver planes</button>
+                </div>
+              ) : showPlanGratisWarning ? (
+                <div style={{
+                  padding: '10px 14px', borderRadius: 10, marginBottom: 8,
+                  background: '#fffaf0', border: '1px solid #f5d585',
+                  borderLeft: '3px solid var(--yellow-600)',
+                  display: 'flex', alignItems: 'center', gap: 12, fontSize: 12.5, color: 'var(--ink-2)',
+                }}>
+                  <span style={{ fontSize: 16 }}>⏰</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    Tu plan gratuito vence en <strong>{p.plan_gratis_dias_restantes} {p.plan_gratis_dias_restantes === 1 ? 'día' : 'días'}</strong>.
+                    Comprá un plan pago para mantener tu publicación activa.
+                  </div>
+                  <button onClick={() => onNav && onNav('plans')} style={{
+                    padding: '6px 12px', borderRadius: 8, background: 'var(--ink)',
+                    color: '#fff', border: 'none', cursor: 'pointer',
+                    fontWeight: 700, fontSize: 12, fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  }}>Ver planes</button>
+                </div>
+              ) : null;
               return (
-                <div key={p.id} className="card" style={{
+                <React.Fragment key={p.id}>
+                {planBanner}
+                <div className="card" style={{
                   padding: 12, display: 'flex', alignItems: 'center', gap: 14,
                   transition: 'border-color .12s, box-shadow .12s',
                 }}
@@ -619,6 +667,7 @@ function AdminAgentPage({ route, onNav }) {
                     </button>
                   </div>
                 </div>
+                </React.Fragment>
               );
             })}
           </div>
