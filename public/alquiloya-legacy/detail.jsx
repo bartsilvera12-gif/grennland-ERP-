@@ -358,18 +358,25 @@ function DetailDescription({ p }) {
 
 function DetailMap({ p }) {
   const hasCoords = typeof p.lat === 'number' && typeof p.lng === 'number';
+  // Fallback para publicaciones sin coords exactas: centramos en la ciudad.
+  const cityCentroid = !hasCoords ? CITY_COORDS[normalizeCity(p.ciudad)] : null;
+  const ubic = [p.barrio, p.ciudad].filter(Boolean).join(', ');
   return (
     <div className="card" style={{ padding: 0, marginTop: 16, overflow: 'hidden' }}>
       <div style={{ padding: '20px 24px 16px' }}>
         <h3 style={{ fontSize: 18 }}>Ubicación</h3>
         <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
-          <I.pin s={14}/> {p.barrio}, {p.ciudad} — la ubicación exacta se comparte tras coordinar visita.
+          <I.pin s={14}/> {ubic || 'Ubicación'} — {hasCoords ? 'la ubicación exacta se comparte tras coordinar visita.' : 'ubicación referencial de la zona; la dirección exacta se comparte tras coordinar visita.'}
         </div>
       </div>
       {hasCoords ? (
         <LeafletReadOnlyMap lat={p.lat} lng={p.lng} height={280} approximate/>
+      ) : cityCentroid ? (
+        // Zona de la ciudad (zoom bajo + circulo amplio): no es la direccion
+        // exacta, pero muestra el area correcta en vez de un mapa cualquiera.
+        <LeafletReadOnlyMap lat={cityCentroid[0]} lng={cityCentroid[1]} height={280} approximate zoom={13} radius={1500}/>
       ) : (
-        <MiniMap height={280} pins={1}/>
+        <MiniMap height={280} pins={0}/>
       )}
     </div>
   );
@@ -377,20 +384,20 @@ function DetailMap({ p }) {
 
 // Mapa real (read-only) usando Leaflet via CDN. Si approximate=true, en lugar de un
 // pin exacto dibuja un circulo de ~250m de radio (para no exponer la direccion exacta).
-function LeafletReadOnlyMap({ lat, lng, height = 280, approximate = false }) {
+function LeafletReadOnlyMap({ lat, lng, height = 280, approximate = false, zoom = 15, radius = 250 }) {
   const ref = React.useRef(null);
   const mapRef = React.useRef(null);
   React.useEffect(() => {
     if (typeof window === 'undefined' || !window.L) return;
     if (!ref.current || mapRef.current) return;
     const L = window.L;
-    const m = L.map(ref.current, { scrollWheelZoom: false }).setView([lat, lng], 15);
+    const m = L.map(ref.current, { scrollWheelZoom: false }).setView([lat, lng], zoom);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap',
     }).addTo(m);
     if (approximate) {
       L.circle([lat, lng], {
-        radius: 250,
+        radius,
         color: '#0058A5',
         weight: 2,
         fillColor: '#0058A5',
@@ -402,8 +409,42 @@ function LeafletReadOnlyMap({ lat, lng, height = 280, approximate = false }) {
     mapRef.current = m;
     return () => { try { m.remove(); } catch {} mapRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lat, lng]);
+  }, [lat, lng, zoom, radius]);
   return <div ref={ref} style={{ height, width: '100%', background: 'var(--bg-2)' }}/>;
+}
+
+// Centroides aproximados de ciudades de Paraguay. Se usan como FALLBACK cuando
+// una propiedad no tiene lat/lng exactas (ej. publicaciones viejas creadas
+// antes del fix del guardado de coordenadas). Asi mostramos al menos la zona
+// correcta de la ciudad en vez de un mapa generico que no tiene nada que ver.
+const CITY_COORDS = {
+  'asuncion': [-25.2987, -57.6359],
+  'fernando de la mora': [-25.3333, -57.5333],
+  'san lorenzo': [-25.3397, -57.5089],
+  'luque': [-25.2667, -57.4872],
+  'lambare': [-25.3506, -57.6064],
+  'capiata': [-25.3556, -57.4456],
+  'nemby': [-25.3953, -57.5358],
+  'mariano roque alonso': [-25.2050, -57.5325],
+  'villa elisa': [-25.3639, -57.5944],
+  'itaugua': [-25.3925, -57.3539],
+  'aregua': [-25.3056, -57.3850],
+  'limpio': [-25.1681, -57.4914],
+  'ciudad del este': [-25.5097, -54.6111],
+  'encarnacion': [-27.3306, -55.8667],
+  'pedro juan caballero': [-22.5470, -55.7333],
+  'caaguazu': [-25.4661, -56.0144],
+  'coronel oviedo': [-25.4467, -56.4406],
+  'villarrica': [-25.7500, -56.4333],
+  'concepcion': [-23.4064, -57.4344],
+  'pilar': [-26.8597, -58.2906],
+};
+function normalizeCity(s) {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim();
 }
 
 function DetailQR({ p }) {
