@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import type { SolicitudAccesoRow } from "@/lib/alquiloya/erp-solicitudes-acceso";
-import { confirmDialog } from "@/lib/ui/dialogs";
 
 type Filter = "todas" | "pendiente" | "aprobada" | "rechazada";
 type TipoFilter = "todos" | "agente" | "propietario" | "referido_partner";
@@ -76,6 +75,12 @@ export default function SolicitudesAccesoClient({
     | null
   >(null);
   const [err, setErr] = useState<string | null>(null);
+  // Modal de credenciales creadas: muestra email + contraseña + botones para
+  // enviarlas por WhatsApp (o email si no tiene WhatsApp).
+  const [creds, setCreds] = useState<
+    | { email: string; tempPassword: string; nombre: string; telefono: string | null }
+    | null
+  >(null);
 
   // Counts cruzados: cada grupo de chips refleja lo que pasaria si lo
   // seleccionas considerando los OTROS filtros activos. Asi si "Agentes 1"
@@ -161,19 +166,9 @@ export default function SolicitudesAccesoClient({
       if (!res.ok || !data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
       if (action === "aprobar" && data.portal_credentials) {
         const { email, tempPassword } = data.portal_credentials;
-        // Usamos confirmDialog (con solo botón Aceptar) para que las
-        // credenciales queden visibles hasta que el admin las copie.
-        // Un toast desaparecería antes de que pueda copiarlas.
-        await confirmDialog({
-          title: "Cuenta del portal creada",
-          message:
-            `Email: ${email}\n` +
-            `Contraseña temporal: ${tempPassword}\n\n` +
-            `IMPORTANTE: copiá esta contraseña ahora y enviásela al usuario por WhatsApp. No se vuelve a mostrar.`,
-          confirmText: "Listo, ya la copié",
-          cancelText: "Cerrar",
-          tone: "warning",
-        });
+        // Modal propio con botones "Enviar por WhatsApp / Email". Reemplaza al
+        // confirmDialog generico para poder mandar el acceso al solicitante.
+        setCreds({ email, tempPassword, nombre: row.nombre, telefono: row.telefono ?? null });
       }
       setRows((prev) =>
         prev.map((r) =>
@@ -476,6 +471,87 @@ export default function SolicitudesAccesoClient({
           </div>
         </div>
       ) : null}
+
+      {creds ? <CredencialesModal creds={creds} onClose={() => setCreds(null)} /> : null}
     </>
+  );
+}
+
+// Normaliza telefono a wa.me (Paraguay).
+function waNum(raw: string | null): string | null {
+  if (!raw) return null;
+  let p = String(raw).replace(/\D/g, "");
+  if (!p) return null;
+  if (!p.startsWith("595")) {
+    if (p.startsWith("0")) p = "595" + p.slice(1);
+    else if (p.length <= 10) p = "595" + p;
+  }
+  return p;
+}
+
+function CredencialesModal({
+  creds, onClose,
+}: {
+  creds: { email: string; tempPassword: string; nombre: string; telefono: string | null };
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const mensaje =
+    `Hola ${creds.nombre}, ¡tu cuenta en AlquiloYa fue aprobada! 🎉\n\n` +
+    `Ingresá en: ${typeof window !== "undefined" ? window.location.origin : ""}/portal-agentes/login\n` +
+    `Email: ${creds.email}\n` +
+    `Contraseña temporal: ${creds.tempPassword}\n\n` +
+    `Te recomendamos cambiarla al ingresar.`;
+  const phone = waNum(creds.telefono);
+  const waHref = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(mensaje)}` : null;
+  const mailHref = `mailto:${creds.email}?subject=${encodeURIComponent("Tu acceso a AlquiloYa")}&body=${encodeURIComponent(mensaje)}`;
+
+  async function copyAll() {
+    try {
+      await navigator.clipboard.writeText(`Email: ${creds.email}\nContraseña: ${creds.tempPassword}`);
+      setCopied(true); setTimeout(() => setCopied(false), 1500);
+    } catch { /* ignore */ }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-200">
+        <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+        </div>
+        <h3 className="text-center text-base font-semibold text-slate-900">Cuenta del portal creada</h3>
+        <p className="mt-1 text-center text-sm text-slate-500">
+          Enviale el acceso a <strong>{creds.nombre}</strong>. La contraseña no se vuelve a mostrar.
+        </p>
+
+        <div className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+          <div className="flex justify-between gap-2"><span className="text-slate-500">Email</span><span className="font-medium text-slate-800 break-all">{creds.email}</span></div>
+          <div className="flex justify-between gap-2"><span className="text-slate-500">Contraseña</span><span className="font-mono font-semibold text-slate-900">{creds.tempPassword}</span></div>
+          <button type="button" onClick={copyAll} className="mt-1 w-full rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50">
+            {copied ? "✓ Copiado" : "Copiar email y contraseña"}
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-2">
+          {waHref ? (
+            <a href={waHref} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#25D366] px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-[#1ebd5b]">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.371-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347M12.05 21.785h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884a9.82 9.82 0 0 1 6.988 2.898 9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884"/></svg>
+              Enviar por WhatsApp
+            </a>
+          ) : null}
+          <a href={mailHref}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-700 px-3.5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+            Enviar por Email
+          </a>
+        </div>
+
+        <button type="button" onClick={onClose} className="mt-3 w-full rounded-lg bg-slate-100 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200">
+          Listo
+        </button>
+      </div>
+    </div>
   );
 }
