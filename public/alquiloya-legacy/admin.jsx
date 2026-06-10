@@ -1065,6 +1065,8 @@ function QueriesSection() {
 
 function CapturesSection({ onNav }) {
   const [showAll, setShowAll] = React.useState(false);
+  const [captarOpen, setCaptarOpen] = React.useState(false);
+  const [reloadKey, setReloadKey] = React.useState(0);
   // Captaciones reales del agente logueado (Fase 12A). Distinguimos 3 estados:
   // - null      => cargando
   // - []        => respuesta OK pero sin captaciones (agente nuevo) -> empty state
@@ -1089,7 +1091,7 @@ function CapturesSection({ onNav }) {
       .catch(e => { if (!cancelled) { setRealErr((e && e.message) || 'error'); setRealCapt('mock'); } });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reloadKey]);
   const isLoading = realCapt === null;
   const useMock = realCapt === 'mock';
   const realList = Array.isArray(realCapt) ? realCapt : [];
@@ -1169,11 +1171,20 @@ function CapturesSection({ onNav }) {
           <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 16, marginTop: 4 }}>Propiedades que capté</div>
           <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>Comisión {me.commissionRate}% solo si se concreta</div>
         </div>
-        {(hasRealCapt || useMock) && (
-          <button onClick={() => setShowAll(v => !v)} style={{ background: 'none', border: 'none', color: 'var(--blue)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-            {showAll ? 'Ver solo activas ←' : 'Historial completo →'}
+        <div className="row gap-10" style={{ alignItems: 'center' }}>
+          <button onClick={() => setCaptarOpen(true)} style={{
+            background: 'var(--yellow)', color: 'var(--ink)', border: 'none',
+            padding: '8px 14px', borderRadius: 8, fontWeight: 700, fontSize: 12.5,
+            cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}>
+            <I.plus s={13}/> Captar propietario nuevo
           </button>
-        )}
+          {(hasRealCapt || useMock) && (
+            <button onClick={() => setShowAll(v => !v)} style={{ background: 'none', border: 'none', color: 'var(--blue)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              {showAll ? 'Ver solo activas ←' : 'Historial completo →'}
+            </button>
+          )}
+        </div>
       </div>
 
       {isLoading && (
@@ -1213,12 +1224,12 @@ function CapturesSection({ onNav }) {
               ))}
             </div>
             <div style={{ textAlign: 'center', marginTop: 22 }}>
-              <button onClick={() => onNav && onNav('publish')} style={{
+              <button onClick={() => setCaptarOpen(true)} style={{
                 background: 'var(--yellow)', color: 'var(--ink)', border: 'none',
                 padding: '10px 22px', borderRadius: 10, fontWeight: 700, fontSize: 13.5,
                 cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6,
               }}>
-                <I.plus s={14}/> Cargar primera propiedad captada
+                <I.plus s={14}/> Captar primer propietario
               </button>
             </div>
           </div>
@@ -1372,6 +1383,149 @@ function CapturesSection({ onNav }) {
         })}
       </div>
       </>)}
+
+      {captarOpen && (
+        <CaptarPropietarioModal
+          onClose={() => setCaptarOpen(false)}
+          onSaved={() => { setCaptarOpen(false); setReloadKey(k => k + 1); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function CaptarPropietarioModal({ onClose, onSaved }) {
+  const [form, setForm] = React.useState({
+    propietario_nombre: '', propietario_email: '', propietario_telefono: '',
+    propiedad_titulo: '', tipo_propiedad: '', ciudad: '', barrio: '',
+    precio_estimado: '', mensaje: '',
+  });
+  const [busy, setBusy] = React.useState(false);
+  const [feedback, setFeedback] = React.useState(null);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const submit = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    if (!form.propietario_nombre.trim()) { setFeedback({ kind: 'error', text: 'Poné el nombre del propietario.' }); return; }
+    if (!form.propietario_email.trim() && !form.propietario_telefono.trim()) {
+      setFeedback({ kind: 'error', text: 'Necesitamos email o teléfono para contactarlo.' }); return;
+    }
+    setBusy(true); setFeedback(null);
+    try {
+      const res = await fetch('/api/agente/captaciones', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          propietario_nombre: form.propietario_nombre.trim(),
+          propietario_email: form.propietario_email.trim() || null,
+          propietario_telefono: form.propietario_telefono.trim() || null,
+          propiedad_titulo: form.propiedad_titulo.trim() || null,
+          tipo_propiedad: form.tipo_propiedad || null,
+          ciudad: form.ciudad.trim() || null,
+          barrio: form.barrio.trim() || null,
+          precio_estimado: form.precio_estimado ? Number(String(form.precio_estimado).replace(/[^\d.]/g, '')) : null,
+          mensaje: form.mensaje.trim() || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) throw new Error((data && data.error) || ('HTTP ' + res.status));
+      setFeedback({ kind: 'success', text: '¡Captado! Ya está en tu lista de captaciones.' });
+      setTimeout(() => onSaved && onSaved(), 900);
+    } catch (err) {
+      setFeedback({ kind: 'error', text: 'No pudimos guardar. ' + (err.message || '') });
+    } finally { setBusy(false); }
+  };
+  const lbl = { fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '.04em', display: 'block', marginBottom: 6 };
+  const inp = { width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--line)', fontSize: 14, fontFamily: 'inherit', background: '#fff' };
+  return (
+    <div onClick={busy ? undefined : onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 100,
+      display: 'grid', placeItems: 'center', padding: 20, overflowY: 'auto',
+    }}>
+      <form onSubmit={submit} onClick={(e) => e.stopPropagation()} className="card" style={{
+        padding: 26, maxWidth: 620, width: '100%', background: '#fff', position: 'relative', margin: 'auto',
+      }}>
+        <button type="button" onClick={onClose} disabled={busy} style={{
+          position: 'absolute', top: 14, right: 14, background: 'var(--bg-2)', border: 'none',
+          width: 32, height: 32, borderRadius: 8, cursor: busy ? 'default' : 'pointer', display: 'grid', placeItems: 'center', opacity: busy ? 0.5 : 1,
+        }}><I.x s={14}/></button>
+        <div className="tag" style={{ color: 'var(--yellow-600)' }}>Captaciones</div>
+        <h3 style={{ fontSize: 20, marginTop: 6 }}>Captar propietario nuevo</h3>
+        <p className="muted" style={{ fontSize: 13, marginTop: 6, lineHeight: 1.5 }}>
+          Cargá los datos del propietario y su propiedad. Queda como "en gestión" — después podés crear la publicación o marcarla cerrada cuando se concrete.
+        </p>
+        {feedback && (
+          <div style={{
+            marginTop: 14, padding: '10px 12px', borderRadius: 8, fontSize: 13,
+            background: feedback.kind === 'success' ? '#dcfce7' : '#fee2e2',
+            color: feedback.kind === 'success' ? '#15803d' : '#991b1b',
+          }}>{feedback.text}</div>
+        )}
+
+        <div style={{ marginTop: 16, fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Propietario</div>
+        <div style={{ marginTop: 10 }}>
+          <label style={lbl}>Nombre *</label>
+          <input style={inp} value={form.propietario_nombre} onChange={e => set('propietario_nombre', e.target.value)} placeholder="Ej. María González" />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 }}>
+          <div>
+            <label style={lbl}>Email</label>
+            <input style={inp} type="email" value={form.propietario_email} onChange={e => set('propietario_email', e.target.value)} placeholder="email@dominio.com" />
+          </div>
+          <div>
+            <label style={lbl}>Teléfono / WhatsApp</label>
+            <input style={inp} value={form.propietario_telefono} onChange={e => set('propietario_telefono', e.target.value)} placeholder="0981 234 567" />
+          </div>
+        </div>
+
+        <div style={{ marginTop: 18, fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Propiedad (opcional)</div>
+        <div style={{ marginTop: 10 }}>
+          <label style={lbl}>Título / Referencia</label>
+          <input style={inp} value={form.propiedad_titulo} onChange={e => set('propiedad_titulo', e.target.value)} placeholder="Ej. Departamento 2 dorm. en Villa Morra" />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 10 }}>
+          <div>
+            <label style={lbl}>Tipo</label>
+            <select style={inp} value={form.tipo_propiedad} onChange={e => set('tipo_propiedad', e.target.value)}>
+              <option value="">—</option>
+              <option value="departamento">Departamento</option>
+              <option value="casa">Casa</option>
+              <option value="duplex">Dúplex</option>
+              <option value="terreno">Terreno</option>
+              <option value="local_comercial">Local comercial</option>
+              <option value="oficina">Oficina</option>
+              <option value="deposito">Depósito</option>
+            </select>
+          </div>
+          <div>
+            <label style={lbl}>Ciudad</label>
+            <input style={inp} value={form.ciudad} onChange={e => set('ciudad', e.target.value)} placeholder="Asunción" />
+          </div>
+          <div>
+            <label style={lbl}>Barrio</label>
+            <input style={inp} value={form.barrio} onChange={e => set('barrio', e.target.value)} placeholder="Villa Morra" />
+          </div>
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <label style={lbl}>Precio estimado (Gs.)</label>
+          <input style={inp} value={form.precio_estimado} onChange={e => set('precio_estimado', e.target.value)} placeholder="3.000.000" />
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <label style={lbl}>Notas internas</label>
+          <textarea style={{ ...inp, minHeight: 70, resize: 'vertical' }} value={form.mensaje} onChange={e => set('mensaje', e.target.value)} placeholder="Cualquier detalle útil para vos (ej. el dueño viaja, llaves con la portera, etc.)" />
+        </div>
+
+        <div className="row" style={{ justifyContent: 'flex-end', gap: 10, marginTop: 22 }}>
+          <button type="button" onClick={onClose} disabled={busy} style={{
+            background: 'transparent', border: '1px solid var(--line)', color: 'var(--ink-2)',
+            padding: '9px 18px', borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
+          }}>Cancelar</button>
+          <button type="submit" disabled={busy} style={{
+            background: busy ? 'var(--ink-4)' : 'var(--ink)', color: '#fff', border: 'none',
+            padding: '9px 22px', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: busy ? 'default' : 'pointer', fontFamily: 'inherit',
+          }}>{busy ? 'Guardando…' : 'Captar propietario'}</button>
+        </div>
+      </form>
     </div>
   );
 }
