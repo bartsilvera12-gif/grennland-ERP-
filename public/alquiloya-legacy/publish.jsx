@@ -1471,6 +1471,9 @@ function BrochurePage2({ property, contacto }) {
   const feats = Array.isArray(p.features) && p.features.length ? p.features : null;
   const qrId = p.codigo || p.legacyId || (p.apiId ? String(p.apiId).slice(0, 8) : 'AY');
   const hasCoords = typeof p.lat === 'number' && typeof p.lng === 'number';
+  // Texto de ubicacion real (barrio / ciudad). Es el dato compartible que
+  // antes no aparecia — el mapa decorativo no alcanzaba.
+  const ubicTexto = [p.barrio || p.neighborhood, p.ciudad || p.city].filter(Boolean).join(', ');
   // Linea de contacto: datos reales del publicador. Si no hay, no inventamos.
   const cName = (contacto && contacto.nombre) || '';
   const cPhone = (contacto && (contacto.telefono || contacto.whatsapp)) || '';
@@ -1495,6 +1498,12 @@ function BrochurePage2({ property, contacto }) {
         ) : null}
         <div>
           <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 12 }}>Ubicación</div>
+          {/* Texto de ubicacion real — el dato que el cliente echaba en falta. */}
+          {ubicTexto ? (
+            <div className="row gap-4" style={{ fontSize: 10, color: 'var(--ink-2)', fontWeight: 600, marginTop: 4 }}>
+              <I.pin s={10}/> {ubicTexto}
+            </div>
+          ) : null}
           <div style={{ marginTop: 6, borderRadius: 4, overflow: 'hidden' }}>
             {/* Sin pines numerados inventados: 1 marcador si hay coords, ninguno si no. */}
             <MiniMap height={90} pins={hasCoords ? 1 : 0}/>
