@@ -178,8 +178,12 @@ function EditModal({
         bullets: bullets.map((b) => b.trim()).filter(Boolean),
         excluded: excluded.map((b) => b.trim()).filter(Boolean),
       };
-      const res = await fetchWithSupabaseSession(`/api/dashboard/alquiloya-planes-publicacion/${plan.id}`, {
-        method: "PATCH",
+      const isNew = !plan.id;
+      const url = isNew
+        ? `/api/dashboard/alquiloya-planes-publicacion`
+        : `/api/dashboard/alquiloya-planes-publicacion/${plan.id}`;
+      const res = await fetchWithSupabaseSession(url, {
+        method: isNew ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -198,8 +202,10 @@ function EditModal({
       <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#4FAEB2]">Editor de plan</p>
-            <h2 className="text-lg font-semibold text-slate-900">{plan.nombre}</h2>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#4FAEB2]">
+              {plan.id ? "Editor de plan" : "Nuevo plan"}
+            </p>
+            <h2 className="text-lg font-semibold text-slate-900">{plan.nombre || "Plan sin nombre"}</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Cerrar">
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
@@ -275,7 +281,7 @@ function EditModal({
             Cancelar
           </button>
           <button type="button" disabled={saving} onClick={save} className="rounded-xl bg-[#4FAEB2] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#3F8E91] disabled:opacity-50">
-            {saving ? "Guardando…" : "Guardar cambios"}
+            {saving ? "Guardando…" : plan.id ? "Guardar cambios" : "Crear plan"}
           </button>
         </footer>
       </div>
@@ -350,8 +356,9 @@ export default function PlanesPublicacionClient({ hideHeader = false }: { hideHe
         <p className="text-sm text-slate-500">Cargando planes…</p>
       ) : (
         <>
-          {/* Segmento Dueños / Agentes — espejo de /publico#plans */}
-          <div className="mb-5 inline-flex rounded-full border border-slate-200 bg-white p-1 shadow-sm">
+          {/* Segmento Dueños / Agentes + boton de crear */}
+          <div className="mb-5 flex flex-wrap items-center gap-3">
+          <div className="inline-flex rounded-full border border-slate-200 bg-white p-1 shadow-sm">
             <button
               type="button"
               onClick={() => setAudience("owner")}
@@ -389,6 +396,39 @@ export default function PlanesPublicacionClient({ hideHeader = false }: { hideHe
               </span>
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              const maxOrden = (ordered.length > 0)
+                ? Math.max(...ordered.map((p) => p.orden ?? 0))
+                : 0;
+              const isOwner = audience === "owner";
+              setEditing({
+                id: "",
+                tier: "",
+                target: isOwner ? "Dueño directo" : "Agente",
+                nombre: "",
+                precio: 0,
+                moneda: "PYG",
+                billing: "unico",
+                badge: null,
+                bullets: [],
+                excluded: [],
+                cta: null,
+                highlighted: false,
+                free_boosts: null,
+                orden: maxOrden + 10,
+                activo: true,
+              });
+            }}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[#4FAEB2] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#3F8E91]"
+          >
+            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Nuevo plan
+          </button>
+          </div>
 
           {filtered.length === 0 ? (
             <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
@@ -409,7 +449,11 @@ export default function PlanesPublicacionClient({ hideHeader = false }: { hideHe
           plan={editing}
           onClose={() => setEditing(null)}
           onSaved={(next) => {
-            setPlanes((prev) => (prev ?? []).map((x) => (x.id === next.id ? next : x)));
+            setPlanes((prev) => {
+              const cur = prev ?? [];
+              const exists = cur.some((x) => x.id === next.id);
+              return exists ? cur.map((x) => (x.id === next.id ? next : x)) : [...cur, next];
+            });
           }}
         />
       ) : null}
