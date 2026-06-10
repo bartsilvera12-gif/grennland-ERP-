@@ -422,11 +422,11 @@ function DetailMap({ p }) {
       <div style={{ padding: '20px 24px 16px' }}>
         <h3 style={{ fontSize: 18 }}>Ubicación</h3>
         <div className="muted" style={{ marginTop: 6, fontSize: 14 }}>
-          <I.pin s={14}/> {ubic || 'Ubicación'} — {hasCoords ? 'la ubicación exacta se comparte tras coordinar visita.' : 'ubicación referencial de la zona; la dirección exacta se comparte tras coordinar visita.'}
+          <I.pin s={14}/> {ubic || 'Ubicación'} — {hasCoords ? 'ubicación exacta del inmueble.' : 'ubicación referencial de la zona; la dirección exacta se comparte tras coordinar visita.'}
         </div>
       </div>
       {hasCoords ? (
-        <LeafletReadOnlyMap lat={p.lat} lng={p.lng} height={280} approximate/>
+        <LeafletReadOnlyMap lat={p.lat} lng={p.lng} height={280}/>
       ) : cityCentroid ? (
         // Zona de la ciudad (zoom bajo + circulo amplio): no es la direccion
         // exacta, pero muestra el area correcta en vez de un mapa cualquiera.
