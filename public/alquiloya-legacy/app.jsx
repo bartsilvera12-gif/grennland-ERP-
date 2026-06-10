@@ -21,6 +21,20 @@ function App() {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
+  // Deep-link de QR: ?prop=<uuid> abre directamente la ficha de esa propiedad.
+  // Es lo que codifican los carteles QR para que al escanear se abra el inmueble.
+  React.useEffect(() => {
+    let cancelled = false;
+    try {
+      const id = new URLSearchParams(window.location.search).get('prop');
+      if (id && window.AlquiloYaPublicData && window.AlquiloYaPublicData.getPropertyDetail) {
+        window.AlquiloYaPublicData.getPropertyDetail(id).then(p => {
+          if (!cancelled && p) { setProperty(p); setRoute('detail'); }
+        });
+      }
+    } catch { /* ignore */ }
+    return () => { cancelled = true; };
+  }, []);
   // Keep URL in sync for admin global (hidden entry point)
   React.useEffect(() => {
     if (route.startsWith('admin-global')) {

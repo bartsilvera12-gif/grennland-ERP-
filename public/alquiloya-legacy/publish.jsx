@@ -1423,7 +1423,8 @@ function BrochurePage1({ property }) {
   const baths = p.baths ?? p.banos;
   const m2 = p.m2 ?? p.superficie_m2;
   const desc = p.desc || p.descripcion || '';
-  const cover = p.cover || p.cover_url || (typeof photo === 'function' ? photo(0) : '');
+  // Sin foto -> null (placeholder), NO una imagen random (photo()).
+  const cover = p.cover || p.cover_url || null;
   // Galeria: solo si la propiedad trae varias fotos reales.
   const gallery = Array.isArray(p.photos)
     ? p.photos.map(x => (typeof x === 'string' ? x : (x && x.url))).filter(Boolean).slice(0, 3)
@@ -1434,7 +1435,14 @@ function BrochurePage1({ property }) {
         <span style={{ fontFamily: 'Montserrat', fontWeight: 900, fontSize: 14, letterSpacing: '.04em' }}>ALQUILOYA</span>
         {(p.verified || p.verificada) ? <span className="badge badge-verified" style={{ fontSize: 9 }}><I.check s={8}/> Verificado</span> : null}
       </div>
-      <Photo src={cover} style={{ height: '38%', borderRadius: 0 }}/>
+      {cover ? (
+        <Photo src={cover} style={{ height: '38%', borderRadius: 0 }}/>
+      ) : (
+        <div style={{ height: '38%', background: 'var(--bg-3)', color: 'var(--ink-4)', display: 'grid', placeItems: 'center', fontSize: 10, gap: 4 }}>
+          <I.grid s={22}/>
+          <span>Sin imagen</span>
+        </div>
+      )}
       <div style={{ padding: '14px 16px', flex: 1 }}>
         <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 14, lineHeight: 1.2 }}>{title}</div>
         {address ? <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>{address}</div> : null}
@@ -1525,7 +1533,14 @@ function BrochurePage2({ property, contacto }) {
           <div className="muted" style={{ fontSize: 8, marginTop: 4 }}>La ubicación exacta se comparte al coordinar la visita.</div>
         </div>
         <div style={{ marginTop: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
-          <QRMock size={70} id={qrId}/>
+          {/* QR REAL escaneable: abre la ficha (deep-link ?prop=<uuid>). */}
+          {(() => {
+            const pid = p.apiId || p.id || '';
+            const origin = (typeof window !== 'undefined' && window.location && window.location.origin) || 'https://alquiloya.com.py';
+            const data = encodeURIComponent(origin + '/?prop=' + encodeURIComponent(pid));
+            const src = 'https://api.qrserver.com/v1/create-qr-code/?size=140x140&margin=0&data=' + data;
+            return <img src={src} alt={'QR ' + qrId} width={70} height={70} style={{ display: 'block' }}/>;
+          })()}
           <div style={{ fontSize: 9, color: 'var(--ink-2)', flex: 1 }}>
             <div style={{ fontWeight: 700, marginBottom: 2 }}>Escaneá para ver online</div>
             <div className="muted" style={{ fontSize: 8 }}>Más fotos, calendario y contacto directo por WhatsApp</div>

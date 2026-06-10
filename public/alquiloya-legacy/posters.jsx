@@ -1,9 +1,73 @@
 // Carteles QR — cada propiedad genera automáticamente su QR.
-// Vive dentro del panel del agente: gestión de carteles por propiedad.
+// Vive dentro del panel del agente/propietario: gestión de carteles por propiedad.
+
+// URL publica que abre la ficha al escanear (deep-link ?prop=<uuid>, ver app.jsx).
+function qrPublicUrl(p) {
+  const origin = (typeof window !== 'undefined' && window.location && window.location.origin) || 'https://alquiloya.com.py';
+  return origin + '/?prop=' + encodeURIComponent(p.id || p.apiId || '');
+}
+// QR REAL y escaneable via api.qrserver.com (sin API key). Reemplaza al QRMock
+// decorativo, que no se podia escanear.
+function qrImgSrc(p, size = 240) {
+  return 'https://api.qrserver.com/v1/create-qr-code/?size=' + size + 'x' + size +
+    '&margin=0&data=' + encodeURIComponent(qrPublicUrl(p));
+}
+async function downloadQR(p) {
+  try {
+    const res = await fetch(qrImgSrc(p, 600));
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'qr-' + (p.codigo || 'inmueble') + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  } catch {
+    window.open(qrImgSrc(p, 600), '_blank', 'noopener');
+  }
+}
+// Imprime uno o varios carteles abriendo una ventana con el layout listo.
+function printPosters(list) {
+  const arr = Array.isArray(list) ? list : [list];
+  if (!arr.length) return;
+  const w = window.open('', '_blank', 'width=820,height=1000');
+  if (!w) { window.alert('Habilitá las ventanas emergentes para imprimir.'); return; }
+  const carteles = arr.map(p => `
+    <div class="cartel">
+      <div class="hd">ALQUILOYA</div>
+      <div class="yellow"><div class="big">SE ALQUILA</div><div class="sub">ESCANEÁ Y MIRÁ FOTOS, PRECIO Y DETALLES</div></div>
+      <div class="body">
+        <img src="${qrImgSrc(p, 360)}" alt="QR" class="qr"/>
+        <div class="code">${p.codigo || ''}</div>
+        <div class="addr">${(p.address || '').replace(/</g, '')}</div>
+      </div>
+      <div class="ft">ALQUILOYA.COM.PY · ¡DONDE ENCONTRÁS MÁS RÁPIDO!</div>
+    </div>`).join('');
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Carteles QR</title>
+    <style>
+      *{box-sizing:border-box;margin:0;font-family:Arial,Helvetica,sans-serif}
+      body{padding:0}
+      .cartel{width:100%;max-width:560px;margin:0 auto 24px;border:1px solid #e7ebf0;border-radius:12px;overflow:hidden;page-break-after:always}
+      .hd{background:#0058A5;color:#fff;font-weight:900;letter-spacing:.04em;padding:16px 22px;font-size:20px}
+      .yellow{background:#F9B000;text-align:center;padding:22px 16px}
+      .big{font-weight:900;font-style:italic;font-size:46px;color:#0b1622;line-height:1}
+      .sub{font-weight:700;font-style:italic;font-size:12px;color:#0b1622;margin-top:8px;letter-spacing:.04em}
+      .body{padding:28px;text-align:center}
+      .qr{width:260px;height:260px;border:4px solid #0b1622;border-radius:8px;padding:8px}
+      .code{font-family:monospace;font-size:14px;font-weight:600;color:#5b6573;margin-top:14px}
+      .addr{font-size:15px;font-weight:600;color:#2a3543;margin-top:4px}
+      .ft{background:#0058A5;color:#fff;text-align:center;padding:12px;font-weight:800;font-style:italic;font-size:12px}
+      @media print{.cartel{border:none}}
+    </style></head><body>${carteles}</body></html>`);
+  w.document.close();
+  // Esperamos a que carguen las imagenes del QR antes de imprimir.
+  w.onload = () => { setTimeout(() => { w.focus(); w.print(); }, 400); };
+}
 
 function PostersPage({ route, onNav }) {
   const [modalId, setModalId] = React.useState(null);
   const [query, setQuery] = React.useState('');
+  const [selected, setSelected] = React.useState(() => new Set());
 
   // Sesion: igual que AdminAgentPage. Resolvemos si es propietario o agente
   // para (a) pasarle el `role` correcto al sidebar (sin Captaciones/Blog en
@@ -71,7 +135,8 @@ function PostersPage({ route, onNav }) {
         id: p.id,
         codigo: p.codigo || p.id,
         title: p.titulo || 'Sin título',
-        cover: p.cover_url || (typeof photo === 'function' ? photo(0) : ''),
+        // Sin foto -> null (placeholder "sin imagen"), NO una imagen random.
+        cover: p.cover_url || null,
         address: [p.barrio, p.ciudad].filter(Boolean).join(', ') || '—',
         tipo: p.tipo || '',
         verified: !!p.verificada,
@@ -89,6 +154,21 @@ function PostersPage({ route, onNav }) {
         (p.codigo || '').toLowerCase().includes(query.toLowerCase()))
     : list;
   const sel = modalId ? list.find(p => p.codigo === modalId || p.id === modalId) : null;
+  const selCount = selected.size;
+  const allChecked = filtered.length > 0 && filtered.every(p => selected.has(p.id));
+  const toggleOne = (id) => setSelected(prev => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  const toggleAll = () => setSelected(prev => {
+    if (filtered.every(p => prev.has(p.id))) return new Set();
+    return new Set(filtered.map(p => p.id));
+  });
+  const printSelected = () => {
+    const chosen = list.filter(p => selected.has(p.id));
+    printPosters(chosen.length ? chosen : filtered);
+  };
 
   return (
     <AdminLayout
@@ -101,82 +181,114 @@ function PostersPage({ route, onNav }) {
       title="Carteles QR"
       subtitle="Cada propiedad genera su QR único automáticamente. Descargá o imprimí el cartel listo para la fachada."
       actions={
-        <button className="btn btn-primary btn-sm"><I.print s={14}/> Imprimir seleccionados</button>
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={printSelected}
+          disabled={loading || filtered.length === 0}
+          style={(loading || filtered.length === 0) ? { opacity: .5, cursor: 'not-allowed' } : undefined}
+          title={selCount ? `Imprimir ${selCount} seleccionado(s)` : 'Imprimir todos'}
+        >
+          <I.print s={14}/> {selCount ? `Imprimir ${selCount} seleccionado${selCount !== 1 ? 's' : ''}` : 'Imprimir todos'}
+        </button>
       }
     >
       <div className="card-soft" style={{ padding: 14, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
         <MiniStat label="Inmuebles con QR" value={loading ? '—' : list.length} icon="qr" color="var(--blue)"/>
-        {/* Descargas / escaneos: no hay tracking real todavia → mostramos "—"
-            en vez de numeros inventados (antes eran mock fijos: 42/318/AY-01243). */}
+        {/* Descargas / escaneos: no hay tracking real todavia → mostramos "—". */}
         <MiniStat label="Carteles descargados" value="—" icon="download" color="var(--green)"/>
         <MiniStat label="Escaneos esta semana" value="—" icon="eye" color="var(--yellow-600)"/>
         <MiniStat label="Más escaneado" value="—" icon="trend" color="#6e3ad1"/>
       </div>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden', marginTop: 16 }}>
-        <div className="row between" style={{ padding: '12px 18px', borderBottom: '1px solid var(--line)', alignItems: 'center' }}>
+        <div className="row between" style={{ padding: '14px 20px', borderBottom: '1px solid var(--line)', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 14 }}>Mis inmuebles publicados</div>
-            <div className="muted" style={{ marginTop: 2, fontSize: 11 }}>Cada uno con su QR generado automáticamente</div>
+            <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 15 }}>Mis inmuebles publicados</div>
+            <div className="muted" style={{ marginTop: 3, fontSize: 12 }}>Cada uno con su QR generado automáticamente</div>
           </div>
-          <input className="input" placeholder="Buscar por ID o título..." value={query} onChange={e => setQuery(e.target.value)} style={{ width: 240, padding: '6px 10px', fontSize: 12.5 }}/>
+          <input className="input" placeholder="Buscar por ID o título…" value={query} onChange={e => setQuery(e.target.value)} style={{ width: 260, padding: '8px 12px', fontSize: 13 }}/>
         </div>
 
         {loading ? (
-          <div style={{ padding: '40px 18px', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>Cargando tus inmuebles…</div>
+          <div style={{ padding: '48px 18px', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>Cargando tus inmuebles…</div>
         ) : filtered.length === 0 ? (
-          <div style={{ padding: '40px 18px', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
+          <div style={{ padding: '48px 18px', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
             {list.length === 0
               ? 'Todavía no tenés inmuebles publicados. Cuando publiques uno, su cartel QR aparece acá automáticamente.'
               : 'No hay inmuebles que coincidan con la búsqueda.'}
           </div>
         ) : (
+        <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: 'var(--bg-2)', textAlign: 'left' }}>
-              <th style={{ padding: '8px 14px', fontSize: 10.5, fontWeight: 700, color: 'var(--ink-3)', letterSpacing: '.04em', textTransform: 'uppercase' }}>Inmueble</th>
-              <th style={{ padding: '8px 10px', fontSize: 10.5, fontWeight: 700, color: 'var(--ink-3)', letterSpacing: '.04em', textTransform: 'uppercase' }}>QR</th>
-              <th style={{ padding: '8px 14px' }}></th>
+              <th style={{ padding: '10px 8px 10px 18px', width: 36 }}>
+                <input type="checkbox" checked={allChecked} onChange={toggleAll} style={{ width: 16, height: 16, accentColor: 'var(--blue)', cursor: 'pointer' }} title="Seleccionar todos"/>
+              </th>
+              <th style={{ padding: '10px 14px', fontSize: 10.5, fontWeight: 700, color: 'var(--ink-3)', letterSpacing: '.05em', textTransform: 'uppercase' }}>Inmueble</th>
+              <th style={{ padding: '10px 14px', fontSize: 10.5, fontWeight: 700, color: 'var(--ink-3)', letterSpacing: '.05em', textTransform: 'uppercase', textAlign: 'center', width: 80 }}>QR</th>
+              <th style={{ padding: '10px 18px', width: 160 }}></th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((p) => (
-              <tr key={p.id} style={{ borderTop: '1px solid var(--line-2)', transition: 'background .12s' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-2)'}
-                onMouseLeave={e => e.currentTarget.style.background = ''}>
-                <td style={{ padding: '10px 14px' }}>
-                  <div className="row gap-10">
-                    <Photo src={p.cover} style={{ width: 44, height: 36, borderRadius: 6, flexShrink: 0 }}/>
+            {filtered.map((p) => {
+              const checked = selected.has(p.id);
+              return (
+              <tr key={p.id} style={{ borderTop: '1px solid var(--line-2)', transition: 'background .12s', background: checked ? 'var(--blue-50)' : '' }}
+                onMouseEnter={e => { if (!checked) e.currentTarget.style.background = 'var(--bg-2)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = checked ? 'var(--blue-50)' : ''; }}>
+                <td style={{ padding: '14px 8px 14px 18px' }}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleOne(p.id)} style={{ width: 16, height: 16, accentColor: 'var(--blue)', cursor: 'pointer' }}/>
+                </td>
+                <td style={{ padding: '14px' }}>
+                  <div className="row gap-12" style={{ alignItems: 'center' }}>
+                    {p.cover ? (
+                      <Photo src={p.cover} style={{ width: 56, height: 44, borderRadius: 8, flexShrink: 0 }}/>
+                    ) : (
+                      <div style={{ width: 56, height: 44, borderRadius: 8, flexShrink: 0, background: 'var(--bg-3)', color: 'var(--ink-4)', display: 'grid', placeItems: 'center' }} title="Sin imagen">
+                        <I.grid s={16}/>
+                      </div>
+                    )}
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 280 }}>{p.title}</div>
-                      <div style={{ marginTop: 2, fontSize: 11, color: 'var(--ink-3)' }}>
-                        <span className="mono" style={{ fontWeight: 600, fontSize: 10.5 }}>{p.codigo}</span> · {p.address}
+                      <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>{p.title}</div>
+                      <div style={{ marginTop: 3, fontSize: 11.5, color: 'var(--ink-3)', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span className="mono" style={{ fontWeight: 600, fontSize: 11, color: 'var(--ink-4)' }}>{p.codigo}</span>
+                        <span style={{ color: 'var(--line)' }}>•</span>
+                        <span>{p.address}</span>
                       </div>
                     </div>
                   </div>
                 </td>
-                <td style={{ padding: '10px 10px' }}>
-                  <div style={{ padding: 3, background: '#fff', border: '1px solid var(--line)', borderRadius: 5, display: 'inline-block' }}>
-                    <QRMock size={28} id={p.codigo}/>
+                <td style={{ padding: '14px', textAlign: 'center' }}>
+                  <div style={{ padding: 4, background: '#fff', border: '1px solid var(--line)', borderRadius: 7, display: 'inline-block', lineHeight: 0 }}>
+                    <img src={qrImgSrc(p, 96)} alt={'QR ' + p.codigo} width={36} height={36} style={{ display: 'block' }}/>
                   </div>
                 </td>
-                <td style={{ padding: '10px 14px', textAlign: 'right' }}>
-                  <div className="row gap-4" style={{ justifyContent: 'flex-end' }}>
-                    <button title="Descargar" style={{ padding: '5px', width: 26, height: 26, borderRadius: 7, background: 'transparent', color: 'var(--ink-3)', border: '1px solid var(--line)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><I.download s={11}/></button>
-                    <button title="Imprimir" style={{ padding: '5px', width: 26, height: 26, borderRadius: 7, background: 'transparent', color: 'var(--ink-3)', border: '1px solid var(--line)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}><I.print s={11}/></button>
-                    <button onClick={() => setModalId(p.codigo)} style={{ padding: '5px 10px', height: 26, borderRadius: 7, background: 'var(--blue)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      Ver <I.chev s={10}/>
+                <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                  <div className="row gap-6" style={{ justifyContent: 'flex-end' }}>
+                    <button title="Descargar QR" onClick={() => downloadQR(p)} style={{ padding: 0, width: 30, height: 30, borderRadius: 8, background: 'transparent', color: 'var(--ink-3)', border: '1px solid var(--line)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--ink-3)'; }}><I.download s={13}/></button>
+                    <button title="Imprimir cartel" onClick={() => printPosters(p)} style={{ padding: 0, width: 30, height: 30, borderRadius: 8, background: 'transparent', color: 'var(--ink-3)', border: '1px solid var(--line)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--ink-3)'; }}><I.print s={13}/></button>
+                    <button onClick={() => setModalId(p.codigo)} style={{ padding: '0 14px', height: 30, borderRadius: 8, background: 'var(--blue)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      Ver <I.chev s={11}/>
                     </button>
                   </div>
                 </td>
               </tr>
-            ))}
+            );})}
           </tbody>
         </table>
+        </div>
         )}
         {!loading && filtered.length > 0 ? (
-          <div className="row" style={{ padding: '10px 18px', borderTop: '1px solid var(--line)', fontSize: 12, color: 'var(--ink-3)' }}>
-            <div>Mostrando {filtered.length} inmueble{filtered.length !== 1 ? 's' : ''}</div>
+          <div className="row between" style={{ padding: '12px 20px', borderTop: '1px solid var(--line)', fontSize: 12, color: 'var(--ink-3)', flexWrap: 'wrap', gap: 8 }}>
+            <div>Mostrando {filtered.length} inmueble{filtered.length !== 1 ? 's' : ''}{selCount ? ` · ${selCount} seleccionado${selCount !== 1 ? 's' : ''}` : ''}</div>
+            {selCount > 0 ? (
+              <button onClick={() => setSelected(new Set())} style={{ background: 'none', border: 'none', color: 'var(--blue)', cursor: 'pointer', fontWeight: 600, fontSize: 12, fontFamily: 'inherit' }}>Limpiar selección</button>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -218,14 +330,14 @@ function PosterModal({ p, onClose }) {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: 28, padding: 28, background: 'var(--bg-2)' }}>
-          <FullPoster id={p.codigo || p.id} address={p.address}/>
+          <FullPoster p={p}/>
           <div className="col gap-16">
             <div>
               <div className="muted xs" style={{ letterSpacing: '.08em', fontWeight: 700 }}>DATOS DEL CARTEL</div>
               <div className="col gap-6" style={{ marginTop: 10, fontSize: 14 }}>
                 <Row label="ID del inmueble" value={<span className="mono">{p.codigo || p.id}</span>}/>
                 <Row label="Dirección" value={p.address}/>
-                <Row label="Tipo" value={TIPOS.find(t => t.id === p.tipo)?.label || '—'}/>
+                <Row label="Tipo" value={(typeof TIPOS !== 'undefined' && TIPOS.find(t => t.id === p.tipo)?.label) || p.tipo || '—'}/>
                 <Row label="Estado" value={p.verified ? 'Verificado' : 'Publicado'}/>
               </div>
             </div>
@@ -238,9 +350,14 @@ function PosterModal({ p, onClose }) {
             </div>
 
             <div className="col gap-8" style={{ marginTop: 'auto' }}>
-              <button className="btn btn-blue" style={{ justifyContent: 'center' }}><I.download s={14}/> Descargar PDF A4</button>
-              <button className="btn btn-outline" style={{ justifyContent: 'center' }}><I.print s={14}/> Imprimir cartel</button>
-              <button className="btn btn-outline" style={{ justifyContent: 'center' }}><I.share s={14}/> Compartir enlace</button>
+              <button className="btn btn-blue" style={{ justifyContent: 'center' }} onClick={() => downloadQR(p)}><I.download s={14}/> Descargar QR</button>
+              <button className="btn btn-outline" style={{ justifyContent: 'center' }} onClick={() => printPosters(p)}><I.print s={14}/> Imprimir cartel</button>
+              <button className="btn btn-outline" style={{ justifyContent: 'center' }} onClick={async () => {
+                const url = qrPublicUrl(p);
+                if (navigator.share) { try { await navigator.share({ title: p.title, url }); return; } catch { return; } }
+                try { await navigator.clipboard.writeText(url); window.alert('Enlace copiado al portapapeles.'); }
+                catch { window.prompt('Copiá el enlace:', url); }
+              }}><I.share s={14}/> Compartir enlace</button>
             </div>
           </div>
         </div>
@@ -310,7 +427,11 @@ function PosterPreviewCard({ p }) {
   );
 }
 
-function FullPoster({ id, address }) {
+function FullPoster({ p, id, address }) {
+  // Acepta `p` (preferido) o id/address sueltos (compat). QR real escaneable.
+  const prop = p || { codigo: id, id, address };
+  const code = prop.codigo || prop.id || '';
+  const addr = prop.address || address || '';
   return (
     <div style={{
       width: 280, background: '#fff', borderRadius: 12, overflow: 'hidden',
@@ -328,11 +449,11 @@ function FullPoster({ id, address }) {
         </div>
       </div>
       <div style={{ padding: 20, textAlign: 'center' }}>
-        <div style={{ padding: 8, border: '3px solid var(--ink)', borderRadius: 8, display: 'inline-block' }}>
-          <QRMock size={150} id={id}/>
+        <div style={{ padding: 8, border: '3px solid var(--ink)', borderRadius: 8, display: 'inline-block', lineHeight: 0 }}>
+          <img src={qrImgSrc(prop, 300)} alt={'QR ' + code} width={150} height={150} style={{ display: 'block' }}/>
         </div>
-        <div style={{ marginTop: 12, fontFamily: 'JetBrains Mono', fontSize: 12, fontWeight: 600, color: 'var(--ink-3)' }}>{id}</div>
-        <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4, color: 'var(--ink-2)' }}>{address}</div>
+        <div style={{ marginTop: 12, fontFamily: 'JetBrains Mono', fontSize: 12, fontWeight: 600, color: 'var(--ink-3)' }}>{code}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, marginTop: 4, color: 'var(--ink-2)' }}>{addr}</div>
       </div>
       <div style={{ background: 'var(--blue)', color: '#fff', padding: '12px 20px', textAlign: 'center' }}>
         <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 13, fontStyle: 'italic', letterSpacing: '.04em' }}>
