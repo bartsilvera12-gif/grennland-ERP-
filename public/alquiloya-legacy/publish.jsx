@@ -652,9 +652,8 @@ function StepBasics({ form, setF }) {
           </div>
           <div className="field">
             <label>Operación</label>
-            <PrettySelect value={form.operacion} onChange={(v) => setF({ operacion: v })} options={[
+            <PrettySelect value="alquiler" onChange={() => {}} options={[
               { value: 'alquiler', label: 'Alquiler' },
-              { value: 'venta',    label: 'Venta' },
             ]}/>
           </div>
         </FormGrid>
