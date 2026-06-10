@@ -109,7 +109,6 @@ function Gallery({ photos = [], active, setActive, property }) {
           >
             <I.heart s={14}/> {saved ? 'Guardado' : 'Guardar'}
           </button>
-          <button type="button" className="btn btn-outline btn-sm" onClick={() => window.print()}><I.print s={14}/> Imprimir ficha</button>
         </div>
         <button onClick={() => setOpenFull(true)} className="btn btn-outline btn-sm">Ver galería completa <I.arrow s={14}/></button>
       </div>
@@ -120,7 +119,8 @@ function Gallery({ photos = [], active, setActive, property }) {
 
 function FullGalleryModal({ property, onClose }) {
   const [tab, setTab] = React.useState('fotos');
-  const [favorite, setFavorite] = React.useState(false);
+  const propId = property && (property.apiId || property.id);
+  const [favorite, setFavorite] = React.useState(() => _isSaved(propId));
   // Solo fotos REALES. Antes se rellenaba con photo() mock hasta 12, asi que
   // una publicacion sin fotos (o con pocas) mostraba imagenes que no eran de
   // la propiedad. Si no hay fotos, mostramos un placeholder claro.
@@ -155,10 +155,11 @@ function FullGalleryModal({ property, onClose }) {
           ))}
         </div>
         <div className="row gap-10">
-          <button onClick={() => setFavorite(f => !f)} className="btn btn-outline btn-sm" style={{ padding: '8px 14px' }}>
+          <button onClick={() => setFavorite(_toggleSaved(propId))} className="btn btn-outline btn-sm"
+            style={{ padding: '8px 14px', ...(favorite ? { borderColor: 'var(--blue)', color: 'var(--blue)', background: 'var(--blue-50)' } : {}) }}>
             <I.heart s={14}/> {favorite ? 'Guardado' : 'Favorito'}
           </button>
-          <button className="btn btn-outline btn-sm" style={{ padding: '8px 14px' }}>
+          <button onClick={() => _sharePropiedad(property)} className="btn btn-outline btn-sm" style={{ padding: '8px 14px' }}>
             <I.share s={14}/> Compartir
           </button>
           <button onClick={onClose} style={{

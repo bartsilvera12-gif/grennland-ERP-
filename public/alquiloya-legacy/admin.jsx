@@ -351,12 +351,13 @@ function AdminAgentPage({ route, onNav }) {
         return;
       }
       // Normalizar al shape consumido por las cards legacy (p.title/p.cover/p.price).
+      // cover: null si no hay foto real (placeholder), NO una imagen random.
       const mapped = body.propiedades.map(p => ({
         id: p.id,
         apiId: p.id,
         codigo: p.codigo || null,
         title: p.titulo || 'Sin título',
-        cover: p.cover_url || (typeof photo === 'function' ? photo(0) : ''),
+        cover: p.cover_url || null,
         price: Number(p.precio) || 0,
         city: p.ciudad || '',
         neighborhood: p.barrio || '',
@@ -650,8 +651,14 @@ function AdminAgentPage({ route, onNav }) {
                 }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue-100)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,88,165,.06)'; }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}>
-                  {/* Thumbnail */}
-                  <Photo src={p.cover} style={{ width: 64, height: 64, borderRadius: 10, flexShrink: 0 }}/>
+                  {/* Thumbnail — placeholder "sin imagen" si no hay foto real. */}
+                  {p.cover ? (
+                    <Photo src={p.cover} style={{ width: 64, height: 64, borderRadius: 10, flexShrink: 0 }}/>
+                  ) : (
+                    <div style={{ width: 64, height: 64, borderRadius: 10, flexShrink: 0, background: 'var(--bg-3)', color: 'var(--ink-4)', display: 'grid', placeItems: 'center' }} title="Sin imagen">
+                      <I.grid s={20}/>
+                    </div>
+                  )}
 
                   {/* Info principal */}
                   <div style={{ flex: 1, minWidth: 0 }}>
