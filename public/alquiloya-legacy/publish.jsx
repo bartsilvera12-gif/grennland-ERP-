@@ -1381,7 +1381,10 @@ function Toggle({ checked, onChange }) {
   );
 }
 
-function BrochurePreviewModal({ onClose }) {
+// El brochure ahora se genera con los datos REALES de la propiedad + el
+// contacto del publicador. `property` y `contacto` son opcionales: si no se
+// pasan (preview generico), cae a una muestra de ejemplo.
+function BrochurePreviewModal({ onClose, property, contacto }) {
   return (
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, background: 'rgba(11,22,34,.7)', zIndex: 200,
@@ -1402,37 +1405,59 @@ function BrochurePreviewModal({ onClose }) {
           </div>
         </div>
         <div className="row gap-16" style={{ alignItems: 'flex-start' }}>
-          <BrochurePage1/>
-          <BrochurePage2/>
+          <BrochurePage1 property={property}/>
+          <BrochurePage2 property={property} contacto={contacto}/>
         </div>
       </div>
     </div>
   );
 }
 
-function BrochurePage1() {
+function BrochurePage1({ property }) {
+  const p = property || {};
+  const title = p.title || p.titulo || 'Tu propiedad';
+  const address = p.address || [p.neighborhood || p.barrio, p.city || p.ciudad].filter(Boolean).join(', ') || '';
+  const priceNum = Number(p.price ?? p.precio) || 0;
+  const opVenta = (p.operacion || '') === 'venta';
+  const beds = p.beds ?? p.dormitorios;
+  const baths = p.baths ?? p.banos;
+  const m2 = p.m2 ?? p.superficie_m2;
+  const desc = p.desc || p.descripcion || '';
+  const cover = p.cover || p.cover_url || (typeof photo === 'function' ? photo(0) : '');
+  // Galeria: solo si la propiedad trae varias fotos reales.
+  const gallery = Array.isArray(p.photos)
+    ? p.photos.map(x => (typeof x === 'string' ? x : (x && x.url))).filter(Boolean).slice(0, 3)
+    : [];
   return (
     <div style={{ background: '#fff', width: '50%', aspectRatio: '0.707', boxShadow: '0 20px 40px rgba(0,0,0,.3)', borderRadius: 4, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ background: 'var(--blue)', color: '#fff', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontFamily: 'Montserrat', fontWeight: 900, fontSize: 14, letterSpacing: '.04em' }}>ALQUILOYA</span>
-        <span className="badge badge-verified" style={{ fontSize: 9 }}><I.check s={8}/> Verificado</span>
+        {(p.verified || p.verificada) ? <span className="badge badge-verified" style={{ fontSize: 9 }}><I.check s={8}/> Verificado</span> : null}
       </div>
-      <Photo src={photo(0)} style={{ height: '38%', borderRadius: 0 }}/>
+      <Photo src={cover} style={{ height: '38%', borderRadius: 0 }}/>
       <div style={{ padding: '14px 16px', flex: 1 }}>
-        <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 14, lineHeight: 1.2 }}>Dúplex moderno con balcón</div>
-        <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>Villa Morra, Asunción</div>
-        <div style={{ fontFamily: 'Montserrat', fontWeight: 900, fontSize: 18, color: 'var(--blue)', marginTop: 8 }}>Gs. 3.800.000<span style={{ fontSize: 9, fontWeight: 500, color: 'var(--ink-3)' }}> / mes</span></div>
+        <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 14, lineHeight: 1.2 }}>{title}</div>
+        {address ? <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>{address}</div> : null}
+        {priceNum > 0 ? (
+          <div style={{ fontFamily: 'Montserrat', fontWeight: 900, fontSize: 18, color: 'var(--blue)', marginTop: 8 }}>
+            Gs. {priceNum.toLocaleString('es-PY')}<span style={{ fontSize: 9, fontWeight: 500, color: 'var(--ink-3)' }}>{opVenta ? '' : ' / mes'}</span>
+          </div>
+        ) : null}
         <div className="row gap-10" style={{ marginTop: 8, fontSize: 9.5, color: 'var(--ink-2)' }}>
-          <span><I.bed s={10}/> 2 dorm</span>
-          <span><I.bath s={10}/> 2 baños</span>
-          <span><I.ruler s={10}/> 85 m²</span>
+          {beds != null ? <span><I.bed s={10}/> {beds} dorm</span> : null}
+          {baths != null ? <span><I.bath s={10}/> {baths} baño{Number(baths) === 1 ? '' : 's'}</span> : null}
+          {m2 != null && Number(m2) > 0 ? <span><I.ruler s={10}/> {m2} m²</span> : null}
         </div>
-        <div style={{ fontSize: 8.5, color: 'var(--ink-3)', marginTop: 10, lineHeight: 1.4 }}>
-          Excelente propiedad recientemente refaccionada, ubicación estratégica con acceso rápido a avenidas principales, supermercados, colegios y centros comerciales.
-        </div>
-        <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
-          {[1,2,3].map(i => <Photo key={i} src={photo(i)} style={{ aspectRatio: '1', borderRadius: 2 }}/>)}
-        </div>
+        {desc ? (
+          <div style={{ fontSize: 8.5, color: 'var(--ink-3)', marginTop: 10, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 5, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {desc}
+          </div>
+        ) : null}
+        {gallery.length > 0 ? (
+          <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+            {gallery.map((src, i) => <Photo key={i} src={src} style={{ aspectRatio: '1', borderRadius: 2 }}/>)}
+          </div>
+        ) : null}
       </div>
       <div style={{ borderTop: '1px solid var(--line-2)', padding: '8px 16px', fontSize: 8, color: 'var(--ink-3)', textAlign: 'center' }}>
         Página 1 · alquiloya.com.py
@@ -1441,39 +1466,57 @@ function BrochurePage1() {
   );
 }
 
-function BrochurePage2() {
+function BrochurePage2({ property, contacto }) {
+  const p = property || {};
+  const feats = Array.isArray(p.features) && p.features.length ? p.features : null;
+  const qrId = p.codigo || p.legacyId || (p.apiId ? String(p.apiId).slice(0, 8) : 'AY');
+  const hasCoords = typeof p.lat === 'number' && typeof p.lng === 'number';
+  // Linea de contacto: datos reales del publicador. Si no hay, no inventamos.
+  const cName = (contacto && contacto.nombre) || '';
+  const cPhone = (contacto && (contacto.telefono || contacto.whatsapp)) || '';
+  const footer = [cName, cPhone].filter(Boolean).join(' · ');
   return (
     <div style={{ background: '#fff', width: '50%', aspectRatio: '0.707', boxShadow: '0 20px 40px rgba(0,0,0,.3)', borderRadius: 4, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <div style={{ background: 'var(--blue)', color: '#fff', padding: '12px 16px' }}>
         <span style={{ fontFamily: 'Montserrat', fontWeight: 900, fontSize: 14, letterSpacing: '.04em' }}>ALQUILOYA</span>
       </div>
       <div style={{ padding: '14px 16px', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div>
-          <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 12 }}>Características destacadas</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginTop: 6 }}>
-            {['Aire acondicionado','Cocina equipada','Lavadero','Seguridad 24hs','Wifi','Termotanque'].map(f => (
-              <div key={f} className="row gap-4" style={{ fontSize: 9, color: 'var(--ink-2)' }}>
-                <I.check s={8}/> {f}
-              </div>
-            ))}
+        {feats ? (
+          <div>
+            <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 12 }}>Características destacadas</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginTop: 6 }}>
+              {feats.slice(0, 8).map(f => (
+                <div key={f} className="row gap-4" style={{ fontSize: 9, color: 'var(--ink-2)' }}>
+                  <I.check s={8}/> {f}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
         <div>
           <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 12 }}>Ubicación</div>
           <div style={{ marginTop: 6, borderRadius: 4, overflow: 'hidden' }}>
-            <MiniMap height={90}/>
+            {/* Sin pines numerados inventados: 1 marcador si hay coords, ninguno si no. */}
+            <MiniMap height={90} pins={hasCoords ? 1 : 0}/>
           </div>
+          <div className="muted" style={{ fontSize: 8, marginTop: 4 }}>La ubicación exacta se comparte al coordinar la visita.</div>
         </div>
         <div style={{ marginTop: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
-          <QRMock size={70} id="AY-01001"/>
+          <QRMock size={70} id={qrId}/>
           <div style={{ fontSize: 9, color: 'var(--ink-2)', flex: 1 }}>
             <div style={{ fontWeight: 700, marginBottom: 2 }}>Escaneá para ver online</div>
             <div className="muted" style={{ fontSize: 8 }}>Más fotos, calendario y contacto directo por WhatsApp</div>
           </div>
         </div>
-        <div style={{ borderTop: '1px solid var(--line-2)', paddingTop: 8, fontSize: 8, color: 'var(--ink-3)', textAlign: 'center' }}>
-          Mariana López · +595 981 555 102 · Página 2
-        </div>
+        {footer ? (
+          <div style={{ borderTop: '1px solid var(--line-2)', paddingTop: 8, fontSize: 8, color: 'var(--ink-3)', textAlign: 'center' }}>
+            {footer} · Página 2
+          </div>
+        ) : (
+          <div style={{ borderTop: '1px solid var(--line-2)', paddingTop: 8, fontSize: 8, color: 'var(--ink-3)', textAlign: 'center' }}>
+            Página 2 · alquiloya.com.py
+          </div>
+        )}
       </div>
     </div>
   );

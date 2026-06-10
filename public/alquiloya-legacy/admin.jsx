@@ -340,12 +340,20 @@ function AdminAgentPage({ route, onNav }) {
       // Normalizar al shape consumido por las cards legacy (p.title/p.cover/p.price).
       const mapped = body.propiedades.map(p => ({
         id: p.id,
+        apiId: p.id,
         codigo: p.codigo || null,
         title: p.titulo || 'Sin título',
         cover: p.cover_url || (typeof photo === 'function' ? photo(0) : ''),
         price: Number(p.precio) || 0,
         city: p.ciudad || '',
         neighborhood: p.barrio || '',
+        // Campos usados por el brochure (la API ya los expone).
+        beds: p.dormitorios ?? null,
+        baths: p.banos ?? null,
+        m2: p.superficie_m2 ?? null,
+        desc: p.descripcion || '',
+        operacion: p.operacion || '',
+        verificada: !!p.verificada,
         estado: p.estado || '',
         activo: p.activo !== false,
         visible_web: !!p.visible_web,
@@ -376,7 +384,11 @@ function AdminAgentPage({ route, onNav }) {
   const [buyOpen, setBuyOpen] = React.useState(false);
   const [verifyTarget, setVerifyTarget] = React.useState(null);
   const [verifiedIds, setVerifiedIds] = React.useState({ [PROPERTIES[0].id]: true });
-  const [brochureOpen, setBrochureOpen] = React.useState(false);
+  // brochureTarget = la propiedad cuyo boton "Brochure PDF" se apreto (antes
+  // era un boolean y el modal mostraba SIEMPRE una casa mock con datos
+  // inventados). Ahora generamos el brochure con los datos reales de ESA
+  // propiedad.
+  const [brochureTarget, setBrochureTarget] = React.useState(null);
   const [propFilter, setPropFilter] = React.useState('all');
   const totalAvailable = impulsesFree + impulsesPaid;
 
@@ -652,7 +664,7 @@ function AdminAgentPage({ route, onNav }) {
                         <I.shield s={13}/>
                       </button>
                     )}
-                    <button onClick={() => setBrochureOpen(true)} title="Brochure PDF"
+                    <button onClick={() => setBrochureTarget(p)} title="Brochure PDF"
                       style={{ padding: 0, width: 28, height: 28, borderRadius: 8, background: 'transparent', color: 'var(--ink-3)', border: '1px solid var(--line)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
                       <I.doc s={13}/>
                     </button>
@@ -757,7 +769,17 @@ function AdminAgentPage({ route, onNav }) {
           onClose={() => setVerifyTarget(null)}
         />
       )}
-      {brochureOpen && <BrochurePreviewModal onClose={() => setBrochureOpen(false)}/>}
+      {brochureTarget && (
+        <BrochurePreviewModal
+          property={brochureTarget}
+          contacto={{
+            nombre: (isPropietario ? meData?.propietario?.nombre : meData?.agente?.nombre) || '',
+            telefono: (isPropietario ? meData?.propietario?.telefono : meData?.agente?.telefono) || '',
+            whatsapp: (isPropietario ? meData?.propietario?.telefono : meData?.agente?.whatsapp) || '',
+          }}
+          onClose={() => setBrochureTarget(null)}
+        />
+      )}
     </AdminLayout>
   );
 }

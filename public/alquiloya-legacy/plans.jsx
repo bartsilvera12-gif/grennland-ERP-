@@ -422,13 +422,30 @@ const _inputStyle = { width: '100%', padding: '10px 12px', border: '1px solid va
 function _feedback(fb) {
   if (!fb) return null;
   const isErr = fb.kind === 'error';
+  if (isErr) {
+    return (
+      <div style={{
+        marginTop: 12, padding: '10px 12px', borderRadius: 10, fontSize: 13,
+        background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca',
+      }}>{fb.text}</div>
+    );
+  }
+  // Estado de exito: panel claro con icono en vez de un banner de una linea.
   return (
     <div style={{
-      marginTop: 12, padding: '10px 12px', borderRadius: 10, fontSize: 13,
-      background: isErr ? '#fef2f2' : '#ecfdf5',
-      color: isErr ? '#991b1b' : '#065f46',
-      border: '1px solid ' + (isErr ? '#fecaca' : '#a7f3d0'),
-    }}>{fb.text}</div>
+      marginTop: 14, padding: '16px 14px', borderRadius: 12, textAlign: 'center',
+      background: '#ecfdf5', border: '1px solid #a7f3d0',
+    }}>
+      <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#10b981', color: '#fff', display: 'grid', placeItems: 'center', margin: '0 auto 10px' }}>
+        <I.check s={22}/>
+      </div>
+      <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 15, color: '#065f46' }}>
+        {fb.title || '¡Pedido recibido!'}
+      </div>
+      <div style={{ fontSize: 13, color: '#047857', marginTop: 4, lineHeight: 1.45 }}>
+        {fb.text}
+      </div>
+    </div>
   );
 }
 
@@ -459,7 +476,7 @@ function CambioPlanModal({ planes, onClose }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.success === false) throw new Error((data && data.error) || ('HTTP ' + res.status));
-      setFeedback({ kind: 'success', text: '¡Listo! Recibimos tu solicitud. El equipo se va a contactar para coordinar el pago y aplicar el cambio.' });
+      setFeedback({ kind: 'success', title: '¡Solicitud enviada!', text: 'El equipo te va a contactar para coordinar el pago y aplicar el cambio de plan.' });
       setForm({ nombre: '', email: '', telefono: '', plan_tier: '', mensaje: '' });
     } catch (err) {
       setFeedback({ kind: 'error', text: 'No pudimos registrar tu solicitud. ' + (err.message || '') });
@@ -537,7 +554,7 @@ function ImpulsoCompraModal({ pack, onClose }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.success === false) throw new Error((data && data.error) || ('HTTP ' + res.status));
-      setFeedback({ kind: 'success', text: '¡Listo! Recibimos tu pedido. Te contactamos por WhatsApp para coordinar el pago y activar los impulsos.' });
+      setFeedback({ kind: 'success', title: '¡Pedido recibido!', text: 'Te vamos a escribir por WhatsApp para coordinar el pago. Apenas se confirma, activamos los impulsos en tu cuenta.' });
       setForm({ nombre: '', email: '', telefono: '', mensaje: '' });
     } catch (err) {
       setFeedback({ kind: 'error', text: 'No pudimos registrar tu compra. ' + (err.message || '') });
