@@ -3,6 +3,8 @@ import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
+import { sendMail } from "@/lib/email/send-mail";
+import { renderAccesoAprobadoEmail } from "@/lib/email/templates/acceso-aprobado";
 import crypto from "node:crypto";
 
 export const runtime = "nodejs";
@@ -322,33 +324,37 @@ export async function PATCH(request: Request, ctx: Ctx) {
 
           portalCredentials = { email: sol.email, tempPassword };
 
-          // Disparar correo automatico al usuario con un link para establecer/resetear
-          // su contraseña. Si Supabase tiene SMTP configurado (default o custom), envia
-          // el email. Si no, queda registrado el link en data.properties.action_link
-          // y el admin puede compartir la tempPassword manualmente.
+          // Enviar correo directo via SMTP (Hostinger u otro). No depende de
+          // Supabase SMTP. Si las variables SMTP_* no estan seteadas, sendMail
+          // devuelve {sent:false} sin romper, y el admin comparte manualmente.
           try {
-            const portalUrl =
+            const origin = new URL(request.url).origin;
+            const portalPath =
               sol.tipo === "referido_partner"
                 ? "/portal-referidos/login"
                 : "/portal-agentes/login";
-            const origin = new URL(request.url).origin;
-            const { error: linkErr } = await supabase.auth.admin.generateLink({
-              type: "recovery",
+            const portalUrl = `${origin}${portalPath}`;
+            const tpl = renderAccesoAprobadoEmail({
+              nombre: sol.nombre,
               email: sol.email,
-              options: { redirectTo: `${origin}${portalUrl}` },
+              password: tempPassword,
+              portalUrl,
             });
-            if (linkErr) {
-              emailError = linkErr.message;
-              console.warn(
-                "[solicitudes-acceso] generateLink falló (¿SMTP configurado?):",
-                linkErr.message
-              );
-            } else {
+            const result = await sendMail({
+              to: sol.email,
+              subject: tpl.subject,
+              html: tpl.html,
+              text: tpl.text,
+            });
+            if (result.sent) {
               emailSent = true;
+            } else {
+              emailError = result.reason;
+              console.warn("[solicitudes-acceso] sendMail no envió:", result.reason);
             }
           } catch (e) {
-            emailError = e instanceof Error ? e.message : "Error generando link";
-            console.warn("[solicitudes-acceso] no se pudo enviar email:", emailError);
+            emailError = e instanceof Error ? e.message : "Error enviando mail";
+            console.warn("[solicitudes-acceso] excepción en sendMail:", emailError);
           }
         } catch (e) {
           // Best-effort: si falla, no abortamos la aprobacion. Se puede crear manualmente despues.

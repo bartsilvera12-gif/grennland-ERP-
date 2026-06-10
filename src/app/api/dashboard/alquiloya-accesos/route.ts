@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { sendMail } from "@/lib/email/send-mail";
+import { renderAccesoAprobadoEmail } from "@/lib/email/templates/acceso-aprobado";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -329,6 +331,39 @@ export async function POST(request: Request) {
       );
     }
 
+    // 5. Enviar email automatico con las credenciales (si SMTP configurado).
+    //    Solo si creamos un user nuevo y NO fue admin-provided password
+    //    (caso referido_partner el admin conoce la pass y la comparte manualmente).
+    let emailSent = false;
+    let emailError: string | null = null;
+    if (createdNewAuthUser && !passwordWasAdminProvided) {
+      try {
+        const origin = new URL(request.url).origin;
+        const portalPath =
+          tipo === "referido_partner" ? "/portal-referidos/login" : "/portal-agentes/login";
+        const tpl = renderAccesoAprobadoEmail({
+          nombre: nombre ?? "Hola",
+          email,
+          password: passwordToUse,
+          portalUrl: `${origin}${portalPath}`,
+        });
+        const result = await sendMail({
+          to: email,
+          subject: tpl.subject,
+          html: tpl.html,
+          text: tpl.text,
+        });
+        if (result.sent) emailSent = true;
+        else {
+          emailError = result.reason;
+          console.warn("[alquiloya-accesos] sendMail no envió:", result.reason);
+        }
+      } catch (e) {
+        emailError = e instanceof Error ? e.message : "Error enviando mail";
+        console.warn("[alquiloya-accesos] excepción en sendMail:", emailError);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       email,
@@ -338,6 +373,8 @@ export async function POST(request: Request) {
       temporary_password: createdNewAuthUser && !passwordWasAdminProvided ? passwordToUse : null,
       password_was_admin_provided: passwordWasAdminProvided,
       reused_auth_user: !createdNewAuthUser,
+      email_sent: emailSent,
+      email_error: emailError,
     });
   } catch (err) {
     console.error(
