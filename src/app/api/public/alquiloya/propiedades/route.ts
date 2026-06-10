@@ -220,17 +220,27 @@ export async function POST(request: Request) {
       // Si no es UUID, resolvemos contra planes_publicacion por tier; si tampoco existe, queda null.
       const planRaw = s(body.plan_publicacion_id, 80);
       let planId: string | null = null;
+      let planEsGratis = false;
       if (planRaw) {
         if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(planRaw)) {
           planId = planRaw;
+          const r = await client.query<{ billing: string | null; tier: string | null }>(
+            `SELECT billing, tier FROM "alquiloya"."planes_publicacion"
+              WHERE id = $1::uuid AND empresa_id = $2::uuid LIMIT 1`,
+            [planId, ALQUILOYA_EMPRESA_ID]
+          );
+          const row = r.rows[0];
+          planEsGratis = row?.billing === "gratis" || (row?.tier ?? "").toLowerCase().startsWith("gratuito");
         } else {
-          const r = await client.query<{ id: string }>(
-            `SELECT id FROM "alquiloya"."planes_publicacion"
+          const r = await client.query<{ id: string; billing: string | null; tier: string | null }>(
+            `SELECT id, billing, tier FROM "alquiloya"."planes_publicacion"
               WHERE empresa_id = $1::uuid AND tier = $2 AND activo = true
               LIMIT 1`,
             [ALQUILOYA_EMPRESA_ID, planRaw]
           );
-          planId = r.rows[0]?.id ?? null;
+          const row = r.rows[0];
+          planId = row?.id ?? null;
+          planEsGratis = row?.billing === "gratis" || (row?.tier ?? "").toLowerCase().startsWith("gratuito");
         }
       }
       const notas = s(body.notas_propietario, 1000);
@@ -264,6 +274,50 @@ export async function POST(request: Request) {
             WHERE id = $3::uuid`,
           [planId, notas, propietarioId]
         );
+      }
+
+      // 1bis. Gate plan gratis: 1 propiedad activa por propietario cada 30 dias.
+      // Si el plan resuelto en este request es gratis (o no se mando plan pero el
+      // propietario ya tenia uno gratis), chequeamos si tiene una propiedad
+      // activa creada hace menos de 30 dias. Si si, bloqueamos: tiene que comprar
+      // un plan pago para publicar otra. La regla aplica por propietario_id
+      // (vale tanto si publica un dueño directo como un agente publicando
+      // para ese propietario).
+      let efectivoPlanEsGratis = planEsGratis;
+      if (!efectivoPlanEsGratis) {
+        // Si no llego planId en este request, mirar el plan actual del propietario.
+        const propPlan = await client.query<{ billing: string | null; tier: string | null }>(
+          `SELECT pp.billing, pp.tier
+             FROM "alquiloya"."propietarios" p
+             LEFT JOIN "alquiloya"."planes_publicacion" pp ON pp.id = p.plan_publicacion_id
+            WHERE p.id = $1::uuid LIMIT 1`,
+          [propietarioId]
+        );
+        const row = propPlan.rows[0];
+        efectivoPlanEsGratis = row?.billing === "gratis" || (row?.tier ?? "").toLowerCase().startsWith("gratuito");
+      }
+      if (efectivoPlanEsGratis) {
+        const dup = await client.query<{ n: number }>(
+          `SELECT count(*)::int AS n
+             FROM "alquiloya"."propiedades"
+            WHERE empresa_id = $1::uuid
+              AND propietario_id = $2::uuid
+              AND activo = true
+              AND created_at > now() - interval '30 days'`,
+          [ALQUILOYA_EMPRESA_ID, propietarioId]
+        );
+        if ((dup.rows[0]?.n ?? 0) >= 1) {
+          await client.query("ROLLBACK");
+          return NextResponse.json(
+            {
+              error:
+                "Ya tenés una publicación gratuita activa de los últimos 30 días. " +
+                "Comprá un plan pago para publicar más propiedades.",
+              code: "FREE_PLAN_LIMIT",
+            },
+            { status: 409 }
+          );
+        }
       }
 
       // 2. Insertar propiedad — siempre como NO publicada/inactiva, linkeada

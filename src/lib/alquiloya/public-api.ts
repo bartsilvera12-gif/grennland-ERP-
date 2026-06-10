@@ -13,7 +13,9 @@ type PublicTable =
   | "agentes"
   | "propiedades"
   | "propiedad_fotos"
-  | "propiedad_caracteristicas";
+  | "propiedad_caracteristicas"
+  | "propietarios"
+  | "planes_publicacion";
 
 function t(table: PublicTable): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
@@ -70,7 +72,24 @@ export async function listPublicPropiedades(request: NextRequest) {
 
     const sp = request.nextUrl.searchParams;
     const params: unknown[] = [ALQUILOYA_EMPRESA_ID];
-    const where = ["p.empresa_id = $1::uuid", "p.activo = true", "p.visible_web = true"];
+    const where = [
+      "p.empresa_id = $1::uuid",
+      "p.activo = true",
+      "p.visible_web = true",
+      // Plan gratis vence a los 30 dias desde created_at. Si la propiedad esta
+      // ligada a un propietario con plan gratis y ya pasaron 30 dias, no la
+      // mostramos al publico — sigue en el ERP para que el cliente pague el
+      // plan y la reactive.
+      `NOT (
+         p.created_at < now() - interval '30 days'
+         AND EXISTS (
+           SELECT 1 FROM ${t("propietarios")} pr
+           LEFT JOIN ${t("planes_publicacion")} pp ON pp.id = pr.plan_publicacion_id
+           WHERE pr.id = p.propietario_id
+             AND (pp.billing = 'gratis' OR pp.tier ILIKE 'gratuito%')
+         )
+       )`,
+    ];
 
     for (const [paramName, columnName] of [
       ["ciudad", "ciudad"],
@@ -387,6 +406,17 @@ export async function getPublicAgente(id: string) {
               -- El listado publico /propiedades sigue exigiendo ambos.
               AND p.activo = true
               AND COALESCE(p.estado, 'disponible') NOT IN ('rechazada', 'pausada')
+              -- Plan gratis vencido (mas de 30 dias desde created_at): se
+              -- oculta del perfil publico hasta que pague un plan.
+              AND NOT (
+                p.created_at < now() - interval '30 days'
+                AND EXISTS (
+                  SELECT 1 FROM ${t("propietarios")} pr
+                  LEFT JOIN ${t("planes_publicacion")} pp ON pp.id = pr.plan_publicacion_id
+                  WHERE pr.id = p.propietario_id
+                    AND (pp.billing = 'gratis' OR pp.tier ILIKE 'gratuito%')
+                )
+              )
           ), '[]'::json) AS propiedades
         FROM ${t("agentes")} a
         WHERE a.empresa_id = $1::uuid
