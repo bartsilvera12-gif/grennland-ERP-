@@ -176,6 +176,24 @@ export async function POST(request: Request) {
         msg.includes("registered") ||
         msg.includes("duplicate");
       if (isDup) {
+        // SOLO para referido_partner mantenemos el comportamiento anterior
+        // (el admin define la password manualmente, y puede querer "resetear"
+        // un partner existente). Para agente/propietario, no reutilizamos
+        // silenciosamente: pedimos al admin que resuelva el conflicto.
+        if (tipo !== "referido_partner") {
+          return NextResponse.json(
+            {
+              error:
+                `El email "${email}" ya está registrado en Supabase Auth. ` +
+                `No reutilizamos cuentas existentes para evitar vincular un ` +
+                `propietario/agente a una cuenta que no es suya. Eliminá la ` +
+                `cuenta existente en Supabase Dashboard → Authentication → Users, ` +
+                `o pediles que usen un email distinto.`,
+            },
+            { status: 409 }
+          );
+        }
+
         // El tipo del cast es deliberadamente acotado al subset que usamos.
         const adminApi = supabaseAdmin.auth.admin as unknown as Parameters<typeof findAuthUserByEmail>[0];
         const existing = await findAuthUserByEmail(adminApi, email);
