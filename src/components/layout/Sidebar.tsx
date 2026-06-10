@@ -152,7 +152,8 @@ const MENU_STRUCTURE: MenuItem[] = [
     href: "/notas-credito",
     icon: ScrollText,
   },
-  { key: "usuarios", slug: "usuarios", label: "Usuarios", href: "/usuarios", icon: UserCog },
+  // Oculto a pedido del cliente (ruta /usuarios sigue activa por si se reactiva):
+  // { key: "usuarios", slug: "usuarios", label: "Usuarios", href: "/usuarios", icon: UserCog },
   // Configuración: item simple sin children a pedido del cliente. La
   // pantalla /configuracion ya funciona como hub global con tarjetas hacia
   // cada subseccion (Facturación, Conversaciones, CRM, etc.); cada
