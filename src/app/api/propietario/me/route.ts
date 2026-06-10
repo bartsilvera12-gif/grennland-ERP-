@@ -30,9 +30,10 @@ export async function GET(request: Request) {
 
     let propietario: Record<string, unknown> | null = null;
     if (usuario.empresa_id === ALQUILOYA_EMPRESA_ID) {
+      // 1) Path normal: usuarios.propietario_id linkeado a propietarios.id
       const { data: uExt } = await supabase
         .from("usuarios")
-        .select("propietario_id")
+        .select("propietario_id, email")
         .eq("id", usuario.id)
         .limit(1)
         .maybeSingle();
@@ -46,6 +47,39 @@ export async function GET(request: Request) {
           .limit(1)
           .maybeSingle();
         if (pr) propietario = pr as Record<string, unknown>;
+      }
+
+      // 2) Fallback: si no hay linkage en usuarios.propietario_id, buscar
+      // propietarios con el mismo email del auth user. Cubre el caso donde el
+      // propietario fue cargado en alquiloya.propietarios pero usuarios.propietario_id
+      // quedo NULL (por ej. alta manual, o auth.users creado despues que el
+      // propietario). Al encontrar match, auto-vinculamos para que la proxima
+      // request use el path rapido.
+      if (!propietario) {
+        const candidateEmails = [
+          (uExt as { email?: string | null } | null)?.email ?? null,
+          user.email ?? null,
+        ].filter((e): e is string => typeof e === "string" && e.trim().length > 0);
+        for (const em of candidateEmails) {
+          const { data: pr } = await supabase
+            .from("propietarios")
+            .select("id, nombre, email, telefono, tipo_persona, estado, activo, plan_publicacion_id, plan_vencimiento_at, impulsos_saldo")
+            .ilike("email", em.trim())
+            .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+            .limit(1)
+            .maybeSingle();
+          if (pr) {
+            propietario = pr as Record<string, unknown>;
+            const prId = (pr as { id?: string }).id;
+            if (prId) {
+              await supabase
+                .from("usuarios")
+                .update({ propietario_id: prId })
+                .eq("id", usuario.id);
+            }
+            break;
+          }
+        }
       }
     }
 

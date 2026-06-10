@@ -126,12 +126,40 @@ export async function POST(request: Request) {
     // flujo "publicar gratis" de los dueños directos.
     const { data: uExt } = await supabase
       .from("usuarios")
-      .select("agente_id, propietario_id")
+      .select("agente_id, propietario_id, email")
       .eq("id", usuarioErp.id)
       .limit(1)
       .maybeSingle();
     const agenteId = (uExt as { agente_id?: string | null } | null)?.agente_id ?? null;
-    const usuarioPropietarioId = (uExt as { propietario_id?: string | null } | null)?.propietario_id ?? null;
+    let usuarioPropietarioId = (uExt as { propietario_id?: string | null } | null)?.propietario_id ?? null;
+
+    // Fallback: si no hay propietario_id linkeado pero el usuario tiene email
+    // que matchea con un propietarios.email existente, lo resolvemos por email
+    // y auto-vinculamos. Cubre el mismo caso que /api/propietario/me.
+    if (!agenteId && !usuarioPropietarioId) {
+      const candidateEmails = [
+        (uExt as { email?: string | null } | null)?.email ?? null,
+        authUser.email ?? null,
+      ].filter((e): e is string => typeof e === "string" && e.trim().length > 0);
+      for (const em of candidateEmails) {
+        const { data: pr } = await supabase
+          .from("propietarios")
+          .select("id")
+          .ilike("email", em.trim())
+          .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+          .limit(1)
+          .maybeSingle();
+        const prId = (pr as { id?: string } | null)?.id ?? null;
+        if (prId) {
+          usuarioPropietarioId = prId;
+          await supabase
+            .from("usuarios")
+            .update({ propietario_id: prId })
+            .eq("id", usuarioErp.id);
+          break;
+        }
+      }
+    }
 
     if (!agenteId && !usuarioPropietarioId) {
       return NextResponse.json(
