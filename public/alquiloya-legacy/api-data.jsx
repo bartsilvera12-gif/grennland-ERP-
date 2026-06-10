@@ -145,7 +145,13 @@
 
   const normalizeProperty = (row, agents = state.agents) => {
     if (!row) return null;
-    const fallback = findFallbackProperty(row);
+    // Si la propiedad es REAL (id UUID de la API), NO usamos data mock como
+    // fallback. Antes findFallbackProperty matcheaba por titulo, asi que una
+    // propiedad real titulada como el seed (ej. "Dúplex moderno con balcón")
+    // heredaba fotos/cover/ubicacion del mock — por eso al "ver mas fotos" de
+    // una publicacion sin fotos salian imagenes que no eran de la propiedad.
+    const isReal = uuidRe.test(String(row?.id || ''));
+    const fallback = isReal ? null : findFallbackProperty(row);
     const cover = sanitizeImageUrl(row.cover?.url || row.cover) || fallback?.cover || null;
     const features = featuresFromRow(row, fallback);
     // El fallback a `fallback?.agent` venia de la data mock (data.jsx) y le

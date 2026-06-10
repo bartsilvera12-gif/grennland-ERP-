@@ -44,20 +44,26 @@ function DetailPage({ p, onProperty, onNav }) {
 
 function Gallery({ photos = [], active, setActive, property }) {
   const [openFull, setOpenFull] = React.useState(false);
-  const totalExtra = Math.max(0, (photos.length || 0) - 4);
+  const real = (Array.isArray(photos) ? photos : []).filter(Boolean);
+  const totalExtra = Math.max(0, real.length - 5);
   return (
     <div className="container" style={{ padding: '8px 32px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr 1fr', gridTemplateRows: '230px 230px', gap: 8, borderRadius: 16, overflow: 'hidden' }}>
-        <Photo src={photos[0]} style={{ gridRow: '1 / 3', borderRadius: 0, cursor: 'pointer' }}/>
-        <Photo src={photos[1]} style={{ borderRadius: 0, cursor: 'pointer' }}/>
-        <Photo src={photos[2]} style={{ borderRadius: 0, cursor: 'pointer' }}/>
-        <Photo src={photos[3]} style={{ borderRadius: 0, cursor: 'pointer' }}/>
+        <Photo src={real[0]} style={{ gridRow: '1 / 3', borderRadius: 0, cursor: 'pointer' }}/>
+        <Photo src={real[1]} style={{ borderRadius: 0, cursor: 'pointer' }}/>
+        <Photo src={real[2]} style={{ borderRadius: 0, cursor: 'pointer' }}/>
+        <Photo src={real[3]} style={{ borderRadius: 0, cursor: 'pointer' }}/>
         <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setOpenFull(true)}>
-          <Photo src={photos[4] || photos[0]} style={{ borderRadius: 0, height: '100%' }}/>
-          <button onClick={() => setOpenFull(true)} style={{
-            position: 'absolute', inset: 0, background: 'rgba(11,22,34,.55)', color: '#fff', border: 'none',
-            fontFamily: 'Montserrat', fontWeight: 700, fontSize: 14, cursor: 'pointer'
-          }}>+ {Math.max(totalExtra, 12)} fotos</button>
+          {/* La 5ta tile ya no repite la primera foto: si no hay 5ta real,
+              queda el placeholder. El overlay "+N fotos" solo aparece si
+              realmente hay fotos extra. */}
+          <Photo src={real[4]} style={{ borderRadius: 0, height: '100%' }}/>
+          {totalExtra > 0 && (
+            <button onClick={() => setOpenFull(true)} style={{
+              position: 'absolute', inset: 0, background: 'rgba(11,22,34,.55)', color: '#fff', border: 'none',
+              fontFamily: 'Montserrat', fontWeight: 700, fontSize: 14, cursor: 'pointer'
+            }}>+ {totalExtra} foto{totalExtra !== 1 ? 's' : ''}</button>
+          )}
         </div>
       </div>
       <div className="row between" style={{ marginTop: 12 }}>
@@ -76,11 +82,10 @@ function Gallery({ photos = [], active, setActive, property }) {
 function FullGalleryModal({ property, onClose }) {
   const [tab, setTab] = React.useState('fotos');
   const [favorite, setFavorite] = React.useState(false);
-  // Generate extra photos to fill the grid
-  const basePhotos = Array.isArray(property.photos) ? property.photos : [];
-  const photos = basePhotos.length >= 12
-    ? basePhotos
-    : [...basePhotos, ...Array.from({ length: 12 - basePhotos.length }, (_, i) => photo(i * 4 + 3))];
+  // Solo fotos REALES. Antes se rellenaba con photo() mock hasta 12, asi que
+  // una publicacion sin fotos (o con pocas) mostraba imagenes que no eran de
+  // la propiedad. Si no hay fotos, mostramos un placeholder claro.
+  const photos = (Array.isArray(property.photos) ? property.photos : []).filter(Boolean);
 
   React.useEffect(() => {
     const prev = document.body.style.overflow;
@@ -131,6 +136,19 @@ function FullGalleryModal({ property, onClose }) {
       <div style={{ flex: 1, overflow: 'auto', display: 'grid', gridTemplateColumns: '1fr 380px', gap: 0 }}>
         <div style={{ padding: '20px 28px', overflowY: 'auto' }}>
           {tab === 'fotos' && (
+            photos.length === 0 ? (
+              <div className="card" style={{ padding: 60, textAlign: 'center', minHeight: 360, display: 'grid', placeItems: 'center' }}>
+                <div>
+                  <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--bg-3)', color: 'var(--ink-4)', display: 'grid', placeItems: 'center', margin: '0 auto' }}>
+                    <I.grid s={36}/>
+                  </div>
+                  <h3 style={{ fontSize: 18, marginTop: 18 }}>Sin fotos cargadas</h3>
+                  <p className="muted" style={{ fontSize: 14, marginTop: 8, maxWidth: 380, margin: '8px auto 0' }}>
+                    Esta publicación todavía no tiene fotos. Coordiná una visita por WhatsApp para conocer el inmueble.
+                  </p>
+                </div>
+              </div>
+            ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {photos.map((src, i) => (
                 <div key={i} style={{ position: 'relative', overflow: 'hidden', borderRadius: 10, aspectRatio: i === 0 ? '16 / 9' : '4 / 3', gridColumn: i === 0 ? '1 / 3' : 'auto' }}>
@@ -147,6 +165,7 @@ function FullGalleryModal({ property, onClose }) {
                 </div>
               ))}
             </div>
+            )
           )}
           {tab === 'mapa' && (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
