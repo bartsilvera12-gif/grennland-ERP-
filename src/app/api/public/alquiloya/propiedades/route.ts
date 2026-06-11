@@ -193,6 +193,13 @@ export async function POST(request: Request) {
       );
     }
 
+    // Limits del plan que aplican al actor (agente o propietario). Se llenan
+    // mas abajo segun el path y los usamos para capear fotos al insertar.
+    let actorPlanLimits: { propiedadesActivas: number | null; fotosPorInmueble: number | null } = {
+      propiedadesActivas: null,
+      fotosPorInmueble: null,
+    };
+
     // Path agente: validar que el agente este activo, con plan asignado y
     // sin haber agotado la cuota de propiedades activas.
     if (agenteId) {
@@ -233,6 +240,7 @@ export async function POST(request: Request) {
         .limit(1)
         .maybeSingle();
       const limits = extractPlanLimits((planRow as { bullets?: unknown } | null)?.bullets);
+      actorPlanLimits = limits;
       if (limits.propiedadesActivas != null) {
         const { count: activeCount } = await supabase
           .from("propiedades")
@@ -255,10 +263,12 @@ export async function POST(request: Request) {
         }
       }
     } else {
-      // Path propietario: validar que el propietario este activo.
+      // Path propietario: validar activo + plan (vencimiento + cuota) si
+      // tiene plan_publicacion_id asignado. Si todavia no compro plan,
+      // se conserva el fallback "1 propiedad cada 30 dias" (mas abajo).
       const { data: prRow } = await supabase
         .from("propietarios")
-        .select("id, activo")
+        .select("id, activo, plan_publicacion_id, plan_vencimiento_at")
         .eq("id", usuarioPropietarioId!)
         .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
         .limit(1)
@@ -268,6 +278,45 @@ export async function POST(request: Request) {
           { error: "Tu cuenta de propietario esta inactiva. Contactanos para reactivarla." },
           { status: 403 }
         );
+      }
+      const pPlanId = (prRow as { plan_publicacion_id?: string | null }).plan_publicacion_id ?? null;
+      if (pPlanId) {
+        const venc = (prRow as { plan_vencimiento_at?: string | null }).plan_vencimiento_at ?? null;
+        if (venc && new Date(venc).getTime() < Date.now()) {
+          return NextResponse.json(
+            { error: "Tu plan esta vencido. Renovalo para volver a publicar.", code: "plan_vencido" },
+            { status: 402 }
+          );
+        }
+        const { data: planRow } = await supabase
+          .from("planes_publicacion")
+          .select("bullets")
+          .eq("id", pPlanId)
+          .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+          .limit(1)
+          .maybeSingle();
+        const limits = extractPlanLimits((planRow as { bullets?: unknown } | null)?.bullets);
+        actorPlanLimits = limits;
+        if (limits.propiedadesActivas != null) {
+          const { count: activeCount } = await supabase
+            .from("propiedades")
+            .select("id", { count: "exact", head: true })
+            .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+            .eq("propietario_id", usuarioPropietarioId!)
+            .eq("activo", true);
+          const used = typeof activeCount === "number" ? activeCount : 0;
+          if (used >= limits.propiedadesActivas) {
+            return NextResponse.json(
+              {
+                error: `Llegaste al limite de tu plan (${used}/${limits.propiedadesActivas} propiedades activas). Pausa una propiedad o pasa a un plan superior.`,
+                code: "limite_alcanzado",
+                activas: used,
+                limite: limits.propiedadesActivas,
+              },
+              { status: 402 }
+            );
+          }
+        }
       }
     }
 
@@ -300,7 +349,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "email invalido" }, { status: 400 });
     }
 
-    const fotos = Array.isArray(body.fotos) ? body.fotos.slice(0, MAX_FOTOS) : [];
+    // Cap de fotos = min(hard MAX_FOTOS, limite del plan). Si el cliente
+    // mando mas, devolvemos 402 con el limite — preferimos error explicito
+    // a silenciosamente truncar, asi el frontend muestra "tu plan permite N".
+    const fotosLimitFromPlan = actorPlanLimits.fotosPorInmueble;
+    const effectiveFotosCap =
+      fotosLimitFromPlan != null ? Math.min(MAX_FOTOS, fotosLimitFromPlan) : MAX_FOTOS;
+    const rawFotos = Array.isArray(body.fotos) ? body.fotos : [];
+    if (rawFotos.length > effectiveFotosCap) {
+      return NextResponse.json(
+        {
+          error: `Tu plan permite hasta ${effectiveFotosCap} fotos por inmueble. Estas subiendo ${rawFotos.length}. Quitá fotos o pasá a un plan superior.`,
+          code: "limite_fotos",
+          fotos: rawFotos.length,
+          limite: effectiveFotosCap,
+        },
+        { status: 402 }
+      );
+    }
+    const fotos = rawFotos.slice(0, effectiveFotosCap);
     const carac = Array.isArray(body.caracteristicas) ? body.caracteristicas.slice(0, MAX_CARAC) : [];
 
     const pool = getChatPostgresPool();
