@@ -293,7 +293,8 @@ function AdminAgentPage({ route, onNav }) {
     let cancelled = false;
     (async () => {
       try {
-        const r2 = await fetch('/api/agente/me', { cache: 'no-store', credentials: 'include' });
+        const cf = window.ayCachedFetch || fetch;
+        const r2 = await cf('/api/agente/me', { cache: 'no-store', credentials: 'include' });
         if (r2.ok) {
           const body2 = await r2.json();
           if (cancelled) return;
@@ -302,7 +303,7 @@ function AdminAgentPage({ route, onNav }) {
             return;
           }
         }
-        const r = await fetch('/api/propietario/me', { cache: 'no-store', credentials: 'include' });
+        const r = await cf('/api/propietario/me', { cache: 'no-store', credentials: 'include' });
         if (r.ok) {
           const body = await r.json();
           if (cancelled) return;
@@ -331,9 +332,10 @@ function AdminAgentPage({ route, onNav }) {
     let cancelled = false;
     (async () => {
       let body = null;
+      const cf = window.ayCachedFetch || fetch;
       // Si la sesion es de propietario (incluso con 0 inmuebles) usamos esa.
       try {
-        const r = await fetch('/api/propietario/propiedades', { cache: 'no-store', credentials: 'include' });
+        const r = await cf('/api/propietario/propiedades', { cache: 'no-store', credentials: 'include' });
         if (r.ok) {
           const b = await r.json();
           // /api/propietario/propiedades devuelve {success:true, propiedades:[]}
@@ -345,7 +347,7 @@ function AdminAgentPage({ route, onNav }) {
       } catch { /* try next */ }
       if (!body) {
         try {
-          const r2 = await fetch('/api/agente/propiedades', { cache: 'no-store', credentials: 'include' });
+          const r2 = await cf('/api/agente/propiedades', { cache: 'no-store', credentials: 'include' });
           if (r2.ok) {
             const b2 = await r2.json();
             if (b2?.success && Array.isArray(b2.propiedades)) body = b2;
@@ -434,6 +436,11 @@ function AdminAgentPage({ route, onNav }) {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.success) throw new Error((data && data.error) || ('HTTP ' + res.status));
+        if (window.ayInvalidate) {
+          window.ayInvalidate('/api/propietario/propiedades');
+          window.ayInvalidate('/api/propietario/me');
+          window.ayInvalidate('/api/agente/propiedades');
+        }
         setBoostedIds(b => ({ ...b, [id]: true }));
         setImpulsesPaid(Number(data.saldo_restante) || 0);
         return;
@@ -1086,7 +1093,7 @@ function CapturesSection({ onNav }) {
   const [realErr, setRealErr] = React.useState(null);
   React.useEffect(() => {
     let cancelled = false;
-    fetch('/api/agente/captaciones', { cache: 'no-store', credentials: 'include' })
+    (window.ayCachedFetch || fetch)('/api/agente/captaciones', { cache: 'no-store', credentials: 'include' })
       .then(r => {
         if (cancelled) return null;
         if (r.status === 401 || r.status === 403) { setRealCapt('mock'); return null; }
@@ -1695,7 +1702,7 @@ function EmbudoCaptaciones() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch('/api/agente/embudo', { cache: 'no-store', credentials: 'include' });
+        const r = await (window.ayCachedFetch || fetch)('/api/agente/embudo', { cache: 'no-store', credentials: 'include' });
         if (!r.ok) return;
         const b = await r.json().catch(() => ({}));
         if (!cancelled && Array.isArray(b?.embudo)) setData(b.embudo);
@@ -1756,7 +1763,7 @@ function ConsultasRecientes({ onNav }) {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch('/api/agente/consultas?limit=6', { cache: 'no-store', credentials: 'include' });
+        const r = await (window.ayCachedFetch || fetch)('/api/agente/consultas?limit=6', { cache: 'no-store', credentials: 'include' });
         if (!r.ok) return;
         const b = await r.json().catch(() => ({}));
         if (!cancelled && Array.isArray(b?.consultas)) setData(b.consultas);
@@ -1830,7 +1837,7 @@ function BlogSection() {
 
   async function reload() {
     try {
-      const r = await fetch('/api/agente/posts', { cache: 'no-store', credentials: 'include' });
+      const r = await (window.ayCachedFetch || fetch)('/api/agente/posts', { cache: 'no-store', credentials: 'include' });
       const body = await r.json().catch(() => ({}));
       if (!r.ok || !body.success) throw new Error(body.error || ('HTTP ' + r.status));
       setPosts(Array.isArray(body.posts) ? body.posts : []);
@@ -1866,6 +1873,7 @@ function BlogSection() {
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok || !body.success) throw new Error(body.error || ('HTTP ' + r.status));
+      if (window.ayInvalidate) window.ayInvalidate('/api/agente/posts');
       setEditing(null);
       await reload();
     } catch (e) {
@@ -1882,6 +1890,7 @@ function BlogSection() {
       const r = await fetch('/api/agente/posts/' + post.id, { method: 'DELETE', credentials: 'include' });
       const body = await r.json().catch(() => ({}));
       if (!r.ok || !body.success) throw new Error(body.error || ('HTTP ' + r.status));
+      if (window.ayInvalidate) window.ayInvalidate('/api/agente/posts');
       await reload();
     } catch (e) {
       window.alert(e && e.message ? e.message : 'No se pudo eliminar.');

@@ -1339,4 +1339,64 @@ function WhatsAppLauncher() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Caché ligero in-memory para GET fetches del panel agente/propietario.
+// Antes: cuando el usuario navegaba a /Carteles QR (PostersPage) y volvia a
+// Resumen, AdminAgentPage se remontaba y volvia a pegarle a /api/agente/me,
+// /api/agente/propiedades, etc — flash de skeletons en cada cambio.
+// Ahora: ayCachedFetch(url, ttlMs) guarda la respuesta cruda con timestamp
+// en window.__AY_FETCH_CACHE; mientras este fresca se devuelve sin red.
+// ttl por defecto: 60_000 ms. invalidate(url) o invalidateAll() para bustear
+// (ej. tras crear/editar una propiedad).
+// ─────────────────────────────────────────────────────────────────────────────
+(function () {
+  if (typeof window === 'undefined' || window.ayCachedFetch) return;
+  const CACHE = (window.__AY_FETCH_CACHE = window.__AY_FETCH_CACHE || new Map());
+  const DEFAULT_TTL = 60_000;
+
+  async function ayCachedFetch(url, opts) {
+    const ttl = (opts && opts.ttlMs) || DEFAULT_TTL;
+    const key = url;
+    const now = Date.now();
+    const hit = CACHE.get(key);
+    if (hit && now - hit.t < ttl && !hit.error) {
+      // Devolvemos una copia del body parseado para que el caller pueda
+      // hacer .json() sin estado compartido.
+      return {
+        ok: hit.ok,
+        status: hit.status,
+        json: async () => JSON.parse(JSON.stringify(hit.body)),
+      };
+    }
+    const fetchOpts = Object.assign({}, opts);
+    delete fetchOpts.ttlMs;
+    // No-store en la red para que el navegador no cachee, pero igual
+    // usamos nuestro cache en memoria.
+    if (!fetchOpts.cache) fetchOpts.cache = 'no-store';
+    if (!fetchOpts.credentials) fetchOpts.credentials = 'include';
+    try {
+      const r = await fetch(url, fetchOpts);
+      let body = null;
+      try { body = await r.clone().json(); } catch { body = null; }
+      CACHE.set(key, { t: now, ok: r.ok, status: r.status, body });
+      return {
+        ok: r.ok,
+        status: r.status,
+        json: async () => body,
+      };
+    } catch (e) {
+      CACHE.set(key, { t: now, ok: false, status: 0, body: null, error: e });
+      throw e;
+    }
+  }
+  function ayInvalidate(urlOrPrefix) {
+    if (!urlOrPrefix) { CACHE.clear(); return; }
+    for (const k of Array.from(CACHE.keys())) {
+      if (k === urlOrPrefix || k.startsWith(urlOrPrefix)) CACHE.delete(k);
+    }
+  }
+  window.ayCachedFetch = ayCachedFetch;
+  window.ayInvalidate = ayInvalidate;
+})();
+
 Object.assign(window, { Header, Footer, Photo, PropertyCard, AdBanner, QRMock, Avatar, Segment, VerificationModal, VivioChatbot, WhatsAppLauncher, PrettySelect });
