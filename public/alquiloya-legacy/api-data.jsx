@@ -1,8 +1,9 @@
 // Public API bridge. Keeps data.jsx as fallback and normalizes API rows to the legacy UI shape.
 
 (function () {
-  const fallbackProperties = Array.isArray(window.PROPERTIES) ? window.PROPERTIES : [];
-  const fallbackAgents = Array.isArray(window.AGENTS) ? window.AGENTS : [];
+  // Sin datos mock: arrancamos vacío y solo mostramos lo que devuelva la API real.
+  const fallbackProperties = [];
+  const fallbackAgents = [];
 
   const state = {
     loading: true,

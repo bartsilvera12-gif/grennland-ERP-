@@ -18,8 +18,6 @@ import {
   ChevronRight,
   Star,
   Sparkles,
-  PanelLeftClose,
-  PanelLeft,
   Search,
   Receipt,
   Banknote,
@@ -754,28 +752,17 @@ export default function Sidebar() {
             />
           </div>
         </Link>
-        {!collapsed && (
-          <button
-            type="button"
-            onClick={() => setCollapsed(true)}
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-[color:var(--zentra-sidebar-hover)] hover:text-white"
-            aria-label="Colapsar sidebar"
-          >
-            <PanelLeftClose className="h-5 w-5" />
-          </button>
-        )}
       </div>
 
       {/* Toggle flotante estilo Coolify: pestaña en el borde derecho del
-          sidebar. Siempre visible (independiente del estado del logo) para
-          que el usuario pueda contraer/expandir sin perder la flecha cuando
-          el isotipo ocupa el header. */}
+          sidebar. Posicionado debajo del header global de la app para que no
+          quede tapado por la barra superior. */}
       <button
         type="button"
         onClick={() => setCollapsed(!collapsed)}
         aria-label={collapsed ? "Expandir sidebar" : "Colapsar sidebar"}
         title={collapsed ? "Expandir" : "Colapsar"}
-        className="absolute top-[3.25rem] -right-3 z-30 flex h-7 w-7 items-center justify-center rounded-full border border-[color:var(--zentra-sidebar-border)] bg-[color:var(--zentra-sidebar-elevated)] text-slate-300 shadow-[0_4px_10px_rgba(0,0,0,0.35)] transition-[background-color,color,transform] hover:bg-[color:var(--zentra-sidebar-hover)] hover:text-white"
+        className="absolute top-[8rem] -right-3 z-50 flex h-7 w-7 items-center justify-center rounded-full border border-[color:var(--zentra-sidebar-border)] bg-[color:var(--zentra-sidebar-elevated)] text-slate-300 shadow-[0_4px_10px_rgba(0,0,0,0.35)] transition-[background-color,color,transform] hover:bg-[color:var(--zentra-sidebar-hover)] hover:text-white"
       >
         {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4 -rotate-90" />}
       </button>
