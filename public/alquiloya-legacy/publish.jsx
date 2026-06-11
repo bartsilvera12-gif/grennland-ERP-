@@ -49,12 +49,13 @@ function PublishPage() {
     return () => { cancelled = true; };
   }, []);
   const isLoggedPublisher = !!(ctxAgente || ctxPropietario);
-  // Fase Publicar-1: wizard de 5 pasos (sin "Gestión").
+  // Wizard de 5 pasos. Plan va PRIMERO para que el resto de los pasos
+  // (fotos en particular) puedan ajustarse al limite del plan elegido.
   const steps = [
-    { id: 0, title: 'Datos básicos', icon: 'doc' },
-    { id: 1, title: 'Ubicación', icon: 'pin' },
-    { id: 2, title: 'Fotos', icon: 'upload' },
-    { id: 3, title: 'Plan', icon: 'star' },
+    { id: 0, title: 'Plan', icon: 'star' },
+    { id: 1, title: 'Datos básicos', icon: 'doc' },
+    { id: 2, title: 'Ubicación', icon: 'pin' },
+    { id: 3, title: 'Fotos', icon: 'upload' },
     { id: 4, title: 'Vista previa', icon: 'eye' },
   ];
 
@@ -134,16 +135,30 @@ function PublishPage() {
 
   // Validacion por paso del wizard: bloquea "Continuar" si el paso actual no
   // tiene completos sus campos obligatorios. Devuelve null si esta OK, o el
-  // mensaje a mostrar.
+  // mensaje a mostrar. Orden de pasos: Plan, Basicos, Ubicacion, Fotos,
+  // Vista previa.
   function validateStep(s) {
     if (s === 0) {
+      if (!(form.plan_id || '').trim()) return 'Elegí un plan para continuar.';
+      return null;
+    }
+    if (s === 1) {
       if (!(form.titulo || '').trim()) return 'Ingresá el título de la publicación.';
       const precio = Number(String(form.precio).replace(/[^\d.]/g, ''));
       if (!Number.isFinite(precio) || precio <= 0) return 'Ingresá un precio válido.';
       return null;
     }
-    if (s === 1) {
+    if (s === 2) {
       if (!(form.ciudad || '').trim()) return 'Indicá la ciudad del inmueble.';
+      return null;
+    }
+    if (s === 3) {
+      // Validar tope de fotos del plan elegido.
+      const cap = Number(form.plan_fotos_max) > 0 ? Number(form.plan_fotos_max) : null;
+      const n = (form.fotos || []).length;
+      if (cap != null && n > cap) {
+        return `Tu plan permite hasta ${cap} fotos por inmueble. Quitá ${n - cap} foto${n - cap !== 1 ? 's' : ''} o cambiá a un plan superior.`;
+      }
       return null;
     }
     if (s === 4) {
@@ -370,10 +385,10 @@ function PublishPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 28, marginTop: 28, alignItems: 'flex-start' }}>
         <div className="card" style={{ padding: 32 }}>
-          {step === 0 && <StepBasics form={form} setF={setF}/>}
-          {step === 1 && <StepLocation form={form} setF={setF}/>}
-          {step === 2 && <StepPhotos form={form} setF={setF} isAgent={!!ctxAgente}/>}
-          {step === 3 && <StepPlan form={form} setF={setF} ctxAgente={ctxAgente} ctxPropietario={ctxPropietario}/>}
+          {step === 0 && <StepPlan form={form} setF={setF} ctxAgente={ctxAgente} ctxPropietario={ctxPropietario}/>}
+          {step === 1 && <StepBasics form={form} setF={setF}/>}
+          {step === 2 && <StepLocation form={form} setF={setF}/>}
+          {step === 3 && <StepPhotos form={form} setF={setF} isAgent={!!ctxAgente}/>}
           {step === 4 && <StepPreview form={form} setF={setF}/>}
 
           {submitState.success && (
@@ -715,7 +730,7 @@ function StepBasics({ form, setF }) {
   }
   return (
     <div>
-      <div className="tag">Paso 1</div>
+      <div className="tag">Paso 2</div>
       <h3 style={{ fontSize: 22, marginTop: 6 }}>Datos básicos de tu propiedad</h3>
       <p className="muted" style={{ fontSize: 14, marginTop: 6 }}>Completá la información principal del inmueble.</p>
       <div style={{ marginTop: 24 }}>
@@ -804,7 +819,7 @@ function Chip({ label, active, onClick }) {
 function StepLocation({ form, setF }) {
   return (
     <div>
-      <div className="tag">Paso 2</div>
+      <div className="tag">Paso 3</div>
       <h3 style={{ fontSize: 22, marginTop: 6 }}>¿Dónde se encuentra tu inmueble?</h3>
       <p className="muted" style={{ fontSize: 14, marginTop: 6 }}>Tu dirección escrita queda privada. El punto en el mapa sí se muestra al público para que vean la zona.</p>
       <div style={{ marginTop: 24 }}>
@@ -892,9 +907,17 @@ function StepPhotos({ form, setF, isAgent }) {
   const [urlNew, setUrlNew] = React.useState('');
   const [mode, setMode] = React.useState(isAgent ? 'url' : 'file');
   const fileInputRef = React.useRef(null);
+  // Cap del plan: si no hay plan elegido, no enforce (defaults a infinito).
+  const planCap = Number(form.plan_fotos_max) > 0 ? Number(form.plan_fotos_max) : null;
+  const fotosLen = (form.fotos || []).length;
+  const atCap = planCap != null && fotosLen >= planCap;
   function addFotoUrl() {
     const url = (urlNew || '').trim();
     if (!url) return;
+    if (planCap != null && fotosLen >= planCap) {
+      window.alert(`Tu plan permite hasta ${planCap} fotos por inmueble. Borrá alguna o cambiá a un plan superior.`);
+      return;
+    }
     setF(f => ({ fotos: [...(f.fotos || []), { url, alt: f.titulo || '', es_portada: (f.fotos || []).length === 0 }] }));
     setUrlNew('');
   }
@@ -935,7 +958,14 @@ function StepPhotos({ form, setF, isAgent }) {
   async function addFotoFiles(fileList) {
     const files = Array.from(fileList || []).filter(f => f && f.type && f.type.startsWith('image/'));
     if (files.length === 0) return;
-    for (const file of files) {
+    // Cap del plan: solo agregamos hasta llenar el cupo.
+    const currentLen = (form.fotos || []).length;
+    const remaining = planCap != null ? Math.max(0, planCap - currentLen) : files.length;
+    if (planCap != null && files.length > remaining) {
+      window.alert(`Tu plan permite hasta ${planCap} fotos por inmueble. Te quedan ${remaining}. Las primeras ${remaining} se agregaron.`);
+    }
+    const toAdd = planCap != null ? files.slice(0, remaining) : files;
+    for (const file of toAdd) {
       if (file.size > 12 * 1024 * 1024) {
         window.alert('"' + file.name + '" supera los 12MB. Reducila antes de subir.');
         continue;
@@ -958,13 +988,24 @@ function StepPhotos({ form, setF, isAgent }) {
   });
   return (
     <div>
-      <div className="tag">Paso 3</div>
+      <div className="tag">Paso 4</div>
       <h3 style={{ fontSize: 22, marginTop: 6 }}>Sumá fotos de tu propiedad</h3>
       <p className="muted" style={{ fontSize: 14, marginTop: 6 }}>
         {isAgent
           ? 'Como agente, recomendamos pegar URLs de tu servidor de imágenes para no inflar la base. También podés subir desde dispositivo.'
           : 'Subí las fotos desde tu dispositivo (hasta 4 MB c/u). La primera será la principal.'}
       </p>
+      {planCap != null && (
+        <div style={{
+          marginTop: 12, padding: '8px 12px', borderRadius: 10,
+          background: atCap ? '#fdecec' : 'var(--blue-50)',
+          border: '1px solid ' + (atCap ? '#f3c2c2' : 'var(--blue-100, #dceaf6)'),
+          color: atCap ? '#a8312f' : 'var(--blue)',
+          fontSize: 12.5, fontWeight: 600, display: 'inline-block',
+        }}>
+          {fotosLen} / {planCap} fotos según tu plan {atCap ? '· cupo lleno' : ''}
+        </div>
+      )}
 
       <div className="row gap-8" style={{ marginTop: 14 }}>
         <button type="button" style={segBtn(mode === 'file')} onClick={() => setMode('file')}>Subir desde dispositivo</button>
@@ -1230,6 +1271,26 @@ function AgentLevelBadge({ level }) {
   return <span className="badge" style={{ background: c.bg, color: c.fg, fontSize: 9.5 }}>{level}</span>;
 }
 
+// Lee de los bullets del plan ("Hasta 5 fotos por inmueble", "15 propiedades
+// activas") los topes numericos. Devuelve { fotosPorInmueble, propiedadesActivas }.
+function extractPlanLimitsFromBullets(bullets) {
+  const arr = Array.isArray(bullets) ? bullets : [];
+  let fotosPorInmueble = null;
+  let propiedadesActivas = null;
+  for (const b of arr) {
+    if (typeof b !== 'string') continue;
+    if (fotosPorInmueble == null) {
+      const m = b.match(/hasta\s+(\d+)\s+fotos?/i);
+      if (m) fotosPorInmueble = Number(m[1]) || null;
+    }
+    if (propiedadesActivas == null) {
+      const m = b.match(/(\d+)\s*propiedades?\s+activas?/i);
+      if (m) propiedadesActivas = Number(m[1]) || null;
+    }
+  }
+  return { fotosPorInmueble, propiedadesActivas };
+}
+
 function StepPlan({ form, setF, ctxAgente, ctxPropietario }) {
   const [apiPlans, setApiPlans] = React.useState(null);
   React.useEffect(() => {
@@ -1258,7 +1319,14 @@ function StepPlan({ form, setF, ctxAgente, ctxPropietario }) {
         const ctxPlanId = (ctxAgente && ctxAgente.plan_publicacion_id) || (ctxPropietario && ctxPropietario.plan_publicacion_id);
         if (ctxPlanId && !form.plan_id) {
           const match = arr.find(p => p.id === ctxPlanId);
-          if (match) setF({ plan_id: match.tier });
+          if (match) {
+            const limits = extractPlanLimitsFromBullets(match.bullets);
+            setF({
+              plan_id: match.tier,
+              plan_fotos_max: limits.fotosPorInmueble,
+              plan_propiedades_max: limits.propiedadesActivas,
+            });
+          }
         }
       })
       .catch(() => { /* fallback PLANS mock */ });
@@ -1270,14 +1338,21 @@ function StepPlan({ form, setF, ctxAgente, ctxPropietario }) {
   const list = source.filter(p => p.tier && String(p.tier).includes(audience));
   return (
     <div>
-      <div className="tag">Paso 4</div>
+      <div className="tag">Paso 1</div>
       <h3 style={{ fontSize: 22, marginTop: 6 }}>Elegí un plan para tu publicación</h3>
       <p className="muted" style={{ fontSize: 14, marginTop: 6 }}>Podés cambiar de plan más adelante.</p>
       <div className="col gap-12" style={{ marginTop: 20 }}>
         {list.map(p => {
           const picked = form.plan_id === p.tier;
           return (
-            <button key={p.tier} type="button" onClick={() => setF({ plan_id: p.tier })} className="card" style={{
+            <button key={p.tier} type="button" onClick={() => {
+              const limits = extractPlanLimitsFromBullets(p.bullets);
+              setF({
+                plan_id: p.tier,
+                plan_fotos_max: limits.fotosPorInmueble,
+                plan_propiedades_max: limits.propiedadesActivas,
+              });
+            }} className="card" style={{
               padding: 18, textAlign: 'left',
               border: '2px solid ' + (picked ? 'var(--blue)' : 'var(--line)'),
               background: picked ? 'var(--blue-50)' : '#fff',
