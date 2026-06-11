@@ -58,6 +58,7 @@ export default function EditPropiedadClient({ initial }: { initial: ErpPropiedad
     activo: !!initial.activo,
     visible_web: !!initial.visible_web,
     destacada: !!initial.destacada,
+    publicacion_dias: initial.publicacion_dias == null ? "" : String(initial.publicacion_dias),
     lat: initial.lat == null ? null : Number(initial.lat),
     lng: initial.lng == null ? null : Number(initial.lng),
   });
@@ -104,6 +105,7 @@ export default function EditPropiedadClient({ initial }: { initial: ErpPropiedad
         cocheras: form.cocheras || null,
         superficie_m2: form.superficie_m2 || null,
         terreno_m2: form.terreno_m2 || null,
+        publicacion_dias: form.publicacion_dias === "" ? null : Number(form.publicacion_dias),
         codigo: form.codigo || null,
         fotos: fotos.filter((f) => f.url.trim()),
         caracteristicas: cars.filter((c) => c.nombre.trim()),
@@ -307,6 +309,25 @@ export default function EditPropiedadClient({ initial }: { initial: ErpPropiedad
               <input type="checkbox" checked={form.destacada} onChange={(e) => set("destacada", e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-[#4FAEB2] focus:ring-[#4FAEB2]" />
               Destacada
             </label>
+          </div>
+
+          <div className="mt-5 max-w-sm">
+            <label className="block text-sm font-medium text-slate-700">
+              Días de publicación
+              <span className="ml-2 text-xs font-normal text-slate-500">(opcional · default 30)</span>
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={3650}
+              value={form.publicacion_dias}
+              onChange={(e) => set("publicacion_dias", e.target.value)}
+              placeholder="30"
+              className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-[#4FAEB2] focus:outline-none focus:ring-1 focus:ring-[#4FAEB2]"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Cuántos días sigue visible en la web para propietarios con plan gratis. Dejá vacío para usar el default (30).
+            </p>
           </div>
         </section>
 

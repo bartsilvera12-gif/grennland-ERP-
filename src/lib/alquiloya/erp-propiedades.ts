@@ -37,6 +37,27 @@ async function destacadaHastaExists(): Promise<boolean> {
   return hasDestacadaHasta;
 }
 
+let hasPublicacionDias: boolean | null = null;
+async function publicacionDiasExists(): Promise<boolean> {
+  if (hasPublicacionDias != null) return hasPublicacionDias;
+  const pool = getChatPostgresPool();
+  if (!pool) return false;
+  try {
+    const { rows } = await queryWithRetry<{ ok: boolean }>(
+      pool,
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.columns
+          WHERE table_schema='alquiloya' AND table_name='propiedades' AND column_name='publicacion_dias'
+       ) AS ok`,
+      []
+    );
+    hasPublicacionDias = rows[0]?.ok === true;
+  } catch {
+    hasPublicacionDias = false;
+  }
+  return hasPublicacionDias;
+}
+
 export type ErpPropiedadListRow = {
   id: string;
   codigo: string | null;
@@ -71,6 +92,7 @@ export type ErpPropiedadDetail = ErpPropiedadListRow & {
   cocheras: number | null;
   superficie_m2: number | null;
   terreno_m2: number | null;
+  publicacion_dias: number | null;
   updated_at: string | null;
   agente: {
     id: string;
@@ -254,9 +276,11 @@ export async function getErpPropiedad(id: string): Promise<ErpPropiedadDetail | 
   if (!pool) return null;
 
   const hasDH = await destacadaHastaExists();
+  const hasPD = await publicacionDiasExists();
   const dhSelect = hasDH
     ? "p.destacada_hasta::text AS destacada_hasta,\n        (p.destacada AND (p.destacada_hasta IS NULL OR p.destacada_hasta > now())) AS destacada_efectiva,"
     : "NULL::text AS destacada_hasta,\n        p.destacada AS destacada_efectiva,";
+  const pdSelect = hasPD ? "p.publicacion_dias," : "NULL::int AS publicacion_dias,";
   const { rows } = await queryWithRetry<ErpPropiedadDetail>(
     pool,
     `
@@ -268,6 +292,7 @@ export async function getErpPropiedad(id: string): Promise<ErpPropiedadDetail | 
         p.dormitorios, p.banos, p.cocheras,
         p.superficie_m2::float8 AS superficie_m2,
         p.terreno_m2::float8 AS terreno_m2,
+        ${pdSelect}
         p.destacada,
         ${dhSelect}
         p.visible_web, p.activo,

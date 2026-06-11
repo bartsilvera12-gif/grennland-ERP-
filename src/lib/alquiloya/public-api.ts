@@ -25,6 +25,29 @@ function getPoolOrError(): ReturnType<typeof getChatPostgresPool> {
   return getChatPostgresPool();
 }
 
+// Cache module-level: bootstrap idempotente de alquiloya.propiedades.publicacion_dias.
+// La migration 20260703120000 puede no estar aplicada — si la columna falta,
+// el filtro de "plan gratis vencido" usaria un identificador inexistente y
+// la query revienta. Se corre una vez por cold start.
+let publicacionDiasReady = false;
+async function ensurePublicacionDiasColumn(): Promise<void> {
+  if (publicacionDiasReady) return;
+  const pool = getChatPostgresPool();
+  if (!pool) return;
+  try {
+    await pool.query(
+      `ALTER TABLE alquiloya.propiedades
+         ADD COLUMN IF NOT EXISTS publicacion_dias integer`
+    );
+    publicacionDiasReady = true;
+  } catch (e) {
+    console.warn(
+      "[alquiloya/public-api] bootstrap publicacion_dias:",
+      e instanceof Error ? e.message : e
+    );
+  }
+}
+
 function parseOptionalPrice(value: string | null, name: string): number | NextResponse | null {
   if (value == null || value.trim() === "") return null;
   const n = Number(value);
@@ -70,18 +93,22 @@ export async function listPublicPropiedades(request: NextRequest) {
       return NextResponse.json(errorResponse("Pool no disponible."), { status: 500 });
     }
 
+    await ensurePublicacionDiasColumn();
+
     const sp = request.nextUrl.searchParams;
     const params: unknown[] = [ALQUILOYA_EMPRESA_ID];
     const where = [
       "p.empresa_id = $1::uuid",
       "p.activo = true",
       "p.visible_web = true",
-      // Plan gratis vence a los 30 dias desde created_at. Si la propiedad esta
-      // ligada a un propietario con plan gratis y ya pasaron 30 dias, no la
+      // Plan gratis vence a los N dias desde created_at, donde N viene de
+      // propiedades.publicacion_dias (NULL = 30 por defecto). El admin puede
+      // editar ese plazo por propiedad desde el ERP. Si la propiedad esta
+      // ligada a un propietario con plan gratis y ya pasaron N dias, no la
       // mostramos al publico — sigue en el ERP para que el cliente pague el
       // plan y la reactive.
       `NOT (
-         p.created_at < now() - interval '30 days'
+         p.created_at < now() - (COALESCE(p.publicacion_dias, 30) || ' days')::interval
          AND EXISTS (
            SELECT 1 FROM ${t("propietarios")} pr
            LEFT JOIN ${t("planes_publicacion")} pp ON pp.id = pr.plan_publicacion_id
@@ -323,6 +350,8 @@ export async function getPublicAgente(id: string) {
       return NextResponse.json(errorResponse("Pool no disponible."), { status: 500 });
     }
 
+    await ensurePublicacionDiasColumn();
+
     const { rows } = await queryWithRetry<AgenteDetailRow>(
       pool,
       `
@@ -419,10 +448,12 @@ export async function getPublicAgente(id: string) {
               -- El listado publico /propiedades sigue exigiendo ambos.
               AND p.activo = true
               AND COALESCE(p.estado, 'disponible') NOT IN ('rechazada', 'pausada')
-              -- Plan gratis vencido (mas de 30 dias desde created_at): se
-              -- oculta del perfil publico hasta que pague un plan.
+              -- Plan gratis vencido (mas de COALESCE(publicacion_dias, 30)
+              -- dias desde created_at): se oculta del perfil publico hasta
+              -- que pague un plan. publicacion_dias es editable por propiedad
+              -- desde el ERP.
               AND NOT (
-                p.created_at < now() - interval '30 days'
+                p.created_at < now() - (COALESCE(p.publicacion_dias, 30) || ' days')::interval
                 AND EXISTS (
                   SELECT 1 FROM ${t("propietarios")} pr
                   LEFT JOIN ${t("planes_publicacion")} pp ON pp.id = pr.plan_publicacion_id

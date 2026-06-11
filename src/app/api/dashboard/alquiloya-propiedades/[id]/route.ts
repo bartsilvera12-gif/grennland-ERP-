@@ -72,6 +72,7 @@ type PatchBody = {
   destacada?: boolean;
   lat?: number | string | null;
   lng?: number | string | null;
+  publicacion_dias?: number | string | null;
   fotos?: Array<{ url: string; alt?: string | null; es_portada?: boolean | null }>;
   caracteristicas?: Array<{ nombre: string; valor?: string | null; icono?: string | null }>;
 };
@@ -101,6 +102,21 @@ export async function PATCH(
     if (agenteId && !uuidRe.test(agenteId)) {
       return NextResponse.json({ error: "agente_id invalido" }, { status: 400 });
     }
+
+    // Bootstrap idempotente de propiedades.publicacion_dias (migration
+    // 20260703120000 puede no estar aplicada en todas las DBs de produccion).
+    await pool
+      .query(
+        `ALTER TABLE alquiloya.propiedades
+           ADD COLUMN IF NOT EXISTS publicacion_dias integer`
+      )
+      .catch((e) => {
+        console.warn("[propiedades PATCH] bootstrap publicacion_dias:", e instanceof Error ? e.message : e);
+      });
+
+    const pubDiasRaw = i(body.publicacion_dias);
+    const pubDias =
+      pubDiasRaw == null ? null : Math.min(3650, Math.max(1, pubDiasRaw));
 
     const client: PoolClient = await pool.connect();
     try {
@@ -140,6 +156,7 @@ export async function PATCH(
            activo = $20,
            lat = $23,
            lng = $24,
+           publicacion_dias = $25,
            updated_at = now()
          WHERE id = $21::uuid AND empresa_id = $22::uuid`,
         [
@@ -167,6 +184,7 @@ export async function PATCH(
           ALQUILOYA_EMPRESA_ID,
           n(body.lat),
           n(body.lng),
+          pubDias,
         ]
       );
 
