@@ -1399,4 +1399,66 @@ function WhatsAppLauncher() {
   window.ayInvalidate = ayInvalidate;
 })();
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Toast bottom-right. window.ayToast(msg, {variant, duration, title}).
+// variant: 'success' (default) | 'info' | 'error'. duration: ms (default 6000).
+// Sin dependencias: inyecta CSS y un contenedor en <body> la primera vez.
+// ─────────────────────────────────────────────────────────────────────────────
+(function () {
+  if (typeof window === 'undefined' || window.ayToast) return;
+  function ensureRoot() {
+    let root = document.getElementById('ay-toast-root');
+    if (root) return root;
+    const css = document.createElement('style');
+    css.textContent = `
+      #ay-toast-root{position:fixed;right:18px;bottom:18px;z-index:9999;display:flex;flex-direction:column;gap:10px;pointer-events:none;max-width:360px}
+      .ay-toast{pointer-events:auto;background:#fff;border:1px solid #e5e7eb;border-left:4px solid #10b981;border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,.18);padding:12px 14px 12px 12px;display:flex;gap:10px;align-items:flex-start;font-family:inherit;color:#0f172a;animation:ayToastIn .25s ease-out}
+      .ay-toast.is-out{animation:ayToastOut .2s ease-in forwards}
+      .ay-toast .ay-toast-ico{flex:0 0 22px;width:22px;height:22px;border-radius:50%;background:#10b981;color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+      .ay-toast.is-info{border-left-color:#0ea5e9}.ay-toast.is-info .ay-toast-ico{background:#0ea5e9}
+      .ay-toast.is-error{border-left-color:#ef4444}.ay-toast.is-error .ay-toast-ico{background:#ef4444}
+      .ay-toast-body{flex:1;min-width:0}
+      .ay-toast-title{font-weight:700;font-size:13px;line-height:1.25}
+      .ay-toast-msg{font-size:12px;color:#475569;margin-top:2px;line-height:1.35;word-break:break-word}
+      .ay-toast-close{background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px;line-height:1;padding:0 2px;margin-left:4px}
+      .ay-toast-close:hover{color:#475569}
+      @keyframes ayToastIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+      @keyframes ayToastOut{to{opacity:0;transform:translateY(8px)}}
+    `;
+    document.head.appendChild(css);
+    root = document.createElement('div');
+    root.id = 'ay-toast-root';
+    document.body.appendChild(root);
+    return root;
+  }
+  function ayToast(msg, opts) {
+    if (typeof document === 'undefined') return;
+    const o = opts || {};
+    const variant = o.variant || 'success';
+    const duration = typeof o.duration === 'number' ? o.duration : 6000;
+    const root = ensureRoot();
+    const el = document.createElement('div');
+    el.className = 'ay-toast' + (variant === 'info' ? ' is-info' : variant === 'error' ? ' is-error' : '');
+    const ico = variant === 'error' ? '!' : variant === 'info' ? 'i' : '✓';
+    el.innerHTML =
+      '<div class="ay-toast-ico">' + ico + '</div>' +
+      '<div class="ay-toast-body">' +
+        (o.title ? '<div class="ay-toast-title">' + String(o.title).replace(/[<>&]/g, '') + '</div>' : '') +
+        '<div class="ay-toast-msg"></div>' +
+      '</div>' +
+      '<button type="button" class="ay-toast-close" aria-label="Cerrar">×</button>';
+    el.querySelector('.ay-toast-msg').textContent = String(msg || '');
+    function dismiss() {
+      if (el.classList.contains('is-out')) return;
+      el.classList.add('is-out');
+      setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 220);
+    }
+    el.querySelector('.ay-toast-close').addEventListener('click', dismiss);
+    root.appendChild(el);
+    if (duration > 0) setTimeout(dismiss, duration);
+    return dismiss;
+  }
+  window.ayToast = ayToast;
+})();
+
 Object.assign(window, { Header, Footer, Photo, PropertyCard, AdBanner, QRMock, Avatar, Segment, VerificationModal, VivioChatbot, WhatsAppLauncher, PrettySelect });

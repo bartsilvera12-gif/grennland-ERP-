@@ -387,6 +387,8 @@ function AdminAgentPage({ route, onNav }) {
         price: Number(p.precio) || 0,
         city: p.ciudad || '',
         neighborhood: p.barrio || '',
+        lat: typeof p.lat === 'number' ? p.lat : null,
+        lng: typeof p.lng === 'number' ? p.lng : null,
         // Campos usados por el brochure (la API ya los expone).
         beds: p.dormitorios ?? null,
         baths: p.banos ?? null,
@@ -409,6 +411,31 @@ function AdminAgentPage({ route, onNav }) {
       setMyPropiedades(mapped);
       SNAP.myPropiedades = mapped;
       setPropsLoading(false);
+      // Notificacion: detectar transiciones pendiente → aprobada para mostrar
+      // un toast bottom-right. Estado previo persistido en localStorage.
+      try {
+        if (typeof window !== 'undefined' && window.ayToast) {
+          const KEY = 'ay-prop-mod-status';
+          const prev = JSON.parse(localStorage.getItem(KEY) || '{}') || {};
+          const next = {};
+          const just = [];
+          for (const p of mapped) {
+            const isApproved = p.activo && p.visible_web;
+            const isRejected = String(p.estado || '').toLowerCase() === 'rechazada';
+            const cur = isApproved ? 'approved' : isRejected ? 'rejected' : 'pending';
+            next[p.id] = cur;
+            if (prev[p.id] === 'pending' && cur === 'approved') just.push(p);
+          }
+          localStorage.setItem(KEY, JSON.stringify(next));
+          for (const p of just) {
+            window.ayToast(p.title || 'Tu publicación ya está visible en la web.', {
+              title: '¡Propiedad aprobada!',
+              variant: 'success',
+              duration: 8000,
+            });
+          }
+        }
+      } catch { /* localStorage bloqueado / JSON invalido */ }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -435,6 +462,7 @@ function AdminAgentPage({ route, onNav }) {
   // inventados). Ahora generamos el brochure con los datos reales de ESA
   // propiedad.
   const [brochureTarget, setBrochureTarget] = React.useState(null);
+  const [editProfileOpen, setEditProfileOpen] = React.useState(false);
   const [propFilter, setPropFilter] = React.useState('all');
   const totalAvailable = impulsesFree + impulsesPaid;
 
@@ -845,7 +873,7 @@ function AdminAgentPage({ route, onNav }) {
               {profile?.id && !isPropietario ? (
                 <button onClick={() => onNav('agent/' + slug + '?id=' + profile.id)} className="btn btn-blue btn-sm">Ver perfil público →</button>
               ) : null}
-              <button className="btn btn-outline btn-sm">Editar datos</button>
+              <button className="btn btn-outline btn-sm" onClick={() => setEditProfileOpen(true)}>Editar datos</button>
             </div>
           </div>
         </div>
@@ -871,7 +899,125 @@ function AdminAgentPage({ route, onNav }) {
           onClose={() => setBrochureTarget(null)}
         />
       )}
+      {editProfileOpen && meData && (
+        <EditProfileModal
+          isPropietario={isPropietario}
+          profile={isPropietario ? meData.propietario : meData.agente}
+          onClose={() => setEditProfileOpen(false)}
+          onSaved={(next) => {
+            setMeData((prev) => {
+              if (!prev) return prev;
+              const merged = isPropietario
+                ? { ...prev, propietario: { ...prev.propietario, ...next } }
+                : { ...prev, agente: { ...prev.agente, ...next } };
+              SNAP.meData = merged;
+              return merged;
+            });
+            if (window.ayInvalidate) {
+              window.ayInvalidate('/api/agente/me');
+              window.ayInvalidate('/api/propietario/me');
+            }
+            setEditProfileOpen(false);
+            if (window.ayToast) window.ayToast('Datos actualizados.', { variant: 'success', duration: 4000 });
+          }}
+        />
+      )}
     </AdminLayout>
+  );
+}
+
+// Modal de edicion del perfil (agente o propietario). Campos visibles segun
+// el rol. PATCH a /api/agente/me o /api/propietario/me.
+function EditProfileModal({ isPropietario, profile, onClose, onSaved }) {
+  const p = profile || {};
+  const [form, setForm] = React.useState({
+    nombre: p.nombre || '',
+    telefono: p.telefono || '',
+    whatsapp: p.whatsapp || '',
+    cargo: p.cargo || '',
+    bio: p.bio || '',
+  });
+  const [saving, setSaving] = React.useState(false);
+  const [err, setErr] = React.useState(null);
+  function set(k, v) { setForm((f) => ({ ...f, [k]: v })); }
+  async function submit(e) {
+    e && e.preventDefault && e.preventDefault();
+    if (!form.nombre.trim()) { setErr('El nombre es obligatorio.'); return; }
+    setSaving(true); setErr(null);
+    try {
+      const url = isPropietario ? '/api/propietario/me' : '/api/agente/me';
+      const payload = isPropietario
+        ? { nombre: form.nombre.trim(), telefono: form.telefono.trim() }
+        : {
+            nombre: form.nombre.trim(),
+            telefono: form.telefono.trim(),
+            whatsapp: form.whatsapp.trim(),
+            cargo: form.cargo.trim(),
+            bio: form.bio.trim(),
+          };
+      const r = await fetch(url, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.success) throw new Error(data.error || ('HTTP ' + r.status));
+      onSaved(isPropietario ? data.propietario : data.agente);
+    } catch (e) {
+      setErr(e && e.message ? e.message : 'No se pudo guardar.');
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 200,
+      display: 'grid', placeItems: 'center', padding: 16, overflowY: 'auto'
+    }}>
+      <form onClick={(e) => e.stopPropagation()} onSubmit={submit} style={{
+        background: '#fff', borderRadius: 16, padding: 22, width: '100%', maxWidth: 480,
+        boxShadow: '0 20px 50px rgba(0,0,0,.25)'
+      }}>
+        <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 17 }}>Editar mis datos</div>
+        <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+          Datos visibles en tu página pública.
+        </div>
+        <div style={{ marginTop: 14, display: 'grid', gap: 10 }}>
+          <label style={{ display: 'block' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-2)', marginBottom: 4 }}>NOMBRE *</div>
+            <input className="input" value={form.nombre} onChange={(e) => set('nombre', e.target.value)} disabled={saving} required maxLength={160} style={{ width: '100%' }}/>
+          </label>
+          <label style={{ display: 'block' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-2)', marginBottom: 4 }}>TELÉFONO</div>
+            <input className="input" value={form.telefono} onChange={(e) => set('telefono', e.target.value)} disabled={saving} maxLength={40} style={{ width: '100%' }}/>
+          </label>
+          {!isPropietario && (
+            <>
+              <label style={{ display: 'block' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-2)', marginBottom: 4 }}>WHATSAPP</div>
+                <input className="input" value={form.whatsapp} onChange={(e) => set('whatsapp', e.target.value)} disabled={saving} maxLength={40} style={{ width: '100%' }}/>
+              </label>
+              <label style={{ display: 'block' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-2)', marginBottom: 4 }}>CARGO</div>
+                <input className="input" value={form.cargo} onChange={(e) => set('cargo', e.target.value)} disabled={saving} maxLength={120} placeholder="Ej. Asesor inmobiliario" style={{ width: '100%' }}/>
+              </label>
+              <label style={{ display: 'block' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-2)', marginBottom: 4 }}>BIO</div>
+                <textarea className="input" rows={3} value={form.bio} onChange={(e) => set('bio', e.target.value)} disabled={saving} maxLength={1000} style={{ width: '100%', resize: 'vertical' }}/>
+              </label>
+            </>
+          )}
+        </div>
+        {err ? <div style={{ marginTop: 10, color: '#b91c1c', fontSize: 12 }}>{err}</div> : null}
+        <div className="row gap-10" style={{ marginTop: 16, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? 'Guardando…' : 'Guardar'}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 

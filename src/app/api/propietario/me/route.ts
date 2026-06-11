@@ -93,3 +93,67 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Error" }, { status: 500 });
   }
 }
+
+/**
+ * PATCH /api/propietario/me
+ *
+ * Edicion del propietario autenticado: nombre y telefono. El email no es
+ * editable por aca (se cambia desde auth.users via flujo aparte).
+ */
+export async function PATCH(request: Request) {
+  try {
+    const user = await getAuthUserForApiRoute(request);
+    if (!user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+
+    const supabase = createServiceRoleClient();
+    const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
+    if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+      return NextResponse.json({ error: "Usuario no autorizado" }, { status: 403 });
+    }
+    const { data: uExt } = await supabase
+      .from("usuarios")
+      .select("propietario_id")
+      .eq("id", usuario.id)
+      .limit(1)
+      .maybeSingle();
+    const propietarioId = (uExt as { propietario_id?: string | null } | null)?.propietario_id ?? null;
+    if (!propietarioId) return NextResponse.json({ error: "Sin perfil de propietario" }, { status: 404 });
+
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    function clean(v: unknown, max = 200): string | null | undefined {
+      if (v === undefined) return undefined;
+      if (v === null) return null;
+      if (typeof v !== "string") return undefined;
+      const x = v.trim();
+      if (!x) return null;
+      return x.slice(0, max);
+    }
+    const patch: Record<string, unknown> = {};
+    const nombre = clean(body.nombre, 160);
+    if (nombre !== undefined) {
+      if (nombre === null) return NextResponse.json({ error: "Nombre requerido" }, { status: 400 });
+      patch.nombre = nombre;
+    }
+    const telefono = clean(body.telefono, 40);
+    if (telefono !== undefined) patch.telefono = telefono;
+
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json({ error: "Sin cambios" }, { status: 400 });
+    }
+
+    const { data: updated, error: updErr } = await supabase
+      .from("propietarios")
+      .update(patch)
+      .eq("id", propietarioId)
+      .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+      .select("id, nombre, email, telefono")
+      .limit(1)
+      .maybeSingle();
+    if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+
+    return NextResponse.json({ success: true, propietario: updated });
+  } catch (err) {
+    console.error("[api/propietario/me PATCH]", err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "Error" }, { status: 500 });
+  }
+}

@@ -112,3 +112,74 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Error" }, { status: 500 });
   }
 }
+
+/**
+ * PATCH /api/agente/me
+ *
+ * Permite al agente autenticado actualizar sus campos publicos del perfil:
+ * nombre, telefono, whatsapp, cargo, bio. Otros campos (verificado, plan,
+ * activo) NO son editables por el propio agente.
+ */
+export async function PATCH(request: Request) {
+  try {
+    const user = await getAuthUserForApiRoute(request);
+    if (!user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+
+    const supabase = createServiceRoleClient();
+    const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
+    if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+      return NextResponse.json({ error: "Usuario no autorizado" }, { status: 403 });
+    }
+    const { data: uExt } = await supabase
+      .from("usuarios")
+      .select("agente_id")
+      .eq("id", usuario.id)
+      .limit(1)
+      .maybeSingle();
+    const agenteId = (uExt as { agente_id?: string | null } | null)?.agente_id ?? null;
+    if (!agenteId) return NextResponse.json({ error: "Sin perfil de agente" }, { status: 404 });
+
+    const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+    function clean(v: unknown, max = 200): string | null | undefined {
+      if (v === undefined) return undefined;
+      if (v === null) return null;
+      if (typeof v !== "string") return undefined;
+      const x = v.trim();
+      if (!x) return null;
+      return x.slice(0, max);
+    }
+    const patch: Record<string, unknown> = {};
+    const nombre = clean(body.nombre, 160);
+    if (nombre !== undefined) {
+      if (nombre === null) return NextResponse.json({ error: "Nombre requerido" }, { status: 400 });
+      patch.nombre = nombre;
+    }
+    const telefono = clean(body.telefono, 40);
+    if (telefono !== undefined) patch.telefono = telefono;
+    const whatsapp = clean(body.whatsapp, 40);
+    if (whatsapp !== undefined) patch.whatsapp = whatsapp;
+    const cargo = clean(body.cargo, 120);
+    if (cargo !== undefined) patch.cargo = cargo;
+    const bio = clean(body.bio, 1000);
+    if (bio !== undefined) patch.bio = bio;
+
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json({ error: "Sin cambios" }, { status: 400 });
+    }
+
+    const { data: updated, error: updErr } = await supabase
+      .from("agentes")
+      .update(patch)
+      .eq("id", agenteId)
+      .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+      .select("id, nombre, email, telefono, whatsapp, cargo, bio")
+      .limit(1)
+      .maybeSingle();
+    if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+
+    return NextResponse.json({ success: true, agente: updated });
+  } catch (err) {
+    console.error("[api/agente/me PATCH]", err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "Error" }, { status: 500 });
+  }
+}

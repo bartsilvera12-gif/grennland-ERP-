@@ -65,38 +65,47 @@ function printPosters(list) {
 }
 
 function PostersPage({ route, onNav }) {
+  // Snapshot global compartido con AdminAgentPage. Cuando el usuario navega
+  // Resumen → Carteles QR → Resumen, las dos paginas se remontan; sin
+  // snapshot cada remount limpia el state y dispara fetches → flash de
+  // skeleton. Inicializando desde SNAP los datos ya estan en el primer render.
+  const SNAP = (typeof window !== 'undefined' ? (window.__AY_PANEL_SNAPSHOT = window.__AY_PANEL_SNAPSHOT || {}) : {});
   const [modalId, setModalId] = React.useState(null);
   const [query, setQuery] = React.useState('');
   const [selected, setSelected] = React.useState(() => new Set());
 
-  // Sesion: igual que AdminAgentPage. Resolvemos si es propietario o agente
-  // para (a) pasarle el `role` correcto al sidebar (sin Captaciones/Blog en
-  // propietario) y (b) traer SUS inmuebles, no la data mock global.
-  const [meKind, setMeKind] = React.useState(null); // 'propietario' | 'agente' | null
-  const [meInfo, setMeInfo] = React.useState({ nombre: '', email: '' });
+  // Sesion: derivada del snapshot global de AdminAgentPage si existe.
+  const initKind = SNAP.meData?.kind || null;
+  const initInfo = (() => {
+    const m = SNAP.meData;
+    if (!m) return { nombre: '', email: '' };
+    const p = m.kind === 'agente' ? m.agente : m.propietario;
+    return { nombre: p?.nombre || '', email: p?.email || m.usuario?.email || '' };
+  })();
+  const [meKind, setMeKind] = React.useState(initKind);
+  const [meInfo, setMeInfo] = React.useState(initInfo);
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
+      const cf = (typeof window !== 'undefined' && window.ayCachedFetch) ? window.ayCachedFetch : fetch;
       try {
-        // Agente PRIMERO. Si el usuario tiene perfil de agente, ese es su rol —
-        // aunque tambien aparezca en propietarios (caso comun: el agente cargo
-        // una propiedad propia y quedo como propietario tambien). Resolver
-        // como agente garantiza ver Captaciones / Mi blog en el sidebar.
-        const r2 = await fetch('/api/agente/me', { cache: 'no-store', credentials: 'include' });
+        const r2 = await cf('/api/agente/me', { cache: 'no-store', credentials: 'include' });
         if (r2.ok) {
           const b2 = await r2.json();
           if (!cancelled && b2?.agente) {
             setMeKind('agente');
             setMeInfo({ nombre: b2.agente.nombre || '', email: b2.agente.email || b2.usuario?.email || '' });
+            SNAP.meData = { kind: 'agente', usuario: b2.usuario, agente: b2.agente };
             return;
           }
         }
-        const r = await fetch('/api/propietario/me', { cache: 'no-store', credentials: 'include' });
+        const r = await cf('/api/propietario/me', { cache: 'no-store', credentials: 'include' });
         if (r.ok) {
           const b = await r.json();
           if (!cancelled && b?.propietario) {
             setMeKind('propietario');
             setMeInfo({ nombre: b.propietario.nombre || '', email: b.propietario.email || b.usuario?.email || '' });
+            SNAP.meData = { kind: 'propietario', usuario: b.usuario, propietario: b.propietario };
           }
         }
       } catch { /* ignore */ }
@@ -106,27 +115,34 @@ function PostersPage({ route, onNav }) {
   const isPropietario = meKind === 'propietario';
 
   // Inmuebles REALES del usuario logueado (propietario primero, luego agente).
-  // `null` = todavia cargando; `[]` = sesion ok pero sin inmuebles.
-  const [myProps, setMyProps] = React.useState(null);
+  // Init desde SNAP.myPropiedades (lo carga AdminAgentPage) para no recargar.
+  const initProps = Array.isArray(SNAP.myPropiedades)
+    ? SNAP.myPropiedades.map(p => ({
+        id: p.apiId || p.id,
+        codigo: p.codigo || p.id,
+        title: p.title || 'Sin título',
+        cover: p.cover || null,
+        address: [p.neighborhood, p.city].filter(Boolean).join(', ') || '—',
+        tipo: p.tipo || '',
+        verified: !!p.verificada,
+      }))
+    : null;
+  const [myProps, setMyProps] = React.useState(initProps);
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
+      const cf = (typeof window !== 'undefined' && window.ayCachedFetch) ? window.ayCachedFetch : fetch;
       let body = null;
       try {
-        const r = await fetch('/api/propietario/propiedades', { cache: 'no-store', credentials: 'include' });
+        const r = await cf('/api/propietario/propiedades', { cache: 'no-store', credentials: 'include' });
         if (r.ok) {
           const b = await r.json();
-          // IMPORTANTE: /api/propietario/propiedades devuelve {success:true,
-          // propiedades:[]} TAMBIEN cuando el usuario NO es propietario (un
-          // agente). Por eso solo aceptamos este resultado si trae items;
-          // si viene vacio, seguimos al endpoint de agente. Sino, un agente
-          // con inmuebles veia 0 (el [] del propietario cortaba la cadena).
           if (b?.success && Array.isArray(b.propiedades) && b.propiedades.length) body = b;
         }
       } catch { /* try next */ }
       if (!body) {
         try {
-          const r2 = await fetch('/api/agente/propiedades', { cache: 'no-store', credentials: 'include' });
+          const r2 = await cf('/api/agente/propiedades', { cache: 'no-store', credentials: 'include' });
           if (r2.ok) {
             const b2 = await r2.json();
             if (b2?.success && Array.isArray(b2.propiedades)) body = b2;
@@ -139,7 +155,6 @@ function PostersPage({ route, onNav }) {
         id: p.id,
         codigo: p.codigo || p.id,
         title: p.titulo || 'Sin título',
-        // Sin foto -> null (placeholder "sin imagen"), NO una imagen random.
         cover: p.cover_url || null,
         address: [p.barrio, p.ciudad].filter(Boolean).join(', ') || '—',
         tipo: p.tipo || '',
