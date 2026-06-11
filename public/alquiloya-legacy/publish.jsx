@@ -3,6 +3,18 @@
 function PublishPage() {
   const [step, setStep] = React.useState(0);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
+  // Modo edicion: si admin.jsx guardo un id en window.__AY_EDIT_PROP_ID
+  // antes de navegar, entramos a este wizard para EDITAR esa propiedad
+  // (prefill del form + PATCH en lugar de POST). Lo levantamos UNA sola
+  // vez al montar y limpiamos el global para que un ciclo siguiente no
+  // arrastre el id viejo.
+  const [editingId, setEditingId] = React.useState(() => {
+    if (typeof window === 'undefined') return null;
+    const id = window.__AY_EDIT_PROP_ID || null;
+    try { window.__AY_EDIT_PROP_ID = null; } catch {}
+    return id;
+  });
+  const [editLoading, setEditLoading] = React.useState(!!editingId);
   // Detectar contexto: si entra desde el panel agente/propietario logueado,
   // ocultar la card "Querés ayuda de un agente" y pre-seleccionar el plan.
   const [ctxAgente, setCtxAgente] = React.useState(null); // {id, nombre, plan_publicacion_id, plan_tier}
@@ -91,6 +103,56 @@ function PublishPage() {
     propietario_telefono: '',
   });
   const setF = React.useCallback((patch) => setForm(f => Object.assign({}, f, typeof patch === 'function' ? patch(f) : patch)), []);
+
+  // Prefill desde la propiedad existente cuando estamos en modo edicion.
+  // GET /api/public/alquiloya/propiedades/:id ya devuelve todo: campos +
+  // fotos + caracteristicas + contacto. Mapeamos al shape del form.
+  React.useEffect(() => {
+    if (!editingId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/public/alquiloya/propiedades/' + encodeURIComponent(editingId), {
+          cache: 'no-store', credentials: 'include',
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok || !body?.success || !body?.data) throw new Error(body?.error || ('HTTP ' + r.status));
+        if (cancelled) return;
+        const p = body.data;
+        setForm(f => ({
+          ...f,
+          titulo: p.titulo || '',
+          tipo: p.tipo || f.tipo,
+          operacion: p.operacion || 'alquiler',
+          descripcion: p.descripcion || '',
+          precio: p.precio != null ? String(p.precio) : '',
+          moneda: p.moneda || 'PYG',
+          dormitorios: p.dormitorios != null ? String(p.dormitorios) : '',
+          banos: p.banos != null ? String(p.banos) : '',
+          cocheras: p.cocheras != null ? String(p.cocheras) : '',
+          superficie_m2: p.superficie_m2 != null ? String(p.superficie_m2) : '',
+          terreno_m2: p.terreno_m2 != null ? String(p.terreno_m2) : '',
+          ciudad: p.ciudad || '',
+          barrio: p.barrio || '',
+          direccion: p.direccion || '',
+          lat: typeof p.lat === 'number' ? p.lat : null,
+          lng: typeof p.lng === 'number' ? p.lng : null,
+          fotos: Array.isArray(p.fotos)
+            ? p.fotos.map(x => ({ url: x.url, alt: x.alt || '', es_portada: !!x.es_portada }))
+            : (f.fotos || []),
+          caracteristicas: Array.isArray(p.caracteristicas)
+            ? p.caracteristicas.map(c => (typeof c === 'string' ? c : (c?.nombre || ''))).filter(Boolean)
+            : (f.caracteristicas || []),
+        }));
+      } catch (e) {
+        console.warn('[publish] prefill edicion fallo:', e && e.message);
+        if (window.ayToast) window.ayToast('No pudimos cargar la propiedad para editar.', { variant: 'error' });
+      } finally {
+        if (!cancelled) setEditLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [editingId]);
 
   // Pre-llenar "Tus datos de contacto" con el perfil del publicador logueado
   // (propietario o agente). Solo rellena campos que el usuario todavia no
@@ -203,14 +265,28 @@ function PublishPage() {
         propietario_telefono: form.propietario_telefono || null,
         plan_publicacion_id: form.plan_id || null,
       };
-      const res = await fetch('/api/public/alquiloya/propiedades', {
-        method: 'POST',
+      const isEdit = !!editingId;
+      const url = isEdit
+        ? '/api/public/alquiloya/propiedades/' + encodeURIComponent(editingId)
+        : '/api/public/alquiloya/propiedades';
+      const res = await fetch(url, {
+        method: isEdit ? 'PATCH' : 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) throw new Error(data.error || ('HTTP ' + res.status));
       setSubmitState({ loading: false, error: null, success: data });
+      // Bustear el cache del panel + snapshot para que al volver la lista
+      // refleje los cambios inmediatamente.
+      try {
+        if (window.ayInvalidate) {
+          window.ayInvalidate('/api/agente/propiedades');
+          window.ayInvalidate('/api/propietario/propiedades');
+        }
+        if (window.__AY_PANEL_SNAPSHOT) window.__AY_PANEL_SNAPSHOT.myPropiedades = null;
+      } catch {}
     } catch (e) {
       setSubmitState({ loading: false, error: (e && e.message) || 'No se pudo enviar.', success: null });
     }
@@ -346,8 +422,12 @@ function PublishPage() {
     <div className="fade-in container" style={{ padding: '32px' }}>
       <div className="row between">
         <div>
-          <div className="tag">Publicar inmueble</div>
-          <h2 style={{ marginTop: 6, fontSize: 30 }}>Cargá tu propiedad en 5 pasos</h2>
+          <div className="tag">{editingId ? 'Editar publicación' : 'Publicar inmueble'}</div>
+          <h2 style={{ marginTop: 6, fontSize: 30 }}>
+            {editingId
+              ? (editLoading ? 'Cargando datos…' : 'Editá tu propiedad')
+              : 'Cargá tu propiedad en 5 pasos'}
+          </h2>
           {ctxAgente && ctxAgente.plan_limite_activas != null && (
             <div className="muted" style={{ fontSize: 12.5, marginTop: 4 }}>
               Plan {(ctxAgente.plan && ctxAgente.plan.nombre) || ''} · {ctxAgente.propiedades_activas}/{ctxAgente.plan_limite_activas} propiedades activas
@@ -394,7 +474,9 @@ function PublishPage() {
 
           {submitState.success && (
             <div style={{ marginTop: 16, padding: 16, background: '#eaf6f0', borderRadius: 12, border: '1px solid #b6dec6', color: '#1f5e3a', fontSize: 14 }}>
-              ✓ Tu propiedad fue enviada para revisión. El equipo de AlquiloYa la revisará antes de publicarla.
+              {editingId
+                ? '✓ Cambios guardados. Tu propiedad fue actualizada.'
+                : '✓ Tu propiedad fue enviada para revisión. El equipo de AlquiloYa la revisará antes de publicarla.'}
               {submitState.success.codigo ? <div className="muted xs" style={{ marginTop: 6 }}>Código: <strong>{submitState.success.codigo}</strong></div> : null}
             </div>
           )}
@@ -436,7 +518,11 @@ function PublishPage() {
                   }}
                   style={(submitState.loading || submitState.success) ? { opacity: 0.6, cursor: submitState.loading ? 'wait' : 'default' } : null}
                 >
-                  {submitState.loading ? 'Enviando…' : (submitState.success ? 'Enviado ✓' : 'Enviar para revisión')}
+                  {submitState.loading
+                    ? (editingId ? 'Guardando…' : 'Enviando…')
+                    : (submitState.success
+                        ? (editingId ? 'Guardado ✓' : 'Enviado ✓')
+                        : (editingId ? 'Guardar cambios' : 'Enviar para revisión'))}
                   <I.check s={16}/>
                 </button>
               )}

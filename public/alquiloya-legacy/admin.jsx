@@ -782,7 +782,13 @@ function AdminAgentPage({ route, onNav }) {
                     <button onClick={() => onNav && onNav('admin-agent-qr')} title="Ver cartel QR" style={{ padding: 0, width: 28, height: 28, borderRadius: 8, background: 'transparent', color: 'var(--ink-3)', border: '1px solid var(--line)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
                       <I.qr s={13}/>
                     </button>
-                    <button onClick={() => onNav && onNav('publish')} title="Editar" style={{ padding: '0 14px', height: 28, borderRadius: 8, background: 'var(--ink)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>
+                    <button onClick={() => {
+                      // Guardamos el id de la propiedad a editar en un global
+                      // que PublishPage lee al montar para prefillear el form
+                      // y cambiar el submit a PATCH.
+                      try { window.__AY_EDIT_PROP_ID = p.apiId || p.id || null; } catch {}
+                      if (onNav) onNav('publish');
+                    }} title="Editar" style={{ padding: '0 14px', height: 28, borderRadius: 8, background: 'var(--ink)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>
                       Editar
                     </button>
                   </div>
