@@ -224,7 +224,7 @@
           <label for="sol-empresa">Inmobiliaria / Razón social</label>
           <input id="sol-empresa" type="text" maxlength="160" />
         </div>
-        <div class="field">
+        <div class="field" id="field-ciudad" style="display:none">
           <label for="sol-ciudad">Ciudad</label>
           <input id="sol-ciudad" type="text" maxlength="80" />
         </div>
@@ -262,6 +262,7 @@
       var fieldPwd = document.getElementById('field-password');
       var fieldPwd2 = document.getElementById('field-password2');
       var fieldMsg = document.getElementById('field-mensaje');
+      var fieldCiudad = document.getElementById('field-ciudad');
       var tipo = 'propietario';
 
       function applyTipo() {
@@ -276,6 +277,7 @@
         fieldPwd.style.display = esProp ? '' : 'none';
         fieldPwd2.style.display = esProp ? '' : 'none';
         fieldMsg.style.display = esProp ? 'none' : '';
+        fieldCiudad.style.display = esProp ? 'none' : '';
         submitBtn.textContent = esProp ? 'Crear cuenta' : 'Enviar solicitud';
       }
 

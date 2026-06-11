@@ -1319,10 +1319,12 @@ function RequestAccessModal({ onClose, planTier, planLabel, defaultTipo }) {
               <input style={inputStyle} maxLength={160} value={form.empresa} onChange={e => set('empresa', e.target.value)}/>
             </div>
           )}
-          <div style={{ marginTop: 14 }}>
-            <label style={fieldLabel}>Ciudad</label>
-            <input style={inputStyle} maxLength={80} value={form.ciudad} onChange={e => set('ciudad', e.target.value)}/>
-          </div>
+          {tipo === 'agente' && (
+            <div style={{ marginTop: 14 }}>
+              <label style={fieldLabel}>Ciudad</label>
+              <input style={inputStyle} maxLength={80} value={form.ciudad} onChange={e => set('ciudad', e.target.value)}/>
+            </div>
+          )}
           {tipo === 'agente' && (
             <div style={{ marginTop: 14 }}>
               <label style={fieldLabel}>Mensaje (opcional)</label>
