@@ -294,26 +294,47 @@ export default function SolicitudesServicioClient({
               </div>
             ) : null}
 
-            {(pending.row.kind === "cambio_plan" || pending.row.kind === "impulsos") ? (
-              <div className="mt-4">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
-                  Propietario {pending.row.kind === "cambio_plan" ? "al que cambiar el plan" : "al que sumar los impulsos"}
-                </label>
-                <select value={pending.propietarioId}
-                  onChange={(e) => setPending((p) => p?.kind === "aprobar" ? { ...p, propietarioId: e.target.value } : p)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/30">
-                  <option value="">— elegí uno —</option>
-                  {propietarios.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre} {p.email ? `· ${p.email}` : p.telefono ? `· ${p.telefono}` : ""}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Si no existe el propietario, primero creálo desde &quot;Solicitudes de acceso&quot; o &quot;+ Nuevo propietario&quot;.
-                </p>
-              </div>
-            ) : null}
+            {(pending.row.kind === "cambio_plan" || pending.row.kind === "impulsos") ? (() => {
+              const matched = pending.propietarioId
+                ? propietarios.find((p) => p.id === pending.propietarioId) ?? null
+                : null;
+              return (
+                <div className="mt-4">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
+                    Se aplicará a
+                  </label>
+                  {matched ? (
+                    <div className="mt-1 flex items-start justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-slate-900">{matched.nombre}</div>
+                        <div className="truncate text-[11px] text-slate-600">
+                          {matched.email ?? matched.telefono ?? ""}
+                        </div>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white">
+                        Solicitante
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                        No pudimos identificar al propietario por email/teléfono. Elegilo manualmente o creálo primero.
+                      </div>
+                      <select value={pending.propietarioId}
+                        onChange={(e) => setPending((p) => p?.kind === "aprobar" ? { ...p, propietarioId: e.target.value } : p)}
+                        className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/30">
+                        <option value="">— elegí uno —</option>
+                        {propietarios.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.nombre} {p.email ? `· ${p.email}` : p.telefono ? `· ${p.telefono}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                </div>
+              );
+            })() : null}
 
             {pending.row.kind === "verificacion" ? (
               <div className="mt-4">
