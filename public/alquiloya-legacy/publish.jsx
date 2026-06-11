@@ -17,27 +17,28 @@ function PublishPage() {
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
+      const cf = window.ayCachedFetch || fetch;
       let sessionDetected = false;
+      // Disparamos ambos endpoints en PARALELO. Antes era secuencial:
+      // primero /api/agente/me y solo si fallaba /api/propietario/me. Eso
+      // duplicaba la espera para propietarios. Con ayCachedFetch ademas la
+      // 2da visita devuelve la respuesta cacheada al toque.
+      const [rA, rP] = await Promise.all([
+        cf('/api/agente/me', { cache: 'no-store', credentials: 'include' }).catch(() => null),
+        cf('/api/propietario/me', { cache: 'no-store', credentials: 'include' }).catch(() => null),
+      ]);
+      if (cancelled) return;
       try {
-        const r = await fetch('/api/agente/me', { cache: 'no-store', credentials: 'include' });
-        if (r.ok) {
-          // /api/agente/me devuelve 200 incluso sin agente vinculado — lo que importa es
-          // que no haya devuelto 401. Eso significa que la sesion Supabase esta viva.
+        if (rA && rA.ok) {
           sessionDetected = true;
-          const b = await r.json();
-          if (!cancelled && b?.agente) {
-            setCtxAgente(b.agente);
-            setHasSession(true);
-            setAuthChecked(true);
-            return;
-          }
+          const b = await rA.json();
+          if (!cancelled && b?.agente) setCtxAgente(b.agente);
         }
       } catch { /* ignore */ }
       try {
-        const r2 = await fetch('/api/propietario/me', { cache: 'no-store', credentials: 'include' });
-        if (r2.ok) {
+        if (rP && rP.ok) {
           sessionDetected = true;
-          const b2 = await r2.json();
+          const b2 = await rP.json();
           if (!cancelled && b2?.propietario) setCtxPropietario(b2.propietario);
         }
       } catch { /* ignore */ }
