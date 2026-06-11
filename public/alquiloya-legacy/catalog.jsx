@@ -28,9 +28,10 @@ const CATALOG_TIPOS = [
 // de tipos reales del backend. Si el usuario apreta "Departamento" en el
 // hero del home, en el catalogo queremos matchear depto + duplex + dpto-ph.
 const BROAD_TO_TIPOS = {
-  depto:    ['departamento', 'duplex', 'duplex_ph'],
+  depto:    ['departamento'],
   casa:     ['casa', 'casa_independiente'],
   salon:    ['salon_comercial', 'local_comercial', 'oficina', 'deposito'],
+  duplex:   ['duplex', 'duplex_ph'],
   temporal: ['alquiler_temporal'],
 };
 function matchTipo(propTipo, selected) {
