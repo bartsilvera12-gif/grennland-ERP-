@@ -419,28 +419,33 @@ function AdminAgentPage({ route, onNav }) {
       setMyPropiedades(mapped);
       SNAP.myPropiedades = mapped;
       setPropsLoading(false);
-      // Notificacion: detectar transiciones pendiente → aprobada para mostrar
-      // un toast bottom-right. Estado previo persistido en localStorage.
+      // Notificacion: avisar cuando una propiedad aparece aprobada y todavia
+      // no fue "ack-eada" por el usuario. Mantenemos un set de IDs ya
+      // notificados en localStorage. La primera vez (sin key) marcamos todo
+      // como ya visto para no spamear con publicaciones viejas.
       try {
         if (typeof window !== 'undefined' && window.ayToast) {
-          const KEY = 'ay-prop-mod-status';
-          const prev = JSON.parse(localStorage.getItem(KEY) || '{}') || {};
-          const next = {};
-          const just = [];
-          for (const p of mapped) {
-            const isApproved = p.activo && p.visible_web;
-            const isRejected = String(p.estado || '').toLowerCase() === 'rechazada';
-            const cur = isApproved ? 'approved' : isRejected ? 'rejected' : 'pending';
-            next[p.id] = cur;
-            if (prev[p.id] === 'pending' && cur === 'approved') just.push(p);
-          }
-          localStorage.setItem(KEY, JSON.stringify(next));
-          for (const p of just) {
-            window.ayToast(p.title || 'Tu publicación ya está visible en la web.', {
-              title: '¡Propiedad aprobada!',
-              variant: 'success',
-              duration: 8000,
-            });
+          const KEY = 'ay-prop-mod-approved-ack';
+          const raw = localStorage.getItem(KEY);
+          const ack = new Set(raw ? (JSON.parse(raw) || []) : []);
+          const approvedNow = mapped.filter(p => p.activo && p.visible_web);
+          if (raw === null) {
+            // Primer arranque: silenciamos todo lo ya aprobado.
+            approvedNow.forEach(p => ack.add(p.id));
+            localStorage.setItem(KEY, JSON.stringify(Array.from(ack)));
+          } else {
+            const just = approvedNow.filter(p => !ack.has(p.id));
+            just.forEach(p => ack.add(p.id));
+            if (just.length) {
+              localStorage.setItem(KEY, JSON.stringify(Array.from(ack)));
+              just.forEach(p => {
+                window.ayToast(p.title || 'Tu publicación ya está visible en la web.', {
+                  title: '¡Propiedad aprobada!',
+                  variant: 'success',
+                  duration: 8000,
+                });
+              });
+            }
           }
         }
       } catch { /* localStorage bloqueado / JSON invalido */ }
