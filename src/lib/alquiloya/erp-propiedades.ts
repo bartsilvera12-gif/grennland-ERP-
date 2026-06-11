@@ -260,6 +260,15 @@ export async function listErpPropiedades(): Promise<ErpPropiedadListRow[]> {
           AND pc.activo = true
       ) ccnt ON true
       WHERE p.empresa_id = $1::uuid
+        -- Excluimos las pendientes de aprobacion (mismo criterio que
+        -- listErpPropiedadesPendientes). Mientras no se aprueben solo
+        -- viven en /dashboard/propiedades-pendientes para que el admin
+        -- las modere; al aprobar pasan al listado general.
+        AND NOT (
+          p.activo = false
+          AND p.visible_web = false
+          AND (p.estado IS NULL OR p.estado = 'inactiva')
+        )
       ORDER BY ${dhOrder} DESC NULLS LAST,
                p.created_at DESC NULLS LAST, p.titulo ASC
     `,
