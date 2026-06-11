@@ -122,6 +122,36 @@ export async function PATCH(request: Request, ctx: Ctx) {
 
     // aprobar → crear agente o propietario y vincular resultado_id
 
+    // Pre-validar unicidad de email para agente/referido (los que sí abren
+    // cuenta de portal). Si el email ya está en uso en cualquier tabla ERP,
+    // abortamos ANTES de crear el agente para no dejar un registro huérfano
+    // sin acceso. Auth.users se sigue validando vía createUser más abajo.
+    if (sol.email && sol.tipo !== "propietario") {
+      const emailLc = sol.email.toLowerCase();
+      const { rows: dup } = await queryWithRetry<{ source: string }>(
+        pool,
+        `SELECT 'usuarios' AS source FROM ${t("usuarios")}
+           WHERE empresa_id=$1::uuid AND lower(email)=$2 LIMIT 1
+         UNION ALL
+         SELECT 'agentes' FROM ${t("agentes")}
+           WHERE empresa_id=$1::uuid AND lower(email)=$2 LIMIT 1
+         UNION ALL
+         SELECT 'propietarios' FROM ${t("propietarios")}
+           WHERE empresa_id=$1::uuid AND lower(email)=$2 LIMIT 1`,
+        [ALQUILOYA_EMPRESA_ID, emailLc]
+      );
+      if (dup.length > 0) {
+        return NextResponse.json(
+          {
+            error:
+              `El email "${sol.email}" ya está registrado en ${dup[0].source}. ` +
+              `Pediles que usen otro correo o resolvé el duplicado antes de aprobar.`,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     // Bootstrap on-demand de las columnas plan_vencimiento_at /
     // plan_publicacion_id en agentes/propietarios. La migracion canonica
     // (20260627120000_alquiloya_planes_vencimiento.sql) no esta aplicada en
@@ -151,6 +181,10 @@ export async function PATCH(request: Request, ctx: Ctx) {
     }
 
     const client = await pool.connect();
+    // Declarados fuera del try para que el catch pueda compensar el auth.user
+    // creado si la transacción del ERP falla.
+    const supabaseAdmin = createServiceRoleClient();
+    let createdAuthUserId: string | null = null;
     try {
       await client.query("BEGIN");
 
@@ -260,25 +294,35 @@ export async function PATCH(request: Request, ctx: Ctx) {
       let usuarioErpId: string | null = null;
       const creaAcceso = sol.tipo !== "propietario";
       if (sol.email && creaAcceso) {
-        try {
-          const supabase = createServiceRoleClient();
-          // Genera password temporal (12 chars alfanumericos + 2 simbolos).
-          const tempPassword =
-            crypto.randomBytes(9).toString("base64").replace(/[+/=]/g, "x").slice(0, 12) + "!9";
-          const { data: created, error: createErr } = await supabase.auth.admin.createUser({
-            email: sol.email,
-            password: tempPassword,
-            email_confirm: true,
-            user_metadata: {
-              nombre: sol.nombre,
-              fuente: "solicitud_acceso",
-              tipo: sol.tipo,
-            },
-          });
-          if (createErr) throw new Error(createErr.message);
-          if (!created.user?.id) throw new Error("no se pudo crear el auth.user");
+        // Genera password temporal (12 chars alfanumericos + 2 simbolos).
+        const tempPassword =
+          crypto.randomBytes(9).toString("base64").replace(/[+/=]/g, "x").slice(0, 12) + "!9";
+        const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+          email: sol.email,
+          password: tempPassword,
+          email_confirm: true,
+          user_metadata: {
+            nombre: sol.nombre,
+            fuente: "solicitud_acceso",
+            tipo: sol.tipo,
+          },
+        });
+        if (createErr) {
+          const msg = (createErr.message ?? "").toLowerCase();
+          const isDup =
+            msg.includes("already") || msg.includes("exists") || msg.includes("registered");
+          throw new Error(
+            isDup
+              ? `El email "${sol.email}" ya tiene cuenta en Auth. ` +
+                  `Borralo en Supabase Dashboard → Authentication → Users o usá otro email.`
+              : `No pudimos crear la cuenta de portal: ${createErr.message}`
+          );
+        }
+        if (!created.user?.id) throw new Error("no se pudo crear el auth.user");
 
-          const authUserId = created.user.id;
+        const authUserId = created.user.id;
+        createdAuthUserId = authUserId;
+        {
           const rol =
             sol.tipo === "agente"
               ? "publicador-agente"
@@ -361,9 +405,6 @@ export async function PATCH(request: Request, ctx: Ctx) {
             emailError = e instanceof Error ? e.message : "Error enviando mail";
             console.warn("[solicitudes-acceso] excepción en sendMail:", emailError);
           }
-        } catch (e) {
-          // Best-effort: si falla, no abortamos la aprobacion. Se puede crear manualmente despues.
-          console.warn("[solicitudes-acceso] no se pudo crear auth user:", e instanceof Error ? e.message : e);
         }
       }
 
@@ -390,6 +431,15 @@ export async function PATCH(request: Request, ctx: Ctx) {
       });
     } catch (e) {
       await client.query("ROLLBACK").catch(() => {});
+      // Si llegamos a crear el auth.user pero la transacción del ERP falló,
+      // borramos el auth.user para no dejar cuentas huérfanas.
+      if (createdAuthUserId) {
+        try {
+          await supabaseAdmin.auth.admin.deleteUser(createdAuthUserId);
+        } catch {
+          /* best-effort */
+        }
+      }
       throw e;
     } finally {
       client.release();
