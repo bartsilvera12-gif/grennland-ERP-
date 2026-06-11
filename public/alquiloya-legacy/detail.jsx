@@ -212,7 +212,7 @@ function FullGalleryModal({ property, onClose }) {
             return (
               <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                 {hasCoords ? (
-                  <LeafletReadOnlyMap lat={property.lat} lng={property.lng} height={520} approximate/>
+                  <LeafletReadOnlyMap lat={property.lat} lng={property.lng} height={520} zoom={17}/>
                 ) : cityCentroid ? (
                   <LeafletReadOnlyMap lat={cityCentroid[0]} lng={cityCentroid[1]} height={520} approximate zoom={13} radius={1500}/>
                 ) : (

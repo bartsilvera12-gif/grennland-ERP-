@@ -1725,7 +1725,7 @@ function BrochurePage2({ property, contacto }) {
                 ? window.CITY_COORDS[window.normalizeCity(p.ciudad || p.city)]
                 : null;
               if (Leaflet && hasCoords) {
-                return <Leaflet lat={p.lat} lng={p.lng} height={110} approximate/>;
+                return <Leaflet lat={p.lat} lng={p.lng} height={110} zoom={17}/>;
               }
               if (Leaflet && cityCoords) {
                 return <Leaflet lat={cityCoords[0]} lng={cityCoords[1]} height={110} approximate zoom={13} radius={1500}/>;
@@ -1733,7 +1733,7 @@ function BrochurePage2({ property, contacto }) {
               return <MiniMap height={110} pins={0}/>;
             })()}
           </div>
-          <div className="muted" style={{ fontSize: 8, marginTop: 4 }}>La ubicación exacta se comparte al coordinar la visita.</div>
+          <div className="muted" style={{ fontSize: 8, marginTop: 4 }}>Ubicación del inmueble en el mapa.</div>
         </div>
         <div style={{ marginTop: 'auto', display: 'flex', gap: 10, alignItems: 'center' }}>
           {/* QR REAL escaneable: abre la ficha (deep-link ?prop=<uuid>). */}
