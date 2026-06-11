@@ -36,12 +36,17 @@ const nextConfig: NextConfig = {
           { key: "Cache-Control", value: "public, max-age=2592000, s-maxage=2592000, immutable" },
         ],
       },
-      // Los .html del sitio legacy: cache corto + revalidación, para que cuando hagamos deploy
-      // se vea el contenido nuevo rápido sin esperar TTL.
+      // Los .html del sitio legacy: NO cachear. Antes era max-age=300 +
+      // stale-while-revalidate=86400 — eso dejaba el HTML viejo en el browser
+      // hasta 5 min y en el CDN hasta 24h despues de cada deploy, asi que los
+      // bumps de ?v=... en los <script src=> nunca llegaban al usuario y los
+      // cambios "no aparecian" aunque estuvieran deployados. Con no-cache el
+      // browser revalida con el server cada vez (304 si no cambio), mientras
+      // que los .js siguen con cache largo via su ?v= propio.
       {
         source: "/alquiloya-legacy/:path*.html",
         headers: [
-          { key: "Cache-Control", value: "public, max-age=300, s-maxage=300, stale-while-revalidate=86400" },
+          { key: "Cache-Control", value: "no-cache, must-revalidate" },
         ],
       },
     ];
