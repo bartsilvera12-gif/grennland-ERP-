@@ -49,7 +49,7 @@ export default function ConfirmDialog({
       className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
     >
       <div
-        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-900/35 backdrop-blur-[2px]"
         onClick={() => !busy && onCancel()}
         aria-hidden="true"
       />
