@@ -118,13 +118,17 @@ function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displ
                   <button onClick={() => onNav && onNav('plans')} className="btn btn-blue btn-sm" style={{ marginTop: 10, width: '100%', justifyContent: 'center' }}>Elegir un plan</button>
                 </div>
               )}
-              <button onClick={() => onNav('agent/mariana-lopez')} className="card" style={{ marginTop: 12, padding: 12, fontSize: 12.5, width: '100%', textAlign: 'left', cursor: 'pointer', border: '1px dashed var(--blue-100)' }}>
-                <div className="row gap-8">
-                  <I.eye s={14}/>
-                  <span style={{ fontWeight: 700, color: 'var(--blue)' }}>Ver mi perfil público</span>
-                </div>
-                <div className="muted xs" style={{ marginTop: 4 }}>Así te ven los propietarios</div>
-              </button>
+              {/* "Ver mi perfil publico" SOLO para agentes — los propietarios
+                  no tienen perfil publico que mostrar. */}
+              {role === 'agente' && (
+                <button onClick={() => onNav('agent/mariana-lopez')} className="card" style={{ marginTop: 12, padding: 12, fontSize: 12.5, width: '100%', textAlign: 'left', cursor: 'pointer', border: '1px dashed var(--blue-100)' }}>
+                  <div className="row gap-8">
+                    <I.eye s={14}/>
+                    <span style={{ fontWeight: 700, color: 'var(--blue)' }}>Ver mi perfil público</span>
+                  </div>
+                  <div className="muted xs" style={{ marginTop: 4 }}>Así te ven los propietarios</div>
+                </button>
+              )}
             </>
           )}
           {kind === 'global' && (
