@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { successResponse, errorResponse } from "@/lib/api/response";
 
 export const runtime = "nodejs";
@@ -149,11 +150,38 @@ export async function POST(request: Request) {
 
       await client.query("COMMIT");
 
+      // Auto-login: signInWithPassword via supabase-ssr SETEA las cookies
+      // de sesion en la response, asi el navegador queda autenticado y
+      // puede ir directo al panel sin pasar por /portal-agentes/login.
+      let autoLogged = false;
+      try {
+        const userSupa = await createSupabaseServerClient();
+        const { error: signInErr } = await userSupa.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (!signInErr) autoLogged = true;
+        else {
+          console.warn(
+            "[registro-propietario] signInWithPassword fallo:",
+            signInErr.message
+          );
+        }
+      } catch (e) {
+        console.warn(
+          "[registro-propietario] excepcion en auto-login:",
+          e instanceof Error ? e.message : e
+        );
+      }
+
       return NextResponse.json(
         successResponse({
           propietario_id: propietarioId,
           email,
-          portal_url: "/portal-agentes/login",
+          // Si auto-logueamos, el front redirige directo al panel.
+          // Si no, cae a /portal-agentes/login para que entre manualmente.
+          portal_url: autoLogged ? "/publico#admin-agent" : "/portal-agentes/login",
+          auto_logged: autoLogged,
         })
       );
     } catch (e) {

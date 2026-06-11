@@ -1192,12 +1192,19 @@ function RequestAccessModal({ onClose, planTier, planLabel, defaultTipo }) {
         const data = await res.json().catch(() => ({}));
         if (!res.ok || data.success === false) throw new Error((data && data.error) || ('HTTP ' + res.status));
         const portalUrl = (data && data.data && data.data.portal_url) || '/portal-agentes/login';
+        const autoLogged = !!(data && data.data && data.data.auto_logged);
         setFeedback({
           kind: 'success',
-          text: '¡Listo! Tu cuenta de propietario está activa. Podés iniciar sesión y publicar tu inmueble (1 publicación incluida).',
+          text: autoLogged
+            ? '¡Listo! Cuenta creada. Llevándote al panel…'
+            : '¡Listo! Tu cuenta de propietario está activa. Podés iniciar sesión y publicar tu inmueble.',
           portalUrl,
         });
         setForm({ nombre: '', email: '', telefono: '', empresa: '', ciudad: '', mensaje: '', password: '', password2: '' });
+        // Si auto-logueamos, redirigimos directo al panel.
+        if (autoLogged) {
+          setTimeout(() => { window.location.assign(portalUrl); }, 600);
+        }
       } catch (err) {
         setFeedback({ kind: 'error', text: 'No pudimos crear tu cuenta. ' + (err.message || '') });
       } finally {
@@ -1304,11 +1311,11 @@ function RequestAccessModal({ onClose, planTier, planLabel, defaultTipo }) {
           {tipo === 'propietario' && (
             <>
               <div style={{ marginTop: 14 }}>
-                <label style={fieldLabel}>Contraseña * (mín. 8 caracteres)</label>
+                <label style={fieldLabel}>Poné la contraseña que querés * <span style={{ color: 'var(--ink-3)', fontWeight: 500, textTransform: 'none' }}>(mín. 8 caracteres)</span></label>
                 <input style={inputStyle} type="password" minLength={8} maxLength={72} value={form.password} onChange={e => set('password', e.target.value)} required autoComplete="new-password"/>
               </div>
               <div style={{ marginTop: 14 }}>
-                <label style={fieldLabel}>Repetir contraseña *</label>
+                <label style={fieldLabel}>Repetí la contraseña *</label>
                 <input style={inputStyle} type="password" minLength={8} maxLength={72} value={form.password2} onChange={e => set('password2', e.target.value)} required autoComplete="new-password"/>
               </div>
             </>
