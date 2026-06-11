@@ -1,12 +1,35 @@
+import Link from "next/link";
+import { headers } from "next/headers";
 import {
   listErpPropiedadesPendientes,
   type ErpPropiedadPendienteRow,
 } from "@/lib/alquiloya/erp-propiedades";
 import PropiedadesPendientesClient from "./PropiedadesPendientesClient";
-import BackLink from "./BackLink";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+// Decide a donde lleva el "← Volver". Antes el componente lo decidia en el
+// cliente leyendo document.referrer, pero Next App Router hace navegacion
+// SPA y document.referrer se queda con el ultimo hard-load (tipicamente "/"),
+// asi que SIEMPRE caia en "Volver al dashboard". Leyendo el header Referer
+// del request RSC que Next manda en cada navegacion, sabemos la ruta real
+// desde donde el usuario hizo click.
+function resolveBack(rawReferer: string | null): { href: string; label: string } {
+  let pathname = "";
+  if (rawReferer) {
+    try {
+      pathname = new URL(rawReferer).pathname;
+    } catch {
+      /* referer mal formado, ignoramos */
+    }
+  }
+  // Solo cuando vienen literalmente del dashboard root.
+  if (pathname === "/" || pathname === "") {
+    return { href: "/", label: "Volver al dashboard" };
+  }
+  return { href: "/dashboard/propiedades", label: "Volver a propiedades" };
+}
 
 export default async function PropiedadesPendientesPage() {
   let rows: ErpPropiedadPendienteRow[] = [];
@@ -18,10 +41,18 @@ export default async function PropiedadesPendientesPage() {
     console.error("[dashboard/propiedades-pendientes] load", e);
   }
 
+  const h = await headers();
+  const back = resolveBack(h.get("referer"));
+
   return (
     <div className="px-6 py-6">
       <header className="mb-6">
-        <BackLink />
+        <Link
+          href={back.href}
+          className="mb-2 inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-[#3F8E91]"
+        >
+          ← {back.label}
+        </Link>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
           Propiedades pendientes de aprobación
         </h1>
