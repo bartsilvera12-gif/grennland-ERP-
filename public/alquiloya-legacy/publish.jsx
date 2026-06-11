@@ -1112,7 +1112,9 @@ function LeafletPickerWidget({ lat, lng, onChange }) {
 
 function StepPhotos({ form, setF, isAgent }) {
   const [urlNew, setUrlNew] = React.useState('');
-  const [mode, setMode] = React.useState(isAgent ? 'url' : 'file');
+  // A pedido del cliente: solo "Subir desde dispositivo". El modo URL queda
+  // soportado en el codigo para no romper drafts viejos, pero ya no se ofrece.
+  const [mode, setMode] = React.useState('file');
   const fileInputRef = React.useRef(null);
   // Cap del plan: si no hay plan elegido, no enforce (defaults a infinito).
   const planCap = Number(form.plan_fotos_max) > 0 ? Number(form.plan_fotos_max) : null;
@@ -1219,10 +1221,6 @@ function StepPhotos({ form, setF, isAgent }) {
         </div>
       )}
 
-      <div className="row gap-8" style={{ marginTop: 14 }}>
-        <button type="button" style={segBtn(mode === 'file')} onClick={() => setMode('file')}>Subir desde dispositivo</button>
-        <button type="button" style={segBtn(mode === 'url')} onClick={() => setMode('url')}>Pegar URL</button>
-      </div>
 
       {mode === 'file' ? (
         <div className="card" style={{ padding: 18, marginTop: 14, background: 'var(--bg-2)', border: '1px dashed var(--line)', textAlign: 'center' }}>
