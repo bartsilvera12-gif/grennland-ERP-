@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 type Tone = "danger" | "default";
 
@@ -25,6 +26,10 @@ export default function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  // Sin esto, montamos el portal en el primer render y rompe SSR/hydration.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -34,14 +39,18 @@ export default function ConfirmDialog({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, busy, onCancel]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
   const confirmCls =
     tone === "danger"
       ? "bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-500/30"
       : "bg-[#4FAEB2] text-white hover:bg-[#3F8E91] focus:ring-[#4FAEB2]/30";
 
-  return (
+  // Portaleado a document.body para que el overlay cubra TODA la viewport
+  // (header del dashboard + sidebar). Sin esto, ancestros con transform/
+  // filter/contain anclan el `position: fixed` al area de contenido y el
+  // blur queda con bordes sin cubrir.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -79,6 +88,7 @@ export default function ConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
