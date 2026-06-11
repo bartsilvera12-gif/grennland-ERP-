@@ -938,10 +938,35 @@ function StepLocation({ form, setF }) {
   );
 }
 
+// Extrae lat,lng de un link de Google Maps (varios formatos comunes).
+// Devuelve [lat,lng] o null si no encuentra coordenadas.
+function parseGoogleMapsLink(url) {
+  if (!url || typeof url !== 'string') return null;
+  const s = url.trim();
+  // 1) @LAT,LNG en la URL: .../@-25.281,-57.635,17z/...
+  let m = s.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (m) return [Number(m[1]), Number(m[2])];
+  // 2) !3dLAT!4dLNG (places, pins compartidos)
+  m = s.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/);
+  if (m) return [Number(m[1]), Number(m[2])];
+  // 3) ?q=LAT,LNG / &q=LAT,LNG / ?ll=LAT,LNG / &query=LAT,LNG
+  m = s.match(/[?&](?:q|ll|query|destination)=(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+  if (m) return [Number(m[1]), Number(m[2])];
+  // 4) Pares "LAT,LNG" sueltos como ultimo recurso (debe parecer Paraguay-ish o lat/lng valido).
+  m = s.match(/(-?\d{1,3}\.\d{3,}),\s*(-?\d{1,3}\.\d{3,})/);
+  if (m) {
+    const la = Number(m[1]), ln = Number(m[2]);
+    if (Math.abs(la) <= 90 && Math.abs(ln) <= 180) return [la, ln];
+  }
+  return null;
+}
+
 function LeafletPickerWidget({ lat, lng, onChange }) {
   const ref = React.useRef(null);
   const mapRef = React.useRef(null);
   const markerRef = React.useRef(null);
+  const [linkInput, setLinkInput] = React.useState('');
+  const [linkErr, setLinkErr] = React.useState(null);
   React.useEffect(() => {
     if (typeof window === 'undefined' || !window.L) return;
     if (!ref.current || mapRef.current) return;
@@ -976,8 +1001,71 @@ function LeafletPickerWidget({ lat, lng, onChange }) {
     return () => { try { m.remove(); } catch {} mapRef.current = null; markerRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Sincroniza el marcador y centra el mapa cuando lat/lng cambian desde
+  // afuera (ej. al pegar un link de Google Maps).
+  React.useEffect(() => {
+    const m = mapRef.current;
+    if (!m || typeof window === 'undefined' || !window.L) return;
+    const L = window.L;
+    if (typeof lat === 'number' && typeof lng === 'number') {
+      if (markerRef.current) {
+        markerRef.current.setLatLng([lat, lng]);
+      } else {
+        markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(m);
+        markerRef.current.on('dragend', (ev) => {
+          const ll = ev.target.getLatLng();
+          onChange(Number(ll.lat.toFixed(6)), Number(ll.lng.toFixed(6)));
+        });
+      }
+      m.setView([lat, lng], 16);
+    } else if (markerRef.current) {
+      try { m.removeLayer(markerRef.current); } catch {}
+      markerRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lat, lng]);
+
+  function onPasteLink() {
+    setLinkErr(null);
+    const parsed = parseGoogleMapsLink(linkInput);
+    if (!parsed) {
+      setLinkErr('No pudimos extraer la ubicación de ese link. Probá copiar de nuevo desde Google Maps (botón "Compartir → Copiar enlace").');
+      return;
+    }
+    const [la, ln] = parsed;
+    onChange(Number(la.toFixed(6)), Number(ln.toFixed(6)));
+    setLinkInput('');
+  }
   return (
     <div>
+      {/* Pegar link de Google Maps — alternativa rapida al click manual. */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <input
+          type="url"
+          className="input"
+          placeholder="O pegá un link de Google Maps (https://maps.app.goo.gl/... o https://www.google.com/maps/...)"
+          value={linkInput}
+          onChange={(e) => { setLinkInput(e.target.value); setLinkErr(null); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onPasteLink(); } }}
+          style={{ flex: 1, minWidth: 200, fontSize: 13 }}
+        />
+        <button
+          type="button"
+          onClick={onPasteLink}
+          disabled={!linkInput.trim()}
+          className="btn btn-blue"
+          style={{ flexShrink: 0, opacity: linkInput.trim() ? 1 : 0.5 }}
+        >
+          Usar link
+        </button>
+      </div>
+      {linkErr ? (
+        <div style={{ marginBottom: 8, padding: '8px 12px', background: '#fee2e2', color: '#991b1b', borderRadius: 8, fontSize: 12.5 }}>{linkErr}</div>
+      ) : (
+        <div className="muted xs" style={{ marginBottom: 8 }}>
+          Tip: en Google Maps → tocá el lugar → <strong>Compartir</strong> → <strong>Copiar enlace</strong>. Pegalo acá y se fija solo el pin.
+        </div>
+      )}
       <div ref={ref} style={{ height: 280, width: '100%', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--line)', background: 'var(--bg-2)' }}/>
       <div className="row between muted xs" style={{ marginTop: 6 }}>
         <span>
