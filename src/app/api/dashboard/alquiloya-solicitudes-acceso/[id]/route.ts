@@ -5,6 +5,8 @@ import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { sendMail } from "@/lib/email/send-mail";
 import { renderAccesoAprobadoEmail } from "@/lib/email/templates/acceso-aprobado";
+import { getClientSchema } from "@/lib/env/instance-mode";
+import { bustOverviewCache } from "@/lib/cache/dashboard-overview-cache";
 import crypto from "node:crypto";
 
 export const runtime = "nodejs";
@@ -116,6 +118,10 @@ export async function PATCH(request: Request, ctx: Ctx) {
           WHERE empresa_id=$1::uuid AND id=$2::uuid
           RETURNING id`,
         [ALQUILOYA_EMPRESA_ID, id, motivo, user.id]
+      );
+      bustOverviewCache(
+        getClientSchema(),
+        process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || ALQUILOYA_EMPRESA_ID
       );
       return NextResponse.json({ success: true, id: rows[0].id, estado: "rechazada" });
     }
@@ -460,6 +466,10 @@ export async function PATCH(request: Request, ctx: Ctx) {
       );
 
       await client.query("COMMIT");
+      bustOverviewCache(
+        getClientSchema(),
+        process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || ALQUILOYA_EMPRESA_ID
+      );
       return NextResponse.json({
         success: true,
         id: upd.rows[0].id,
