@@ -26,9 +26,6 @@ function PublishPage() {
   // hasSession: hay sesion Supabase aunque el usuario no sea agente/propietario.
   // Util para diferenciar "no logueado" de "logueado pero sin perfil de publicador".
   const [hasSession, setHasSession] = React.useState(false);
-  // Modal "Solicitar acceso" inline: antes el boton mandaba a /portal-agentes
-  // (recargaba la pagina). Pedido del cliente: abrirlo directo desde aca.
-  const [accessOpen, setAccessOpen] = React.useState(false);
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -308,86 +305,14 @@ function PublishPage() {
       </div>
     );
   }
-  if (!isLoggedPublisher) {
-    return (
-      <div className="fade-in container" style={{ padding: '32px' }}>
-        <div
-          className="card"
-          style={{
-            maxWidth: 560,
-            margin: '48px auto',
-            padding: 36,
-            textAlign: 'center',
-          }}
-        >
-          <div
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: '50%',
-              margin: '0 auto 16px',
-              background: 'rgba(0,88,165,0.08)',
-              color: 'var(--blue)',
-              display: 'grid',
-              placeItems: 'center',
-            }}
-          >
-            <I.shield s={28}/>
-          </div>
-          <div className="tag" style={{ justifyContent: 'center' }}>Publicar inmueble</div>
-          {hasSession ? (
-            <>
-              <h2 style={{ marginTop: 8, fontSize: 26 }}>Tu cuenta no es de publicador</h2>
-              <p style={{ marginTop: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>
-                Estás logueado, pero tu usuario no tiene perfil de agente ni de propietario
-                vinculado. Para publicar tenés que entrar con una cuenta de agente o
-                propietario activa.
-              </p>
-              <div className="row gap-12" style={{ justifyContent: 'center', marginTop: 24, flexWrap: 'wrap' }}>
-                <a className="btn btn-primary" href="/portal-agentes/login">
-                  <I.user s={16}/> Cambiar de cuenta
-                </a>
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  onClick={async () => {
-                    try { await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'include' }); } catch {}
-                    window.location.href = '/portal-agentes/login';
-                  }}
-                >
-                  Cerrar sesión
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <h2 style={{ marginTop: 8, fontSize: 26 }}>Necesitás una cuenta activa</h2>
-              <p style={{ marginTop: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>
-                Para publicar una propiedad en AlquiloYa tenés que iniciar sesión con
-                una cuenta de agente o propietario con plan activo. Así nos aseguramos
-                de que cada publicación tenga un responsable verificado.
-              </p>
-              <div className="row gap-12" style={{ justifyContent: 'center', marginTop: 24, flexWrap: 'wrap' }}>
-                <a className="btn btn-primary" href="/portal-agentes/login">
-                  <I.user s={16}/> Ingresar
-                </a>
-                <button type="button" className="btn btn-outline" onClick={() => setAccessOpen(true)}>
-                  Solicitar acceso
-                </button>
-              </div>
-              <p style={{ marginTop: 20, fontSize: 12, color: 'var(--ink-4)' }}>
-                ¿No tenés cuenta todavía? Pedí el acceso y nuestro equipo te contacta
-                para activarte.
-              </p>
-            </>
-          )}
-        </div>
-        {accessOpen && window.RequestAccessModal && (
-          <window.RequestAccessModal onClose={() => setAccessOpen(false)} />
-        )}
-      </div>
-    );
-  }
+  // Politica del cliente (junio 2026): los PROPIETARIOS pueden publicar SIN
+  // crear cuenta — el flujo de "iniciar sesion / solicitar acceso" se reserva
+  // para agentes inmobiliarios (porque el agente se queda vinculado a la
+  // propiedad y tiene cuota de plan). Anonimos o sesion sin perfil van directo
+  // al wizard como propietario directo. Mas abajo, el POST de la API
+  // crea/encuentra la fila de propietarios por email/telefono del form.
+  // Antes habia aca un gate que mostraba "Necesitas una cuenta activa" y
+  // "Tu cuenta no es de publicador" — los dos quedaron deprecados.
 
   // Gating de plan SOLO para agentes: sin plan -> no puede publicar.
   // Con plan pero alcanzo la cuota -> tampoco puede.

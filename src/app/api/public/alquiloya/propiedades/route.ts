@@ -121,77 +121,66 @@ type Body = {
 
 export async function POST(request: Request) {
   try {
-    // ── Gate de cuenta activa ───────────────────────────────────────────────
-    // A pedido del cliente: para publicar tenes que tener cuenta de agente con
-    // plan activo. Antes esto era un endpoint anonimo que creaba propiedades
-    // con agente_id=NULL — esas propiedades despues aparecian en el detalle
-    // con un "agente" inventado por el fallback de la legacy data.jsx (ver
-    // public/alquiloya-legacy/api-data.jsx normalizeProperty), pero nunca se
-    // veian en el perfil publico real de ese agente.
+    // ── Gate de cuenta ───────────────────────────────────────────────────────
+    // Politica del cliente (junio 2026): los propietarios pueden publicar SIN
+    // crear cuenta — el flujo se trata como solicitud anonima, y mas abajo se
+    // crea/encuentra la fila en alquiloya.propietarios por email/telefono del
+    // body. La cuenta SI sigue siendo obligatoria para agentes (porque la
+    // propiedad se les vincula y se valida cuota del plan), pero como no
+    // sabemos el rol de antemano la regla es: si NO hay sesion -> path
+    // propietario anonimo; si HAY sesion -> mantenemos las validaciones de
+    // perfil/plan del usuario (agente o propietario linkeado).
     const authUser = await getAuthUserForApiRoute(request);
-    if (!authUser?.id) {
-      return NextResponse.json(
-        { error: "Necesitas iniciar sesion con una cuenta de agente activa para publicar." },
-        { status: 401 }
-      );
-    }
-
     const supabase = createServiceRoleClient();
-    const usuarioErp = await resolveUsuarioErpFromAuthUser(supabase, authUser);
-    if (!usuarioErp || usuarioErp.empresa_id !== ALQUILOYA_EMPRESA_ID) {
-      return NextResponse.json(
-        { error: "Tu usuario no esta habilitado para publicar en AlquiloYa." },
-        { status: 403 }
-      );
-    }
 
-    // Resolver perfil de publicador: puede ser agente (publica para terceros)
-    // o propietario directo (se publica a si mismo). Antes solo aceptabamos
-    // agente_id y rechazabamos con 403 a los propietarios — eso bloqueaba el
-    // flujo "publicar gratis" de los dueños directos.
-    const { data: uExt } = await supabase
-      .from("usuarios")
-      .select("agente_id, propietario_id, email")
-      .eq("id", usuarioErp.id)
-      .limit(1)
-      .maybeSingle();
-    const agenteId = (uExt as { agente_id?: string | null } | null)?.agente_id ?? null;
-    let usuarioPropietarioId = (uExt as { propietario_id?: string | null } | null)?.propietario_id ?? null;
+    let agenteId: string | null = null;
+    let usuarioPropietarioId: string | null = null;
 
-    // Fallback: si no hay propietario_id linkeado pero el usuario tiene email
-    // que matchea con un propietarios.email existente, lo resolvemos por email
-    // y auto-vinculamos. Cubre el mismo caso que /api/propietario/me.
-    if (!agenteId && !usuarioPropietarioId) {
-      const candidateEmails = [
-        (uExt as { email?: string | null } | null)?.email ?? null,
-        authUser.email ?? null,
-      ].filter((e): e is string => typeof e === "string" && e.trim().length > 0);
-      for (const em of candidateEmails) {
-        const { data: pr } = await supabase
-          .from("propietarios")
-          .select("id")
-          .ilike("email", em.trim())
-          .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+    if (authUser?.id) {
+      const usuarioErp = await resolveUsuarioErpFromAuthUser(supabase, authUser);
+      if (!usuarioErp || usuarioErp.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+        // Sesion de otra empresa -> degradamos a anonimo para no bloquear.
+      } else {
+        const { data: uExt } = await supabase
+          .from("usuarios")
+          .select("agente_id, propietario_id, email")
+          .eq("id", usuarioErp.id)
           .limit(1)
           .maybeSingle();
-        const prId = (pr as { id?: string } | null)?.id ?? null;
-        if (prId) {
-          usuarioPropietarioId = prId;
-          await supabase
-            .from("usuarios")
-            .update({ propietario_id: prId })
-            .eq("id", usuarioErp.id);
-          break;
+        agenteId = (uExt as { agente_id?: string | null } | null)?.agente_id ?? null;
+        usuarioPropietarioId = (uExt as { propietario_id?: string | null } | null)?.propietario_id ?? null;
+
+        // Fallback: si no hay propietario_id linkeado pero el usuario tiene
+        // email que matchea con un propietarios.email existente, lo resolvemos
+        // por email y auto-vinculamos.
+        if (!agenteId && !usuarioPropietarioId) {
+          const candidateEmails = [
+            (uExt as { email?: string | null } | null)?.email ?? null,
+            authUser.email ?? null,
+          ].filter((e): e is string => typeof e === "string" && e.trim().length > 0);
+          for (const em of candidateEmails) {
+            const { data: pr } = await supabase
+              .from("propietarios")
+              .select("id")
+              .ilike("email", em.trim())
+              .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+              .limit(1)
+              .maybeSingle();
+            const prId = (pr as { id?: string } | null)?.id ?? null;
+            if (prId) {
+              usuarioPropietarioId = prId;
+              await supabase
+                .from("usuarios")
+                .update({ propietario_id: prId })
+                .eq("id", usuarioErp.id);
+              break;
+            }
+          }
         }
       }
     }
-
-    if (!agenteId && !usuarioPropietarioId) {
-      return NextResponse.json(
-        { error: "Tu cuenta no tiene perfil de agente ni propietario. Pedi alta al admin." },
-        { status: 403 }
-      );
-    }
+    // Si no resolvimos perfil (anonimo o sesion sin perfil) seguimos como
+    // path propietario y mas abajo encontramos/creamos la fila por email/tel.
 
     // Limits del plan que aplican al actor (agente o propietario). Se llenan
     // mas abajo segun el path y los usamos para capear fotos al insertar.
