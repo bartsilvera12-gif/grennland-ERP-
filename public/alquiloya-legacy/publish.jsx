@@ -1532,6 +1532,14 @@ function StepPlan({ form, setF, ctxAgente, ctxPropietario, editingId }) {
             email: (ctxPropietario && ctxPropietario.email) || form.propietario_email || '',
             telefono: (ctxPropietario && (ctxPropietario.telefono || ctxPropietario.whatsapp)) || form.propietario_telefono || '',
           }}
+          propertyContext={{
+            propiedad_titulo: form.titulo || '',
+            tipo_propiedad: form.tipo || '',
+            ciudad: form.ciudad || '',
+            barrio: form.barrio || '',
+            direccion: form.direccion || '',
+            precio_estimado: form.precio ? Number(String(form.precio).replace(/[^\d]/g, '')) : null,
+          }}
           onClose={() => setAgentPickerOpen(false)}
         />
       )}
@@ -2237,7 +2245,7 @@ function ConfirmPublishModal({ form, loading, isAgent, onCancel, onConfirm }) {
 // POST /api/public/alquiloya/captaciones. La captacion aparece en el panel
 // del agente elegido (Captaciones).
 // ─────────────────────────────────────────────────────────────────────────────
-function AgentPickerModal({ defaultContact, onClose }) {
+function AgentPickerModal({ defaultContact, propertyContext, onClose }) {
   const [agentes, setAgentes] = React.useState(null); // null = loading
   const [error, setError] = React.useState(null);
   const [pickedId, setPickedId] = React.useState(null);
@@ -2291,6 +2299,15 @@ function AgentPickerModal({ defaultContact, onClose }) {
           propietario_nombre: nombre,
           propietario_email: email || null,
           propietario_telefono: telefono || null,
+          // Contexto del inmueble que cargo el usuario en el wizard (si ya
+          // toco algo). Asi al agente le llega la captacion con datos
+          // tangibles y no tiene que arrancar de cero.
+          propiedad_titulo: (propertyContext && propertyContext.propiedad_titulo) || null,
+          tipo_propiedad:   (propertyContext && propertyContext.tipo_propiedad)   || null,
+          ciudad:           (propertyContext && propertyContext.ciudad)           || null,
+          barrio:           (propertyContext && propertyContext.barrio)           || null,
+          direccion:        (propertyContext && propertyContext.direccion)        || null,
+          precio_estimado:  (propertyContext && propertyContext.precio_estimado)  || null,
           mensaje: mensaje || null,
           origen: 'panel_propietario_publish',
         }),
@@ -2301,8 +2318,17 @@ function AgentPickerModal({ defaultContact, onClose }) {
         title: '¡Listo!', variant: 'success', duration: 7000,
       });
       onClose && onClose();
-      // Lo mandamos al panel del propietario para que vea el flujo cerrado.
-      try { window.location.hash = '#admin-agent'; } catch {}
+      // Si tenia sesion de propietario lo mandamos a su panel. Si era
+      // anonimo, lo dejamos en home — no tiene a donde ir y forzar el
+      // hash #admin-agent termina en un panel sin login que se redirige
+      // (peor UX que quedarse donde estaba).
+      try {
+        if (defaultContact && defaultContact.nombre && window.location.hash !== '#publish') {
+          // Caso raro: cerrado desde otra ruta. Lo dejamos.
+        } else {
+          window.location.hash = '';
+        }
+      } catch {}
     } catch (e) {
       if (window.ayToast) window.ayToast(e?.message || 'No se pudo enviar la solicitud.', { variant: 'error', title: 'Error' });
     } finally {

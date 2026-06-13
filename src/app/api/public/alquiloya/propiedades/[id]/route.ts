@@ -13,14 +13,16 @@ export const dynamic = "force-dynamic";
 const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Bootstrap idempotente del estado 'eliminada' para el soft-delete.
-// Espejo de la migracion 20260705120000_alquiloya_propiedades_estado_eliminada
-// — asegura que prod no quede esperando a que alguien corra la migracion
-// manualmente para que el DELETE saque las propiedades del contador de
-// pendientes. Corre UNA vez por proceso.
-let estadoEliminadaReady = false;
-async function ensureEstadoEliminada(pool: import("pg").Pool): Promise<void> {
-  if (estadoEliminadaReady) return;
+// Bootstrap idempotente del CHECK constraint de estado.
+// Mezcla las migraciones:
+//   - 20260705120000 (estado 'eliminada' para soft-delete)
+//   - 20260706120000 (formas femeninas 'activa'/'alquilada'/'reservada' que
+//     usa el panel del dueño y antes explotaban en el UPDATE por CHECK)
+// asegura que prod no quede esperando a que alguien corra las migraciones.
+// Corre UNA vez por proceso del Next server.
+let estadoConstraintReady = false;
+async function ensureEstadoConstraint(pool: import("pg").Pool): Promise<void> {
+  if (estadoConstraintReady) return;
   try {
     await pool.query(`
       DO $$
@@ -40,8 +42,14 @@ async function ensureEstadoEliminada(pool: import("pg").Pool): Promise<void> {
         ADD CONSTRAINT propiedades_estado_check
         CHECK (
           estado IS NULL OR estado IN (
-            'disponible','reservado','alquilado','vendido','pausada',
-            'inactiva','rechazada','cerrado','cerrada','finalizado','eliminada'
+            'disponible','activa',
+            'reservado','reservada',
+            'alquilado','alquilada',
+            'vendido','vendida',
+            'pausada','inactiva','rechazada',
+            'cerrado','cerrada',
+            'finalizado','finalizada',
+            'eliminada'
           )
         );
       UPDATE alquiloya.propiedades
@@ -51,14 +59,15 @@ async function ensureEstadoEliminada(pool: import("pg").Pool): Promise<void> {
          AND estado = 'inactiva'
          AND updated_at > created_at + interval '5 seconds';
     `);
-    estadoEliminadaReady = true;
+    estadoConstraintReady = true;
   } catch (e) {
-    console.error("[ensureEstadoEliminada] bootstrap fail", e);
-    // No throw: si falla, el UPDATE de DELETE de abajo igual va a marcar
-    // visible_web=false / activo=false y el row quedara contado. El usuario
-    // puede reintentar despues de que se corra la migracion manualmente.
+    console.error("[ensureEstadoConstraint] bootstrap fail", e);
+    // No throw: si falla, los UPDATEs de abajo igual intentaran y caeran
+    // al fallback. La proxima reinvocacion reintenta el bootstrap.
   }
 }
+// Alias compat con el nombre viejo del helper.
+const ensureEstadoEliminada = ensureEstadoConstraint;
 
 export async function GET(_request: NextRequest, ctx: RouteCtx) {
   const { id } = await ctx.params;
@@ -245,6 +254,13 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
       } else {
         push("visible_web", false);
       }
+    }
+
+    // Si el PATCH toca estado, aseguramos que el CHECK constraint acepte el
+    // nuevo valor antes de intentar el UPDATE. Antes el panel del dueño
+    // veia "no se pudo cambiar el estado" porque la DB rechazaba "activa".
+    if (body.estado !== undefined) {
+      await ensureEstadoConstraint(pool);
     }
 
     const client = await pool.connect();

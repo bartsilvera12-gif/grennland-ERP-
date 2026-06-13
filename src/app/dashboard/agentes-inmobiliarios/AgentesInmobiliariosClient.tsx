@@ -7,7 +7,6 @@ import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session"
 import ConfirmDialog from "@/components/ConfirmDialog";
 import type {
   ErpAgenteInmobiliarioRow,
-  ErpPropietarioRow,
 } from "@/lib/alquiloya/erp-agentes-inmobiliarios";
 
 function IconEye() {
@@ -54,8 +53,10 @@ function IconTrash() {
   );
 }
 
-type Tab = "agentes" | "propietarios";
-type Kind = "agente" | "propietario";
+// Tras quitar el modulo de Propietarios del dashboard (los dueños publican
+// sin cuenta), solo queda el flujo de agentes. Mantenemos Kind reducido
+// por si en el futuro hay otro tipo de cuenta que reuse useToggleHandler.
+type Kind = "agente";
 type ActionKind = "desactivar" | "reactivar" | "eliminar";
 
 type PlanEstadoUI = "sin_plan" | "gratis" | "activo" | "por_vencer" | "vencido";
@@ -178,12 +179,7 @@ export function AgentesInmobiliariosClient({
   agentesError,
 }: {
   agentes: ErpAgenteInmobiliarioRow[];
-  // Las props de propietarios siguen aceptandose para compat con el page,
-  // pero el tab fue removido del cliente: AlquiloYa ya no gestiona
-  // propietarios desde este modulo (los dueños publican sin cuenta).
-  propietarios?: ErpPropietarioRow[];
   agentesError: string | null;
-  propietariosError?: string | null;
 }) {
   return (
     <div>
@@ -207,31 +203,8 @@ export function AgentesInmobiliariosClient({
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors ${
-        active
-          ? "border-[#4FAEB2] text-[#3F8E91]"
-          : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function useToggleHandler(kind: Kind) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function useToggleHandler(_kind: Kind) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pending, setPending] = useState<
@@ -240,8 +213,8 @@ function useToggleHandler(kind: Kind) {
   >(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const endpoint = kind === "agente" ? "alquiloya-agentes" : "alquiloya-propietarios";
-  const noun = kind === "agente" ? "agente" : "propietario";
+  const endpoint = "alquiloya-agentes";
+  const noun = "agente";
 
   async function run() {
     if (!pending) return;
@@ -607,151 +580,9 @@ function AgentesTab({
   );
 }
 
-function PropietariosTab({
-  rows,
-  error,
-}: {
-  rows: ErpPropietarioRow[];
-  error: string | null;
-}) {
-  const [showInactive, setShowInactive] = useState(false);
-  const [planFilter, setPlanFilter] = useState<"todos" | PlanEstadoUI>("todos");
-  const { busyId, pending, setPending, err, setErr, run, noun } = useToggleHandler("propietario");
-
-  const inactiveCount = useMemo(() => rows.filter((r) => !r.activo).length, [rows]);
-  const planCounts = useMemo(() => {
-    const c: Record<"todos" | PlanEstadoUI, number> = {
-      todos: 0, activo: 0, por_vencer: 0, vencido: 0, gratis: 0, sin_plan: 0,
-    };
-    const pool = showInactive ? rows.filter((r) => !r.activo) : rows.filter((r) => r.activo);
-    for (const r of pool) {
-      c.todos += 1;
-      c[r.plan_estado as PlanEstadoUI] = (c[r.plan_estado as PlanEstadoUI] ?? 0) + 1;
-    }
-    return c;
-  }, [rows, showInactive]);
-  const visibleRows = useMemo(() => {
-    const base = showInactive ? rows.filter((r) => !r.activo) : rows.filter((r) => r.activo);
-    if (planFilter === "todos") return base;
-    return base.filter((r) => r.plan_estado === planFilter);
-  }, [rows, showInactive, planFilter]);
-
-  if (error) {
-    return (
-      <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-        No se pudieron cargar los propietarios: {error}
-      </div>
-    );
-  }
-  if (rows.length === 0) {
-    return (
-      <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
-        Todavía no hay propietarios registrados.
-      </div>
-    );
-  }
-  return (
-    <>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm">
-        <PlanFilter value={planFilter} counts={planCounts} onChange={setPlanFilter} />
-        <label className="inline-flex cursor-pointer items-center gap-2 text-slate-600">
-          <input
-            type="checkbox"
-            checked={showInactive}
-            onChange={(e) => setShowInactive(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-[#4FAEB2] focus:ring-[#4FAEB2]"
-          />
-          Ver desactivados
-          {inactiveCount > 0 ? (
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-              {inactiveCount}
-            </span>
-          ) : null}
-        </label>
-      </div>
-      {err ? (
-        <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {err}
-        </div>
-      ) : null}
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-            <tr>
-              <th className="px-3 py-2.5">Nombre</th>
-              <th className="hidden px-3 py-2.5 md:table-cell">Tipo</th>
-              <th className="hidden px-3 py-2.5 lg:table-cell">Documento</th>
-              <th className="px-3 py-2.5">Teléfono</th>
-              <th className="hidden px-3 py-2.5 lg:table-cell">Email</th>
-              <th className="hidden px-3 py-2.5 xl:table-cell">Estado</th>
-              <th className="px-3 py-2.5">Activo</th>
-              <th className="hidden px-3 py-2.5 xl:table-cell">Usuario</th>
-              <th className="px-3 py-2.5">Plan</th>
-              <th className="sticky right-0 bg-slate-50 px-3 py-2.5 text-right shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.08)]">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {visibleRows.length === 0 ? (
-              <tr>
-                <td colSpan={10} className="px-6 py-12 text-center text-sm text-slate-500">
-                  {showInactive
-                    ? "No hay propietarios desactivados."
-                    : "No hay propietarios activos. Activá \"Ver desactivados\" para verlos."}
-                </td>
-              </tr>
-            ) : (
-              visibleRows.map((p) => {
-                const dim = !p.activo;
-                return (
-                  <tr key={p.id} className={`hover:bg-slate-50 ${dim ? "opacity-60" : ""}`}>
-                    <td className="px-3 py-2 font-medium text-slate-900">{p.nombre}</td>
-                    <td className="hidden px-3 py-2 text-slate-700 md:table-cell">{p.tipo_persona ?? "—"}</td>
-                    <td className="hidden px-3 py-2 text-slate-700 lg:table-cell">{p.documento ?? "—"}</td>
-                    <td className="px-3 py-2 text-slate-700">{p.telefono ?? "—"}</td>
-                    <td className="hidden px-3 py-2 text-slate-700 lg:table-cell">{p.email ?? "—"}</td>
-                    <td className="hidden px-3 py-2 text-slate-700 xl:table-cell">{p.estado ?? "—"}</td>
-                    <td className="px-3 py-2">
-                      <Badge on={p.activo} label={p.activo ? "Sí" : "No"} />
-                    </td>
-                    <td className="hidden px-3 py-2 text-slate-500 xl:table-cell">
-                      {p.usuario_id ? <span className="text-emerald-700">vinculado</span> : "—"}
-                    </td>
-                    <td className="px-3 py-2">
-                      <PlanCell
-                        estado={p.plan_estado as PlanEstadoUI}
-                        nombre={p.plan_nombre}
-                        tier={p.plan_tier}
-                        vencimiento={p.plan_vencimiento_at}
-                      />
-                    </td>
-                    <td className="sticky right-0 bg-white px-3 py-2 text-right shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.08)]">
-                      <ActionsCell
-                        active={!!p.activo}
-                        viewHref={`/dashboard/agentes-inmobiliarios/propietarios/${p.id}`}
-                        editHref={`/dashboard/agentes-inmobiliarios/propietarios/${p.id}/editar`}
-                        onDesactivar={() => { setErr(null); setPending({ id: p.id, nombre: p.nombre, action: "desactivar" }); }}
-                        onReactivar={() => { setErr(null); setPending({ id: p.id, nombre: p.nombre, action: "reactivar" }); }}
-                        onEliminar={() => { setErr(null); setPending({ id: p.id, nombre: p.nombre, action: "eliminar" }); }}
-                        disabled={busyId === p.id}
-                      />
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-      <ConfirmFor
-        pending={pending}
-        busy={busyId === pending?.id}
-        noun={noun}
-        onConfirm={run}
-        onCancel={() => busyId !== pending?.id && setPending(null)}
-      />
-    </>
-  );
-}
+// PropietariosTab eliminado: tras la decision del cliente de que los
+// propietarios publican sin cuenta, este modulo solo gestiona agentes.
+// El page.tsx ya no le pasa propietarios al cliente.
 
 // ── CambiarPlanModal ────────────────────────────────────────────────────────
 // Lista los planes activos del dashboard y deja al admin asignar uno (o

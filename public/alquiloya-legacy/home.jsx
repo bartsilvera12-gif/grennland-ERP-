@@ -658,19 +658,38 @@ function MiniMap({ height = 200, pins = 8 }) {
 }
 
 function Categories({ properties = PROPERTIES, onNav }) {
-  const countByTipo = (id) => properties.filter(p => p.tipo === id).length;
+  // Mapeo broad -> backend tipos, mismo criterio que BROAD_TO_TIPOS de
+  // catalog.jsx, para contar bien cuando el backend devuelve la forma
+  // larga ('departamento') y los chips del home usan ids cortos ('depto').
+  const BROAD = {
+    depto:    ['depto','departamento'],
+    casa:     ['casa','casa_independiente'],
+    salon:    ['salon','salon_comercial','local_comercial','oficina','deposito'],
+    duplex:   ['duplex','duplex_ph'],
+    temporal: ['temporal','alquiler_temporal'],
+  };
+  const countByTipo = (id) => {
+    const set = new Set(BROAD[id] || [id]);
+    return properties.filter(p => set.has(p.tipo)).length;
+  };
   const cats = [
     { id: 'depto',    label: 'Departamentos',         count: countByTipo('depto'),    img: 'uploads/departamento.png' },
     { id: 'casa',     label: 'Casas independientes',  count: countByTipo('casa'),     img: 'uploads/casas.png' },
     { id: 'salon',    label: 'Salones comerciales',   count: countByTipo('salon'),    img: 'uploads/comercio.png' },
-    { id: 'temporal', label: 'Alquileres temporales', count: countByTipo('temporal'), img: 'uploads/alquiler.png' },
+    { id: 'temporal', label: 'Lugar Temporal',        count: countByTipo('temporal'), img: 'uploads/alquiler.png' },
   ];
   return (
     <section className="container" style={{ marginTop: 24, padding: '40px 32px' }}>
       <SectionHead eyebrow="Categorías" title="Explorá por tipo de inmueble" />
       <div className="home-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginTop: 28 }}>
         {cats.map(c => (
-          <button key={c.id} onClick={() => onNav('catalog')}
+          <button key={c.id} onClick={() => {
+            // Pasamos el tipo via __pendingSearch para que el catalogo
+            // arranque filtrado por la categoria clickeada (antes el click
+            // navegaba sin contexto y el usuario llegaba a "Todos").
+            try { window.__pendingSearch = { tipo: c.id }; } catch {}
+            onNav('catalog');
+          }}
             style={{
               textAlign: 'left', padding: 24, cursor: 'pointer',
               background: '#fff',
@@ -716,6 +735,11 @@ function Categories({ properties = PROPERTIES, onNav }) {
   );
 }
 
+// Deprecated: estaba pensado para ilustrar cada categoria con un SVG inline,
+// pero el card final usa <img src="uploads/..."> y nadie llama esta funcion.
+// Lo dejamos definido por si vuelve, pero NO ocupa lugar en el bundle minado
+// porque el minifier la dropea si no se referencia.
+// eslint-disable-next-line no-unused-vars
 function CategoryIllustration({ kind }) {
   const BLUE = '#0058A5', LIGHT = '#7AB1E6', YELLOW = '#F9B000', INK = '#0b1622';
   const S = 52;

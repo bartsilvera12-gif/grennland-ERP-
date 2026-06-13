@@ -1,8 +1,6 @@
 import {
   listErpAgentesInmobiliarios,
-  listErpPropietarios,
   type ErpAgenteInmobiliarioRow,
-  type ErpPropietarioRow,
 } from "@/lib/alquiloya/erp-agentes-inmobiliarios";
 import { AgentesInmobiliariosClient } from "./AgentesInmobiliariosClient";
 
@@ -11,22 +9,13 @@ export const runtime = "nodejs";
 
 export default async function AgentesInmobiliariosPage() {
   let agentes: ErpAgenteInmobiliarioRow[] = [];
-  let propietarios: ErpPropietarioRow[] = [];
   let agentesError: string | null = null;
-  let propietariosError: string | null = null;
 
   try {
     agentes = await listErpAgentesInmobiliarios();
   } catch (e) {
     agentesError = e instanceof Error ? e.message : "Error desconocido";
     console.error("[dashboard/agentes-inmobiliarios] agentes", e);
-  }
-
-  try {
-    propietarios = await listErpPropietarios();
-  } catch (e) {
-    propietariosError = e instanceof Error ? e.message : "Error desconocido";
-    console.error("[dashboard/agentes-inmobiliarios] propietarios", e);
   }
 
   return (
@@ -36,17 +25,12 @@ export default async function AgentesInmobiliariosPage() {
           Agentes inmobiliarios
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Gestión de cuentas externas (agentes y propietarios) que publican en
-          AlquiloYa. No incluye usuarios internos del ERP.
+          Gestión de cuentas externas (agentes) que publican en AlquiloYa.
+          Los propietarios publican sin cuenta y no requieren registro.
         </p>
       </header>
 
-      <AgentesInmobiliariosClient
-        agentes={agentes}
-        propietarios={propietarios}
-        agentesError={agentesError}
-        propietariosError={propietariosError}
-      />
+      <AgentesInmobiliariosClient agentes={agentes} agentesError={agentesError} />
     </div>
   );
 }
