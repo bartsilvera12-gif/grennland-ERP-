@@ -734,14 +734,21 @@ function FormGrid({ children }) {
   return <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>{children}</div>;
 }
 
+// Lista completa de tipos que acepta el backend (TIPOS_OK en
+// /api/public/alquiloya/propiedades). El select del paso 2 ofrece todos
+// para que el usuario pueda elegir el que mejor describe su inmueble.
 const PUBLISH_TIPOS = [
-  { id: 'departamento',     label: 'Departamento',     icon: 'building' },
-  { id: 'casa',             label: 'Casa',             icon: 'home' },
-  { id: 'duplex',           label: 'Dúplex',           icon: 'building' },
-  { id: 'local_comercial',  label: 'Local comercial',  icon: 'store' },
-  { id: 'oficina',          label: 'Oficina',          icon: 'briefcase' },
-  { id: 'terreno',          label: 'Terreno',          icon: 'pin' },
-  { id: 'deposito',         label: 'Depósito',         icon: 'archive' },
+  { id: 'departamento',       label: 'Departamento' },
+  { id: 'casa',               label: 'Casa' },
+  { id: 'casa_independiente', label: 'Casa independiente' },
+  { id: 'duplex',             label: 'Dúplex' },
+  { id: 'duplex_ph',          label: 'Dúplex PH' },
+  { id: 'local_comercial',    label: 'Local comercial' },
+  { id: 'salon_comercial',    label: 'Salón comercial' },
+  { id: 'oficina',            label: 'Oficina' },
+  { id: 'terreno',            label: 'Terreno' },
+  { id: 'deposito',           label: 'Depósito' },
+  { id: 'alquiler_temporal',  label: 'Lugar Temporal' },
 ];
 const PUBLISH_CARAC = ['Cochera','Amoblado','Mascotas permitidas','Piscina','Quincho','Aire acondicionado','Wifi','Lavadero','Seguridad 24hs','Cocina equipada'];
 
@@ -761,17 +768,12 @@ function StepBasics({ form, setF }) {
       <div style={{ marginTop: 24 }}>
         <div className="field" style={{ marginBottom: 18 }}>
           <label>Tipo de inmueble</label>
-          <div className="row gap-10" style={{ flexWrap: 'wrap' }}>
-            {PUBLISH_TIPOS.map(t => (
-              <TileChoice
-                key={t.id}
-                icon={I[t.icon] ? t.icon : 'doc'}
-                label={t.label}
-                active={form.tipo === t.id}
-                onClick={() => setF({ tipo: t.id })}
-              />
-            ))}
-          </div>
+          <PrettySelect
+            value={form.tipo || ''}
+            onChange={(v) => setF({ tipo: v })}
+            placeholder="Seleccione el tipo de inmueble"
+            options={PUBLISH_TIPOS.map(t => ({ value: t.id, label: t.label }))}
+          />
         </div>
         <div className="field" style={{ marginBottom: 18 }}>
           <label>Título de la publicación *</label>
