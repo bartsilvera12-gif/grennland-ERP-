@@ -7,12 +7,15 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import type { SolicitudAccesoRow } from "@/lib/alquiloya/erp-solicitudes-acceso";
 
 type Filter = "todas" | "pendiente" | "aprobada" | "rechazada";
+// "propietario" sigue en el union para soportar filas viejas que ya tenian
+// ese tipo en la DB (los propietarios ya no piden acceso, publican directo
+// sin cuenta). Lo dejamos fuera del filtro UI a pedido del cliente.
 type TipoFilter = "todos" | "agente" | "propietario" | "referido_partner";
+type TipoFilterUI = "todos" | "agente" | "referido_partner";
 
-const TIPO_LABEL: Record<TipoFilter, string> = {
+const TIPO_LABEL: Record<TipoFilterUI, string> = {
   todos: "Todos",
   agente: "Agentes",
-  propietario: "Propietarios",
   referido_partner: "Referidos",
 };
 
@@ -229,7 +232,7 @@ export default function SolicitudesAccesoClient({
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Tipo</div>
-        {(["todos", "agente", "propietario", "referido_partner"] as TipoFilter[]).map((t) => (
+        {(["todos", "agente", "referido_partner"] as TipoFilterUI[]).map((t) => (
           <button
             key={t}
             type="button"
