@@ -135,9 +135,10 @@ const TIPOS = [
   { id: 'depto', label: 'Departamento', icon: 'apt' },
   { id: 'casa', label: 'Casa independiente', icon: 'house' },
   { id: 'salon', label: 'Salón comercial', icon: 'shop' },
-  // "Alquiler temporal" sacado del hero (sigue disponible en el select del
-  // catalogo). Reemplazado por Duplex a pedido del cliente.
-  { id: 'duplex', label: 'Dúplex', icon: 'apt' },
+  // El cliente prefiere "Lugar Temporal" en lugar de "Alquiler temporal"
+  // (mismo concepto, redaccion mas neutra). El id sigue siendo 'temporal'
+  // para mantener compat con BROAD_TO_TIPOS del catalogo.
+  { id: 'temporal', label: 'Lugar Temporal', icon: 'cal' },
 ];
 
 // Unsplash photo IDs — modern real estate photos
