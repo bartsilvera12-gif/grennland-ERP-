@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     let planTier: string | null = null;
     let packId: string | null = null;
     let packQty: number | null = null;
-    let monto: number | null = num(body.monto);
+    const monto: number | null = num(body.monto);
     let propiedadId: string | null = null;
     const mensaje = s(body.mensaje, 1200);
 
