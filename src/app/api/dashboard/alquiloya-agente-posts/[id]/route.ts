@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
-import { sanitizeBlogHtml } from "../../../agente/posts/route";
+import { sanitizeBlogHtml } from "@/lib/alquiloya/sanitize-blog-html";
 
 function slugify(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")

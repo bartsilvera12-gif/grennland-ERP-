@@ -4,7 +4,7 @@ import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
-import { sanitizeBlogHtml } from "../route";
+import { sanitizeBlogHtml } from "@/lib/alquiloya/sanitize-blog-html";
 
 // Mismo slugify que en la coleccion. Si el PATCH manda slug vacio y titulo
 // cambio, regeneramos a partir del nuevo titulo.

@@ -3,7 +3,7 @@ import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { listErpAgentePosts } from "@/lib/alquiloya/erp-agente-posts";
-import { sanitizeBlogHtml } from "../../agente/posts/route";
+import { sanitizeBlogHtml } from "@/lib/alquiloya/sanitize-blog-html";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

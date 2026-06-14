@@ -15,7 +15,8 @@ type PublicTable =
   | "propiedad_fotos"
   | "propiedad_caracteristicas"
   | "propietarios"
-  | "planes_publicacion";
+  | "planes_publicacion"
+  | "agente_posts";
 
 function t(table: PublicTable): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
