@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, ChevronDown, LogOut } from "lucide-react";
+import Link from "next/link";
+import { Bell, ChevronDown, LogOut, User } from "lucide-react";
 import { cachedSessionFetch, invalidateCachedFetch } from "@/lib/api/cached-session-fetch";
 import { signOut } from "@/lib/auth";
 
@@ -10,6 +11,7 @@ type HeaderUsuario = {
   nombre: string | null;
   rol: string | null;
   email: string | null;
+  avatar_url?: string | null;
 };
 
 function clean(value: string | null | undefined): string {
@@ -76,6 +78,7 @@ export default function Header() {
 
   const nombreReal = clean(usuario?.nombre);
   const fallbackEmail = clean(usuario?.email);
+  const avatarUrl = clean(usuario?.avatar_url);
   const displayName = nombreReal || fallbackEmail || "Usuario";
   const dropdownName = nombreReal || "Usuario";
   const avatarInitial = (nombreReal || fallbackEmail || "Usuario").charAt(0).toUpperCase();
@@ -106,13 +109,17 @@ export default function Header() {
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 transition-colors hover:bg-slate-100"
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/alquiloya-legacy/assets/icono.png"
-                alt="AlquiloYa"
-                className="h-7 w-7 object-contain"
-              />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#0EA5E9] text-sm font-bold text-white ring-1 ring-slate-200">
+              {avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarUrl}
+                  alt={displayName}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span aria-hidden>{avatarInitial}</span>
+              )}
             </div>
             <div className="hidden text-left sm:block">
               <p className="max-w-[180px] truncate text-sm font-medium text-[#0F172A]">{displayName}</p>
@@ -128,7 +135,18 @@ export default function Header() {
           >
             <div className="border-b border-slate-200 px-4 py-2">
               <p className="truncate text-sm font-medium text-[#0F172A]">{dropdownName}</p>
+              {fallbackEmail ? (
+                <p className="truncate text-xs text-[#475569]">{fallbackEmail}</p>
+              ) : null}
             </div>
+            <Link
+              href="/perfil"
+              onClick={() => setUserMenuOpen(false)}
+              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-[#475569] transition-colors hover:bg-slate-50 hover:text-[#0EA5E9]"
+            >
+              <User className="h-4 w-4" />
+              Mi perfil
+            </Link>
             <button
               type="button"
               onClick={async () => {

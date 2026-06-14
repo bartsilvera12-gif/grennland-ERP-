@@ -88,7 +88,12 @@ function AgentProfilePage({ slug, onNav, onProperty }) {
       <div className="container" style={{ marginTop: -96, position: 'relative', zIndex: 2 }}>
         <div className="card" style={{ padding: 26, display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 26, alignItems: 'flex-start' }}>
           <div style={{ position: 'relative' }}>
-            <Avatar name={agent.name} size={108}/>
+            {agent.foto_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={agent.foto_url} alt={agent.name} style={{ width: 108, height: 108, borderRadius: '50%', objectFit: 'cover', display: 'block', background: 'var(--bg-3)', border: '3px solid #fff' }}/>
+            ) : (
+              <Avatar name={agent.name} size={108}/>
+            )}
             {agent.verified && (
               <span style={{
                 position: 'absolute', bottom: 4, right: 4,

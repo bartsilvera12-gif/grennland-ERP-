@@ -957,7 +957,20 @@ function AdminAgentPage({ route, onNav }) {
           <h3 style={{ fontSize: 20, marginTop: 4 }}>{isPropietario ? 'Mi perfil' : 'Mi perfil de agente'}</h3>
           <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>Datos visibles en tu página pública. Estos datos los ven los propietarios cuando elijen un agente.</div>
           <div className="card" style={{ padding: 22, marginTop: 16, display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 18, alignItems: 'center' }}>
-            <Avatar name={profileName} size={68}/>
+            <AgentAvatarUploader
+              fotoUrl={!isPropietario ? (profile?.foto_url || null) : null}
+              name={profileName}
+              size={68}
+              canUpload={!isPropietario}
+              onUploaded={(url) => {
+                setMeData((prev) => {
+                  if (!prev) return prev;
+                  const merged = { ...prev, agente: { ...prev.agente, foto_url: url } };
+                  SNAP.meData = merged;
+                  return merged;
+                });
+              }}
+            />
             <div>
               <div className="row gap-10" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
                 <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 17 }}>{profileName}</div>
@@ -1027,6 +1040,62 @@ function AdminAgentPage({ route, onNav }) {
         />
       )}
     </AdminLayout>
+  );
+}
+
+// Avatar editable del agente: muestra la foto actual (foto_url) o las iniciales
+// como fallback, y permite subir/cambiar la foto. POST multipart a
+// /api/agente/me/foto. Validación de tipo y tamaño en cliente + servidor.
+function AgentAvatarUploader({ fotoUrl, name, size = 68, canUpload, onUploaded }) {
+  const inputRef = React.useRef(null);
+  const [busy, setBusy] = React.useState(false);
+  async function onPick(e) {
+    const file = e.target.files && e.target.files[0];
+    if (e.target) e.target.value = ''; // permite re-subir el mismo archivo
+    if (!file) return;
+    if (!/^image\/(jpe?g|png|webp)$/i.test(file.type)) {
+      if (window.ayToast) window.ayToast('Formato no válido. Usá una imagen JPG, PNG o WEBP.', { variant: 'error', duration: 5000 });
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      if (window.ayToast) window.ayToast('La imagen supera el máximo de 4 MB.', { variant: 'error', duration: 5000 });
+      return;
+    }
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const r = await fetch('/api/agente/me/foto', { method: 'POST', credentials: 'include', body: fd });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data.success) throw new Error(data.error || ('HTTP ' + r.status));
+      if (window.ayInvalidate) window.ayInvalidate('/api/agente/me');
+      onUploaded && onUploaded(data.foto_url);
+      if (window.ayToast) window.ayToast('Foto de perfil actualizada.', { variant: 'success', duration: 4000 });
+    } catch (err) {
+      if (window.ayToast) window.ayToast('No pudimos subir la foto. ' + (err && err.message ? err.message : ''), { variant: 'error', duration: 6000 });
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      {fotoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={fotoUrl} alt={name || 'Foto de perfil'} style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', display: 'block', background: 'var(--bg-3)' }}/>
+      ) : (
+        <Avatar name={name} size={size}/>
+      )}
+      {canUpload && (
+        <>
+          <button type="button" onClick={() => inputRef.current && inputRef.current.click()} disabled={busy}
+            title={fotoUrl ? 'Cambiar foto' : 'Subir foto'}
+            style={{ position: 'absolute', bottom: -2, right: -2, width: 28, height: 28, borderRadius: '50%', background: 'var(--blue)', color: '#fff', border: '2px solid #fff', cursor: busy ? 'default' : 'pointer', display: 'grid', placeItems: 'center', opacity: busy ? .6 : 1, boxShadow: '0 2px 6px rgba(0,0,0,.2)' }}>
+            <I.upload s={13}/>
+          </button>
+          <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={onPick} style={{ display: 'none' }}/>
+        </>
+      )}
+    </div>
   );
 }
 
