@@ -1075,6 +1075,8 @@ function StepPhotos({ form, setF, isAgent }) {
   // soportado en el codigo para no romper drafts viejos, pero ya no se ofrece.
   const [mode, setMode] = React.useState('file');
   const fileInputRef = React.useRef(null);
+  const [dragIdx, setDragIdx] = React.useState(null);
+  const [overIdx, setOverIdx] = React.useState(null);
   // Cap del plan: si no hay plan elegido, no enforce (defaults a infinito).
   const planCap = Number(form.plan_fotos_max) > 0 ? Number(form.plan_fotos_max) : null;
   const fotosLen = (form.fotos || []).length;
@@ -1152,7 +1154,20 @@ function StepPhotos({ form, setF, isAgent }) {
     }
   }
   function removeFoto(idx) {
-    setF(f => ({ fotos: (f.fotos || []).filter((_, i) => i !== idx) }));
+    setF(f => {
+      const next = (f.fotos || []).filter((_, i) => i !== idx);
+      return { fotos: next.map((p, i) => Object.assign({}, p, { es_portada: i === 0 })) };
+    });
+  }
+  function moveFoto(from, to) {
+    if (from === to || from == null || to == null) return;
+    setF(f => {
+      const arr = (f.fotos || []).slice();
+      if (from < 0 || from >= arr.length || to < 0 || to >= arr.length) return {};
+      const [it] = arr.splice(from, 1);
+      arr.splice(to, 0, it);
+      return { fotos: arr.map((p, i) => Object.assign({}, p, { es_portada: i === 0 })) };
+    });
   }
   const segBtn = (active) => ({
     padding: '8px 14px', borderRadius: 10, border: '1px solid ' + (active ? 'var(--blue)' : 'var(--line)'),
@@ -1166,7 +1181,7 @@ function StepPhotos({ form, setF, isAgent }) {
       <p className="muted" style={{ fontSize: 14, marginTop: 6 }}>
         {isAgent
           ? 'Como agente, recomendamos pegar URLs de tu servidor de imágenes para no inflar la base. También podés subir desde dispositivo.'
-          : 'Subí las fotos desde tu dispositivo (hasta 4 MB c/u). La primera será la principal.'}
+          : 'Subí las fotos desde tu dispositivo (hasta 4 MB c/u).'}
       </p>
       {planCap != null && (
         <div style={{
@@ -1212,18 +1227,53 @@ function StepPhotos({ form, setF, isAgent }) {
         </div>
       )}
       {(form.fotos || []).length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 18 }}>
-          {form.fotos.map((f, i) => (
-            <div key={i} style={{ position: 'relative' }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={f.url} alt={f.alt || ''} style={{ width: '100%', height: 130, objectFit: 'cover', borderRadius: 10, background: 'var(--bg-2)' }} onError={(e) => { e.currentTarget.style.opacity = '0.3'; }}/>
-              {i === 0 && <span className="badge badge-featured" style={{ position: 'absolute', top: 8, left: 8 }}>Principal</span>}
-              <button type="button" onClick={() => removeFoto(i)} style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,.95)', border: 'none', cursor: 'pointer' }}>
-                <I.x s={12}/>
-              </button>
-            </div>
-          ))}
-        </div>
+        <>
+          <div style={{
+            marginTop: 18, padding: '10px 12px', borderRadius: 10,
+            background: 'var(--yellow-50, #fff7e3)',
+            border: '1px solid #f1d98b',
+            color: '#8a5e00',
+            fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span><b>La primera foto siempre será la portada principal.</b> Arrastrá las fotos para reordenarlas.</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12 }}>
+            {form.fotos.map((f, i) => {
+              const isDragging = dragIdx === i;
+              const isOver = overIdx === i && dragIdx !== null && dragIdx !== i;
+              return (
+                <div
+                  key={i}
+                  draggable
+                  onDragStart={(e) => { setDragIdx(i); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); } catch {} }}
+                  onDragOver={(e) => { e.preventDefault(); try { e.dataTransfer.dropEffect = 'move'; } catch {} if (overIdx !== i) setOverIdx(i); }}
+                  onDragLeave={() => { if (overIdx === i) setOverIdx(null); }}
+                  onDrop={(e) => { e.preventDefault(); const from = dragIdx != null ? dragIdx : Number(e.dataTransfer.getData('text/plain')); moveFoto(from, i); setDragIdx(null); setOverIdx(null); }}
+                  onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+                  style={{
+                    position: 'relative',
+                    cursor: 'grab',
+                    opacity: isDragging ? 0.4 : 1,
+                    transform: isOver ? 'scale(1.03)' : 'none',
+                    transition: 'transform .12s ease, opacity .12s ease',
+                    outline: isOver ? '2px dashed var(--blue)' : 'none',
+                    outlineOffset: isOver ? 2 : 0,
+                    borderRadius: 10,
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={f.url} alt={f.alt || ''} draggable={false} style={{ width: '100%', height: 130, objectFit: 'cover', borderRadius: 10, background: 'var(--bg-2)', pointerEvents: 'none' }} onError={(e) => { e.currentTarget.style.opacity = '0.3'; }}/>
+                  {i === 0 && <span className="badge badge-featured" style={{ position: 'absolute', top: 8, left: 8 }}>Principal</span>}
+                  <div style={{ position: 'absolute', bottom: 8, left: 8, width: 24, height: 24, borderRadius: 6, background: 'rgba(11,22,34,.55)', color: '#fff', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, pointerEvents: 'none' }}>⋮⋮</div>
+                  <button type="button" onClick={() => removeFoto(i)} onMouseDown={(e) => e.stopPropagation()} draggable={false} style={{ position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,.95)', border: 'none', cursor: 'pointer' }}>
+                    <I.x s={12}/>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
