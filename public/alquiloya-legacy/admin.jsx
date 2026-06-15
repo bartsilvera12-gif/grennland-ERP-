@@ -1474,6 +1474,8 @@ function CapturesSection({ onNav }) {
     _barrio: r.barrio,
     _email: r.propietario_email,
     _telefono: r.propietario_telefono,
+    _mensaje: r.mensaje,
+    _origen: r.origen,
   }));
   const hasRealCapt = realCaptMapped.length > 0;
   // Solo caemos al mock si el fetch fallo (useMock). Si la respuesta vino vacia
@@ -1678,6 +1680,12 @@ function CapturesSection({ onNav }) {
         {captures.map(c => {
           const p = PROPERTIES.find(pr => pr.id === c.propertyId) || { title: c.propertyId, cover: photo(0), address: '' };
           const closed = c.status === 'cerrada';
+          // Captacion real (lead del propietario via web publica): mostramos
+          // los datos del PROPIETARIO, no una propiedad. Avatar con iniciales,
+          // nombre como titulo, telefono/email + preview del mensaje. Solo si
+          // hay una propiedad ya cargada (titulo) mostramos la casita.
+          const showOwnerCard = c._real && !c._titulo;
+          const titulo = showOwnerCard ? (c.owner || 'Solicitud sin nombre') : p.title;
           return (
             <div key={c.propertyId} className="card" style={{
               padding: 12, display: 'flex', alignItems: 'center', gap: 14,
@@ -1685,28 +1693,49 @@ function CapturesSection({ onNav }) {
             }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue-100)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,88,165,.06)'; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}>
-              <Photo src={p.cover} style={{ width: 64, height: 64, borderRadius: 10, flexShrink: 0 }}/>
+              {showOwnerCard
+                ? <Avatar name={c.owner} size={64}/>
+                : <Photo src={p.cover} style={{ width: 64, height: 64, borderRadius: 10, flexShrink: 0 }}/>}
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="row gap-8" style={{ alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>{p.title}</span>
+                  <span style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>{titulo}</span>
                   {closed
                     ? <span style={{ padding: '1px 7px', borderRadius: 999, background: '#eaf6f0', color: 'var(--green)', fontSize: 9.5, fontWeight: 700 }}>✓ Cerrada</span>
                     : <span style={{ padding: '1px 7px', borderRadius: 999, background: 'var(--blue-50)', color: 'var(--blue)', fontSize: 9.5, fontWeight: 700 }}>● En gestión</span>}
+                  {showOwnerCard && (
+                    <span style={{ padding: '1px 7px', borderRadius: 999, background: 'var(--bg-3)', color: 'var(--ink-3)', fontSize: 9.5, fontWeight: 700 }}>Solicitud</span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11.5, color: 'var(--ink-3)', flexWrap: 'wrap' }}>
-                  <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-4)' }}>{c.propertyId}</span>
-                  <span style={{ color: 'var(--ink-4)' }}>·</span>
-                  <span><I.user s={11}/> <strong style={{ color: 'var(--ink-2)' }}>{c.owner}</strong></span>
-                  <span style={{ color: 'var(--ink-4)' }}>·</span>
-                  <span><I.cal s={11}/> Captada {c.date}</span>
-                  {c.rentPrice && (
+                  {showOwnerCard ? (
                     <>
+                      {c._telefono ? <span><I.whats s={11}/> <strong style={{ color: 'var(--ink-2)' }}>{c._telefono}</strong></span> : null}
+                      {c._email ? (<><span style={{ color: 'var(--ink-4)' }}>·</span><span><I.user s={11}/> {c._email}</span></>) : null}
                       <span style={{ color: 'var(--ink-4)' }}>·</span>
-                      <span>Alquiler <strong style={{ color: 'var(--ink-2)' }}>{formatGs(c.rentPrice)}</strong></span>
+                      <span><I.cal s={11}/> Solicitada {c.date}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-4)' }}>{c.propertyId}</span>
+                      <span style={{ color: 'var(--ink-4)' }}>·</span>
+                      <span><I.user s={11}/> <strong style={{ color: 'var(--ink-2)' }}>{c.owner}</strong></span>
+                      <span style={{ color: 'var(--ink-4)' }}>·</span>
+                      <span><I.cal s={11}/> Captada {c.date}</span>
+                      {c.rentPrice && (
+                        <>
+                          <span style={{ color: 'var(--ink-4)' }}>·</span>
+                          <span>Alquiler <strong style={{ color: 'var(--ink-2)' }}>{formatGs(c.rentPrice)}</strong></span>
+                        </>
+                      )}
                     </>
                   )}
                 </div>
+                {showOwnerCard && c._mensaje ? (
+                  <div style={{ marginTop: 6, fontSize: 12, color: 'var(--ink-2)', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    “{c._mensaje}”
+                  </div>
+                ) : null}
               </div>
 
               {/* Commission column */}
