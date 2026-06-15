@@ -5,7 +5,6 @@ type UsuarioMeRow = {
   nombre: string | null;
   email: string | null;
   rol: string | null;
-  avatar_url?: string | null;
 };
 
 function pickAuthMetadataName(authUser: { user_metadata?: Record<string, unknown> | null }): string | null {
@@ -34,21 +33,11 @@ export async function GET(request: Request) {
     let row: UsuarioMeRow | null = null;
 
     if (catalogUsuario?.id) {
-      // Intentamos incluir avatar_url; si la columna no existe todavía (migración
-      // sin aplicar), reintentamos sin ella para no romper el header.
-      let { data, error } = await supabaseSr
+      const { data, error } = await supabaseSr
         .from("usuarios")
-        .select("nombre, email, rol, avatar_url")
+        .select("nombre, email, rol")
         .eq("id", catalogUsuario.id)
         .maybeSingle();
-
-      if (error && /avatar_url/i.test(error.message)) {
-        ({ data, error } = await supabaseSr
-          .from("usuarios")
-          .select("nombre, email, rol")
-          .eq("id", catalogUsuario.id)
-          .maybeSingle());
-      }
 
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 400 });
@@ -59,9 +48,8 @@ export async function GET(request: Request) {
     const nombre = (row?.nombre ?? pickAuthMetadataName(authUser) ?? "").trim() || null;
     const email = (row?.email ?? authUser.email ?? "").trim() || null;
     const rol = (row?.rol ?? catalogUsuario?.rol ?? "").trim() || null;
-    const avatarUrl = (row?.avatar_url ?? "").trim() || null;
 
-    return NextResponse.json({ usuario: { nombre, rol, email, avatar_url: avatarUrl } });
+    return NextResponse.json({ usuario: { nombre, rol, email } });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Error al obtener el usuario actual";
     return NextResponse.json({ error: message }, { status: 500 });

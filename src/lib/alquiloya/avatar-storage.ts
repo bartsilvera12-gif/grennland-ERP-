@@ -4,11 +4,10 @@ import type { AppSupabaseClient } from "@/lib/supabase/schema";
 /**
  * Almacenamiento de fotos de perfil (avatares) en Supabase Storage.
  *
- * Un único bucket público `avatars` para:
- *   - Agentes/publicadores AlquiloYa  → path `agentes/{empresa_id}/{agente_id}.{ext}`
- *     (la URL se guarda en `alquiloya.agentes.foto_url` y se muestra en la web pública).
- *   - Usuarios internos del ERP        → path `usuarios/{usuario_id}.{ext}`
- *     (la URL se guarda en `alquiloya.usuarios.avatar_url` y se muestra en el header).
+ * Bucket público `avatars` para la foto de perfil del agente/publicador
+ * AlquiloYa → path `agentes/{empresa_id}/{agente_id}.{ext}`. La URL se guarda
+ * en `alquiloya.agentes.foto_url` y se muestra en la web pública (cards y
+ * perfil del agente).
  *
  * Bucket público (getPublicUrl) porque las fotos de agentes se muestran en la
  * web pública y no son datos sensibles. Se crea de forma idempotente (lazy)
