@@ -843,6 +843,44 @@
     .btn, .btn-sm { width: 100%; }
     .row.gap-8 .btn, .row.gap-10 .btn, .row.gap-12 .btn { width: auto; }
   }
+
+  /* Ficha de propiedad — "Características principales": en desktop es una
+     grilla de 6 columnas (icono arriba, label+valor abajo). En móvil quedaba
+     apilada en una sola columna (efecto de la regla global de colapsar grids)
+     con cada ítem ocupando una fila enorme y sin sentido. Acá lo hacemos
+     compacto: 3 columnas en móvil y 2 en teléfonos chicos, con el icono al
+     costado y label+valor al lado (formato horizontal). */
+  @media (max-width: 760px) {
+    .prop-features-grid {
+      grid-template-columns: repeat(3, 1fr) !important;
+      gap: 12px !important;
+    }
+    .prop-features-grid .prop-feature {
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center;
+      gap: 10px;
+    }
+    .prop-features-grid .prop-feature-icon {
+      width: 36px !important; height: 36px !important;
+    }
+    .prop-features-grid .prop-feature-text { flex: 1; min-width: 0; }
+    .prop-features-grid .prop-feature-label {
+      margin-top: 0 !important;
+      font-size: 11.5px !important;
+      line-height: 1.2;
+    }
+    .prop-features-grid .prop-feature-value {
+      font-size: 14px !important;
+      line-height: 1.2;
+      margin-top: 1px;
+    }
+  }
+  @media (max-width: 460px) {
+    .prop-features-grid {
+      grid-template-columns: repeat(2, 1fr) !important;
+    }
+  }
 </style>
 </head>
 <body>
@@ -861,23 +899,23 @@
 <script defer src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
 <script defer src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
 <!-- Chatbot (define SENDPULSE_CONFIG/vivioSendpulse usado por shared) -->
-<script defer src="build/vivio-sendpulse.js?v=mi-perfil-cycle-17"></script>
+<script defer src="build/vivio-sendpulse.js?v=feats-mobile-cycle-18"></script>
 
 <!-- Núcleo + páginas, orden estricto de dependencias -->
-<script defer src="build/brand.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/data.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/api-data.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/shared.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/home.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/catalog.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/detail.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/temporal.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/plans.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/publish.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/posters.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/admin.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/agent.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/help.js?v=mi-perfil-cycle-17"></script>
-<script defer src="build/app.js?v=mi-perfil-cycle-17"></script>
+<script defer src="build/brand.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/data.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/api-data.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/shared.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/home.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/catalog.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/detail.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/temporal.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/plans.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/publish.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/posters.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/admin.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/agent.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/help.js?v=feats-mobile-cycle-18"></script>
+<script defer src="build/app.js?v=feats-mobile-cycle-18"></script>
 </body>
 </html>

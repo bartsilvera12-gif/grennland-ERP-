@@ -384,14 +384,16 @@ function DetailFeatures({ p }) {
   return (
     <div className="card" style={{ padding: 24, marginTop: 24 }}>
       <h3 style={{ fontSize: 18 }}>Características principales</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16, marginTop: 18 }}>
+      <div className="prop-features-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 16, marginTop: 18 }}>
         {feats.map(f => (
-          <div key={f.label} className="col gap-4">
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--blue-50)', color: 'var(--blue)', display: 'grid', placeItems: 'center' }}>
+          <div key={f.label} className="prop-feature col gap-4">
+            <div className="prop-feature-icon" style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--blue-50)', color: 'var(--blue)', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
               {React.createElement(I[f.icon], { s: 18 })}
             </div>
-            <div className="muted xs" style={{ marginTop: 6 }}>{f.label}</div>
-            <div style={{ fontWeight: 700, fontSize: 14 }}>{f.val}</div>
+            <div className="prop-feature-text" style={{ minWidth: 0 }}>
+              <div className="muted xs prop-feature-label" style={{ marginTop: 6 }}>{f.label}</div>
+              <div className="prop-feature-value" style={{ fontWeight: 700, fontSize: 14 }}>{f.val}</div>
+            </div>
           </div>
         ))}
       </div>
