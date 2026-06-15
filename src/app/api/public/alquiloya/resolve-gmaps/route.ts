@@ -16,22 +16,40 @@ export const dynamic = "force-dynamic";
  */
 
 // Mismos parsers que el frontend para no tener que parsear dos veces.
-function parseCoordsFromUrl(url: string): { lat: number; lng: number } | null {
-  if (!url) return null;
-  // @LAT,LNG,Z (formato clasico google.com/maps/@...)
-  let m = url.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
-  if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
-  // !3dLAT!4dLNG (places y pins compartidos)
-  m = url.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/);
-  if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
-  // ?q=LAT,LNG / ?ll=LAT,LNG / ?query=LAT,LNG / ?destination=LAT,LNG
-  m = url.match(/[?&](?:q|ll|query|destination)=(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
-  if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
-  // Pares "LAT,LNG" sueltos como ultimo recurso (rango valido).
-  m = url.match(/(-?\d{1,3}\.\d{3,}),\s*(-?\d{1,3}\.\d{3,})/);
-  if (m) {
-    const la = Number(m[1]), ln = Number(m[2]);
-    if (Math.abs(la) <= 90 && Math.abs(ln) <= 180) return { lat: la, lng: ln };
+function parseCoordsFromUrl(rawUrl: string): { lat: number; lng: number } | null {
+  if (!rawUrl) return null;
+  // Probamos contra la URL cruda y contra la decodificada (algunos formatos
+  // viajan con %2C / %20 / + entre coords).
+  let urlDecoded = rawUrl;
+  try { urlDecoded = decodeURIComponent(rawUrl); } catch { /* keep raw */ }
+  const candidates = urlDecoded === rawUrl ? [rawUrl] : [rawUrl, urlDecoded];
+
+  for (const url of candidates) {
+    // @LAT,LNG,Z (formato clasico google.com/maps/@...)
+    let m = url.match(/@(-?\d{1,3}\.\d+),(-?\d{1,3}\.\d+)/);
+    if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
+    // !3dLAT!4dLNG (places y pins compartidos)
+    m = url.match(/!3d(-?\d{1,3}\.\d+)!4d(-?\d{1,3}\.\d+)/);
+    if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
+    // ?q=LAT,LNG / ?ll=LAT,LNG / ?query=LAT,LNG / ?destination=LAT,LNG
+    // (separador tolerante: coma, espacio o `+` URL-encoded).
+    m = url.match(/[?&](?:q|ll|query|destination)=(-?\d{1,3}\.\d+)[,\s+]+(-?\d{1,3}\.\d+)/);
+    if (m) return { lat: Number(m[1]), lng: Number(m[2]) };
+    // /maps/search/LAT,LNG  ó  /maps/place/LAT,LNG  ó  /maps/dir/.../LAT,LNG
+    // El redirect de los links cortos de la app móvil suele venir así, con `+`
+    // (espacio URL-encoded) entre lat y lng (ej. /maps/search/-25.31,+-57.53).
+    m = url.match(/\/maps\/(?:search|place|dir)\/[^@?#]*?(-?\d{1,3}\.\d+)[,\s+]+(-?\d{1,3}\.\d+)/);
+    if (m) {
+      const la = Number(m[1]), ln = Number(m[2]);
+      if (Math.abs(la) <= 90 && Math.abs(ln) <= 180) return { lat: la, lng: ln };
+    }
+    // Pares "LAT,LNG" sueltos como ultimo recurso (rango valido). Tolerante a
+    // espacios, `+` o coma entre los dos números.
+    m = url.match(/(-?\d{1,3}\.\d{3,})[,\s+]+(-?\d{1,3}\.\d{3,})/);
+    if (m) {
+      const la = Number(m[1]), ln = Number(m[2]);
+      if (Math.abs(la) <= 90 && Math.abs(ln) <= 180) return { lat: la, lng: ln };
+    }
   }
   return null;
 }
