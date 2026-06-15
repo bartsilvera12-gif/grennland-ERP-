@@ -164,6 +164,7 @@ export async function listPublicPropiedades(request: NextRequest) {
           p.superficie_m2::float8 AS superficie_m2,
           p.terreno_m2::float8 AS terreno_m2,
           (p.destacada AND (p.destacada_hasta IS NULL OR p.destacada_hasta > now())) AS destacada,
+          COALESCE(p.verificada, false) AS verificada,
           p.visible_web, p.activo, p.created_at, p.updated_at,
           CASE
             WHEN cover.id IS NULL THEN NULL
@@ -220,6 +221,7 @@ export async function getPublicPropiedad(id: string) {
           p.superficie_m2::float8 AS superficie_m2,
           p.terreno_m2::float8 AS terreno_m2,
           (p.destacada AND (p.destacada_hasta IS NULL OR p.destacada_hasta > now())) AS destacada,
+          COALESCE(p.verificada, false) AS verificada,
           p.visible_web, p.activo, p.created_at, p.updated_at,
           CASE
             WHEN a.id IS NULL THEN NULL
@@ -427,6 +429,7 @@ export async function getPublicAgente(id: string) {
                 'cocheras', p.cocheras,
                 'superficie_m2', p.superficie_m2::float8,
                 'destacada', (p.destacada AND (p.destacada_hasta IS NULL OR p.destacada_hasta > now())),
+                'verificada', COALESCE(p.verificada, false),
                 'cover', CASE
                   WHEN cover.id IS NULL THEN NULL
                   ELSE json_build_object(

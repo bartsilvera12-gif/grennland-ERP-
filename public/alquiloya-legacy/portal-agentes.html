@@ -173,19 +173,11 @@
 
   <div class="modal-backdrop" id="solicitar-modal" role="dialog" aria-modal="true" aria-labelledby="sol-title">
     <div class="modal">
-      <h2 id="sol-title">Crear cuenta de propietario</h2>
-      <p class="lead" id="sol-lead">Registrate directo y publicá tu inmueble (1 publicación incluida).</p>
+      <h2 id="sol-title">Solicitar acceso de agente</h2>
+      <p class="lead" id="sol-lead">Contanos quién sos. Nuestro equipo revisa cada pedido y te contactamos por email.</p>
 
       <form id="solicitar-form" novalidate>
         <div class="field">
-          <label>¿Qué tipo de cuenta querés?</label>
-          <div class="seg" role="tablist">
-            <button type="button" data-tipo="propietario" class="active">Propietario</button>
-            <button type="button" data-tipo="agente">Agente inmobiliario</button>
-          </div>
-        </div>
-
-        <div class="field" id="field-subtipo" style="display:none">
           <label>Tipo de agente</label>
           <div class="seg seg-rich" role="tablist">
             <button type="button" data-subtipo="Independiente" class="active">
@@ -205,30 +197,22 @@
           <input id="sol-nombre" type="text" required maxlength="160" />
         </div>
         <div class="field">
-          <label for="sol-email"><span id="lbl-email">Email *</span></label>
+          <label for="sol-email">Email</label>
           <input id="sol-email" type="email" maxlength="160" placeholder="vos@ejemplo.com" />
         </div>
         <div class="field">
           <label for="sol-telefono">Teléfono / WhatsApp *</label>
           <input id="sol-telefono" type="tel" maxlength="40" required placeholder="+595 9XX XXX XXX" />
         </div>
-        <div class="field" id="field-password">
-          <label for="sol-password">Poné la contraseña que querés * <span style="color:var(--ink-3);font-weight:500;text-transform:none">(mín. 8 caracteres)</span></label>
-          <input id="sol-password" type="password" minlength="8" maxlength="72" autocomplete="new-password" />
-        </div>
-        <div class="field" id="field-password2">
-          <label for="sol-password2">Repetí la contraseña *</label>
-          <input id="sol-password2" type="password" minlength="8" maxlength="72" autocomplete="new-password" />
-        </div>
-        <div class="field" id="field-empresa" style="display:none">
+        <div class="field">
           <label for="sol-empresa">Inmobiliaria / Razón social</label>
           <input id="sol-empresa" type="text" maxlength="160" />
         </div>
-        <div class="field" id="field-ciudad" style="display:none">
+        <div class="field">
           <label for="sol-ciudad">Ciudad</label>
           <input id="sol-ciudad" type="text" maxlength="80" />
         </div>
-        <div class="field" id="field-mensaje" style="display:none">
+        <div class="field">
           <label for="sol-mensaje">Mensaje (opcional)</label>
           <textarea id="sol-mensaje" maxlength="1200" placeholder="Contanos cuántos inmuebles tenés, qué buscás, etc."></textarea>
         </div>
@@ -237,7 +221,7 @@
 
         <div class="modal-actions">
           <button type="button" class="btn modal-cancel" id="sol-cancel">Cancelar</button>
-          <button type="submit" class="btn btn-primary" id="sol-submit">Crear cuenta</button>
+          <button type="submit" class="btn btn-primary" id="sol-submit">Enviar solicitud</button>
         </div>
       </form>
     </div>
@@ -251,35 +235,8 @@
       var form = document.getElementById('solicitar-form');
       var submitBtn = document.getElementById('sol-submit');
       var feedback = document.getElementById('sol-feedback');
-      var title = document.getElementById('sol-title');
-      var lead = document.getElementById('sol-lead');
-      var lblEmail = document.getElementById('lbl-email');
-      var tipoBtns = document.querySelectorAll('.seg button[data-tipo]');
       var subTipoBtns = document.querySelectorAll('.seg button[data-subtipo]');
       var subTipoHidden = document.getElementById('sol-subtipo');
-      var fieldSub = document.getElementById('field-subtipo');
-      var fieldEmpresa = document.getElementById('field-empresa');
-      var fieldPwd = document.getElementById('field-password');
-      var fieldPwd2 = document.getElementById('field-password2');
-      var fieldMsg = document.getElementById('field-mensaje');
-      var fieldCiudad = document.getElementById('field-ciudad');
-      var tipo = 'propietario';
-
-      function applyTipo() {
-        var esProp = tipo === 'propietario';
-        title.textContent = esProp ? 'Crear cuenta de propietario' : 'Solicitar acceso (agente)';
-        lead.textContent = esProp
-          ? 'Registrate directo y publicá tu inmueble (1 publicación incluida).'
-          : 'Contanos quién sos. Nuestro equipo revisa cada pedido y te contactamos.';
-        lblEmail.textContent = esProp ? 'Email *' : 'Email';
-        fieldSub.style.display = esProp ? 'none' : '';
-        fieldEmpresa.style.display = esProp ? 'none' : '';
-        fieldPwd.style.display = esProp ? '' : 'none';
-        fieldPwd2.style.display = esProp ? '' : 'none';
-        fieldMsg.style.display = esProp ? 'none' : '';
-        fieldCiudad.style.display = esProp ? 'none' : '';
-        submitBtn.textContent = esProp ? 'Crear cuenta' : 'Enviar solicitud';
-      }
 
       function openModal() { backdrop.classList.add('open'); }
       function closeModal() {
@@ -292,14 +249,6 @@
       backdrop.addEventListener('click', function (e) { if (e.target === backdrop) closeModal(); });
       document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
 
-      tipoBtns.forEach(function (b) {
-        b.addEventListener('click', function () {
-          tipoBtns.forEach(function (x) { x.classList.remove('active'); });
-          b.classList.add('active');
-          tipo = b.getAttribute('data-tipo');
-          applyTipo();
-        });
-      });
       subTipoBtns.forEach(function (b) {
         b.addEventListener('click', function () {
           subTipoBtns.forEach(function (x) { x.classList.remove('active'); });
@@ -307,8 +256,6 @@
           if (subTipoHidden) subTipoHidden.value = b.getAttribute('data-subtipo');
         });
       });
-
-      applyTipo();
 
       form.addEventListener('submit', async function (e) {
         e.preventDefault();
@@ -321,60 +268,21 @@
         var empresa = document.getElementById('sol-empresa').value.trim();
         var ciudad = document.getElementById('sol-ciudad').value.trim();
         var mensaje = document.getElementById('sol-mensaje').value.trim();
-        var password = document.getElementById('sol-password').value;
-        var password2 = document.getElementById('sol-password2').value;
-        var subTipo = tipo === 'agente' ? document.getElementById('sol-subtipo').value : null;
+        var subTipo = document.getElementById('sol-subtipo').value;
 
         if (!nombre) { feedback.className = 'feedback error'; feedback.textContent = 'Ingresá tu nombre.'; return; }
         var telDigits = telefono.replace(/\D/g, '');
         if (telDigits.length < 7) { feedback.className = 'feedback error'; feedback.textContent = 'El teléfono es obligatorio.'; return; }
 
-        // ───────── PROPIETARIO: alta directa ─────────
-        if (tipo === 'propietario') {
-          if (!email) { feedback.className = 'feedback error'; feedback.textContent = 'Ingresá tu email.'; return; }
-          if (password.length < 8) { feedback.className = 'feedback error'; feedback.textContent = 'La contraseña debe tener al menos 8 caracteres.'; return; }
-          if (password !== password2) { feedback.className = 'feedback error'; feedback.textContent = 'Las contraseñas no coinciden.'; return; }
-          submitBtn.disabled = true;
-          submitBtn.textContent = 'Creando…';
-          try {
-            var resP = await fetch('/api/public/alquiloya/registro-propietario', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ nombre: nombre, email: email, telefono: telefono, ciudad: ciudad || null, password: password })
-            });
-            var dataP = await resP.json().catch(function () { return {}; });
-            if (!resP.ok || !dataP || dataP.success === false) {
-              throw new Error((dataP && dataP.error) || ('HTTP ' + resP.status));
-            }
-            var portalUrl = (dataP && dataP.data && dataP.data.portal_url) || '/portal-agentes/login';
-            var autoLogged = !!(dataP && dataP.data && dataP.data.auto_logged);
-            feedback.className = 'feedback success';
-            feedback.innerHTML = autoLogged
-              ? '¡Listo! Cuenta creada. Llevándote al panel…'
-              : ('¡Listo! Tu cuenta de propietario está activa. ' +
-                  '<a href="' + portalUrl + '" style="font-weight:700;color:#065f46;text-decoration:underline">Ir al portal →</a>');
-            form.reset();
-            if (autoLogged) {
-              setTimeout(function () { window.location.assign(portalUrl); }, 600);
-            }
-          } catch (err) {
-            feedback.className = 'feedback error';
-            feedback.textContent = 'No pudimos crear tu cuenta. ' + (err && err.message ? err.message : '');
-          } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Crear cuenta';
-          }
-          return;
-        }
-
-        // ───────── AGENTE: solicitud con aprobación ─────────
+        // Solicitud de agente con aprobación (los propietarios NO crean cuenta:
+        // contactan al agente desde la web pública vía "Solicitar agente").
         submitBtn.disabled = true;
         submitBtn.textContent = 'Enviando…';
         try {
           var res = await fetch('/api/public/alquiloya/solicitudes-acceso', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tipo: tipo, sub_tipo: subTipo, nombre: nombre, email: email || null, telefono: telefono || null, empresa: empresa || null, ciudad: ciudad || null, mensaje: mensaje || null })
+            body: JSON.stringify({ tipo: 'agente', sub_tipo: subTipo, nombre: nombre, email: email || null, telefono: telefono || null, empresa: empresa || null, ciudad: ciudad || null, mensaje: mensaje || null })
           });
           var data = await res.json().catch(function () { return {}; });
           if (!res.ok || !data || data.success === false) {

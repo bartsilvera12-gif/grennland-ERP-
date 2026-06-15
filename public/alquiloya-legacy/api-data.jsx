@@ -186,7 +186,10 @@
       cochera: row.cocheras != null ? toNumber(row.cocheras) > 0 : Boolean(fallback?.cochera),
       amoblado: fallback?.amoblado ?? features.some(f => /amobl/i.test(f)),
       mascotas: fallback?.mascotas ?? features.some(f => /masc/i.test(f)),
-      verified: fallback?.verified ?? true,
+      // Antes: `fallback?.verified ?? true` — cuando no había fallback caía en
+      // `true` y TODAS las propiedades aparecían con badge "Verificado" y en la
+      // sección "Destacadas" del home, aunque no lo estuvieran en la DB.
+      verified: typeof row.verificada === 'boolean' ? row.verificada : Boolean(fallback?.verified),
       featured: row.destacada ?? fallback?.featured ?? false,
       isNew: fallback?.isNew ?? false,
       photos: photosFromRow(row, fallback, cover),
