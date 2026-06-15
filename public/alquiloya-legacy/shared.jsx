@@ -108,26 +108,9 @@ function Header({ route, onNav, onPublish }) {
           ))}
         </nav>
 
-        {/* Decorative zone — fills space between nav and button */}
-        <div className="header-hero-deco" style={{
-          flex: 1, minWidth: 0, height: '100%',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          paddingLeft: 24, paddingRight: 24,
-          pointerEvents: 'none', zIndex: 0,
-        }}>
-          <img
-            src="uploads/hero.png"
-            alt=""
-            aria-hidden="true"
-            style={{
-              width: '100%', maxWidth: 880, height: 120,
-              objectFit: 'contain', objectPosition: 'center center',
-              opacity: 0.52,
-              maskImage: 'linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%)',
-              WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%)',
-            }}
-          />
-        </div>
+        {/* Espaciador: empuja el chip de sesión a la derecha (antes había acá
+            una imagen decorativa hero.png; se quitó a pedido). */}
+        <div style={{ flex: 1, minWidth: 0 }} aria-hidden="true" />
 
         {/* Auth chip: muestra "Ingresar" si no hay sesion, o el avatar +
             dropdown del usuario logueado. Mientras `sessionChecked` es false
