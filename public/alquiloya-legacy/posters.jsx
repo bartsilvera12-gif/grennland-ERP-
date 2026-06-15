@@ -2,9 +2,13 @@
 // Vive dentro del panel del agente/propietario: gestión de carteles por propiedad.
 
 // URL publica que abre la ficha al escanear (deep-link ?prop=<uuid>, ver app.jsx).
+// Usamos /publico (no "/"): redirige a la web pública legacy en cualquier host
+// (next.config) conservando el query, así el QR abre la PUBLICACIÓN tanto en
+// el dominio público como en localhost/preview. Con "/" el QR caía al ERP/login
+// en hosts donde la raíz no se reescribe al sitio público.
 function qrPublicUrl(p) {
   const origin = (typeof window !== 'undefined' && window.location && window.location.origin) || 'https://alquiloya.com.py';
-  return origin + '/?prop=' + encodeURIComponent(p.id || p.apiId || '');
+  return origin + '/publico?prop=' + encodeURIComponent(p.id || p.apiId || '');
 }
 // QR REAL y escaneable via api.qrserver.com (sin API key). Reemplaza al QRMock
 // decorativo, que no se podia escanear.
