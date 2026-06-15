@@ -820,7 +820,8 @@ function AgentStarsPublic({ rating, count }) {
 // una captación para ese agente (POST /api/public/alquiloya/captaciones, que el
 // agente ve en su panel → Captaciones). Requiere nombre + (teléfono o email).
 function SolicitarAgenteModal({ agent, onClose }) {
-  const [form, setForm] = React.useState({ nombre: '', telefono: '', email: '', ciudad: '', mensaje: '' });
+  const [form, setForm] = React.useState({ nombre: '', telefono: '', email: '', mensaje: '' });
+  const [esPropietario, setEsPropietario] = React.useState(false);
   const [sending, setSending] = React.useState(false);
   const [sent, setSent] = React.useState(false);
   const [error, setError] = React.useState(null);
@@ -829,7 +830,7 @@ function SolicitarAgenteModal({ agent, onClose }) {
   const agentId = agent.apiId || agent.id;
   const validId = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(agentId || ''));
   const hasContacto = form.telefono.trim().length > 0 || form.email.trim().length > 0;
-  const ready = form.nombre.trim().length >= 2 && hasContacto && form.mensaje.trim().length >= 10;
+  const ready = esPropietario && form.nombre.trim().length >= 2 && hasContacto && form.mensaje.trim().length >= 10;
 
   React.useEffect(() => {
     const prev = document.body.style.overflow;
@@ -853,7 +854,6 @@ function SolicitarAgenteModal({ agent, onClose }) {
           propietario_nombre: form.nombre.trim(),
           propietario_email: form.email.trim() || undefined,
           propietario_telefono: form.telefono.trim() || undefined,
-          ciudad: form.ciudad.trim() || undefined,
           mensaje: form.mensaje.trim(),
           origen: 'web_publica_solicitar_agente',
         }),
@@ -897,7 +897,7 @@ function SolicitarAgenteModal({ agent, onClose }) {
           <div className="tag">Solicitar agente</div>
           <h3 style={{ fontSize: 20, marginTop: 6 }}>Contactá a {agent.name || 'este agente'}</h3>
           <p className="muted" style={{ fontSize: 13.5, marginTop: 6, lineHeight: 1.5 }}>
-            Dejá tus datos y contanos qué necesitás. El agente recibe tu solicitud y te contacta.
+            Para propietarios que quieren publicar o gestionar su inmueble. Dejá tus datos y el agente te contacta.
           </p>
         </div>
 
@@ -918,14 +918,14 @@ function SolicitarAgenteModal({ agent, onClose }) {
           </div>
           <div className="muted xs" style={{ marginTop: 4 }}>Dejá al menos un teléfono o un email para que te puedan contactar.</div>
           <div className="field" style={{ marginTop: 14 }}>
-            <label>Ciudad / zona (opcional)</label>
-            <input className="input" value={form.ciudad} onChange={(e) => set('ciudad', e.target.value)} placeholder="Ej: Asunción, Villa Morra" maxLength={120}/>
-          </div>
-          <div className="field" style={{ marginTop: 14 }}>
             <label>Tu mensaje *</label>
-            <textarea className="input" rows={4} value={form.mensaje} onChange={(e) => set('mensaje', e.target.value)} placeholder="Contale qué buscás o qué querés publicar. Mínimo 10 caracteres." maxLength={1000}/>
+            <textarea className="input" rows={4} value={form.mensaje} onChange={(e) => set('mensaje', e.target.value)} placeholder="Contanos sobre tu inmueble y qué necesitás. Mínimo 10 caracteres." maxLength={1000}/>
             <div className="muted xs" style={{ textAlign: 'right' }}>{form.mensaje.length} caracteres</div>
           </div>
+          <label style={{ marginTop: 14, display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13.5, cursor: 'pointer' }}>
+            <input type="checkbox" checked={esPropietario} onChange={(e) => setEsPropietario(e.target.checked)} style={{ marginTop: 3, width: 16, height: 16, flexShrink: 0 }}/>
+            <span>Soy propietario/a y quiero publicar o gestionar un inmueble.</span>
+          </label>
           {error ? <div style={{ marginTop: 8, color: '#b91c1c', fontSize: 13 }}>{error}</div> : null}
         </div>
 
