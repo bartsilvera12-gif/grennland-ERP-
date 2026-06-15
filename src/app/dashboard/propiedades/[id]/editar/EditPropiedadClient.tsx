@@ -26,8 +26,15 @@ function ensureOption(arr: string[], v: string | null): string[] {
   return [...arr, v];
 }
 
-export default function EditPropiedadClient({ initial }: { initial: ErpPropiedadDetail }) {
+export default function EditPropiedadClient({
+  initial,
+  fromPendientes = false,
+}: {
+  initial: ErpPropiedadDetail;
+  fromPendientes?: boolean;
+}) {
   const router = useRouter();
+  const fromQuery = fromPendientes ? "?from=pendientes" : "";
   const [agentes, setAgentes] = useState<Agente[]>([]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -117,7 +124,7 @@ export default function EditPropiedadClient({ initial }: { initial: ErpPropiedad
       });
       const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
       if (!res.ok || !data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
-      router.push(`/dashboard/propiedades/${initial.id}`);
+      router.push(`/dashboard/propiedades/${initial.id}${fromQuery}`);
       router.refresh();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Error al guardar");
@@ -129,7 +136,7 @@ export default function EditPropiedadClient({ initial }: { initial: ErpPropiedad
     <div className="px-6 py-6">
       <header className="mb-6">
         <Link
-          href={`/dashboard/propiedades/${initial.id}`}
+          href={`/dashboard/propiedades/${initial.id}${fromQuery}`}
           className="mb-2 inline-flex text-xs font-medium text-slate-500 hover:text-[#3F8E91]"
         >
           ← Volver al detalle

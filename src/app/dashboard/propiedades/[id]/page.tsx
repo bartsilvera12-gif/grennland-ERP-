@@ -58,7 +58,7 @@ export default async function PropiedadDetallePage({
           </p>
         </div>
         <Link
-          href={`/dashboard/propiedades/${p.id}/editar`}
+          href={`/dashboard/propiedades/${p.id}/editar${fromPendientes ? "?from=pendientes" : ""}`}
           className="inline-flex items-center gap-1.5 rounded-xl bg-[#4FAEB2] px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#3F8E91] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/40"
         >
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

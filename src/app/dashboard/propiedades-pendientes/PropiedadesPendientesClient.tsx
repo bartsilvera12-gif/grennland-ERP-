@@ -140,7 +140,7 @@ export default function PropiedadesPendientesClient({
                   Ver detalle
                 </Link>
                 <Link
-                  href={`/dashboard/propiedades/${p.id}/editar`}
+                  href={`/dashboard/propiedades/${p.id}/editar?from=pendientes`}
                   className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-200"
                 >
                   Editar
