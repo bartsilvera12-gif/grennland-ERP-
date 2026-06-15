@@ -845,7 +845,9 @@ function SolicitarAgenteModal({ agent, onClose }) {
   const agentId = agent.apiId || agent.id;
   const validId = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(agentId || ''));
   const hasContacto = form.telefono.trim().length > 0 || form.email.trim().length > 0;
-  const ready = form.nombre.trim().length >= 2 && hasContacto && form.mensaje.trim().length >= 10;
+  // Mensaje opcional: el agente igual recibe nombre + contacto y puede llamar.
+  // Antes pedía mínimo 10 caracteres y un "hola" no pasaba.
+  const ready = form.nombre.trim().length >= 2 && hasContacto;
 
   React.useEffect(() => {
     const prev = document.body.style.overflow;
@@ -869,7 +871,7 @@ function SolicitarAgenteModal({ agent, onClose }) {
           propietario_nombre: form.nombre.trim(),
           propietario_email: form.email.trim() || undefined,
           propietario_telefono: form.telefono.trim() || undefined,
-          mensaje: form.mensaje.trim(),
+          mensaje: form.mensaje.trim() || undefined,
           origen: 'web_publica_solicitar_agente',
         }),
       });
@@ -933,8 +935,8 @@ function SolicitarAgenteModal({ agent, onClose }) {
           </div>
           <div className="muted xs" style={{ marginTop: 4 }}>Dejá al menos un teléfono o un email para que te puedan contactar.</div>
           <div className="field" style={{ marginTop: 14 }}>
-            <label>Tu mensaje *</label>
-            <textarea className="input" rows={4} value={form.mensaje} onChange={(e) => set('mensaje', e.target.value)} placeholder="Contanos sobre tu inmueble y qué necesitás. Mínimo 10 caracteres." maxLength={1000}/>
+            <label>Tu mensaje (opcional)</label>
+            <textarea className="input" rows={4} value={form.mensaje} onChange={(e) => set('mensaje', e.target.value)} placeholder="Contanos sobre tu inmueble y qué necesitás." maxLength={1000}/>
             <div className="muted xs" style={{ textAlign: 'right' }}>{form.mensaje.length} caracteres</div>
           </div>
           {error ? <div style={{ marginTop: 8, color: '#b91c1c', fontSize: 13 }}>{error}</div> : null}
