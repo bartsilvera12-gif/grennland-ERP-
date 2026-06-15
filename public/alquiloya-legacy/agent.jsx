@@ -821,7 +821,6 @@ function AgentStarsPublic({ rating, count }) {
 // agente ve en su panel → Captaciones). Requiere nombre + (teléfono o email).
 function SolicitarAgenteModal({ agent, onClose }) {
   const [form, setForm] = React.useState({ nombre: '', telefono: '', email: '', mensaje: '' });
-  const [esPropietario, setEsPropietario] = React.useState(false);
   const [sending, setSending] = React.useState(false);
   const [sent, setSent] = React.useState(false);
   const [error, setError] = React.useState(null);
@@ -830,7 +829,7 @@ function SolicitarAgenteModal({ agent, onClose }) {
   const agentId = agent.apiId || agent.id;
   const validId = /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(agentId || ''));
   const hasContacto = form.telefono.trim().length > 0 || form.email.trim().length > 0;
-  const ready = esPropietario && form.nombre.trim().length >= 2 && hasContacto && form.mensaje.trim().length >= 10;
+  const ready = form.nombre.trim().length >= 2 && hasContacto && form.mensaje.trim().length >= 10;
 
   React.useEffect(() => {
     const prev = document.body.style.overflow;
@@ -922,10 +921,6 @@ function SolicitarAgenteModal({ agent, onClose }) {
             <textarea className="input" rows={4} value={form.mensaje} onChange={(e) => set('mensaje', e.target.value)} placeholder="Contanos sobre tu inmueble y qué necesitás. Mínimo 10 caracteres." maxLength={1000}/>
             <div className="muted xs" style={{ textAlign: 'right' }}>{form.mensaje.length} caracteres</div>
           </div>
-          <label style={{ marginTop: 14, display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13.5, cursor: 'pointer' }}>
-            <input type="checkbox" checked={esPropietario} onChange={(e) => setEsPropietario(e.target.checked)} style={{ marginTop: 3, width: 16, height: 16, flexShrink: 0 }}/>
-            <span>Soy propietario/a y quiero publicar o gestionar un inmueble.</span>
-          </label>
           {error ? <div style={{ marginTop: 8, color: '#b91c1c', fontSize: 13 }}>{error}</div> : null}
         </div>
 
