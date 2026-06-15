@@ -103,10 +103,11 @@ function EstadoBadge({ estado }: { estado: SolicitudServicioRow["estado"] }) {
 }
 
 export default function SolicitudesServicioClient({
-  initial, propietarios,
+  initial, propietarios, agentes,
 }: {
   initial: SolicitudServicioRow[];
   propietarios: PropOption[];
+  agentes: PropOption[];
 }) {
   const router = useRouter();
   const [rows, setRows] = useState<SolicitudServicioRow[]>(initial);
@@ -114,10 +115,20 @@ export default function SolicitudesServicioClient({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState<
-    | { kind: "aprobar"; row: SolicitudServicioRow; propietarioId: string; propiedadId: string }
+    | { kind: "aprobar"; row: SolicitudServicioRow; propietarioId: string; agenteId: string; propiedadId: string }
     | { kind: "rechazar"; row: SolicitudServicioRow; motivo: string }
     | null
   >(null);
+
+  // El plan_tier define a quién se aplica el plan. Convención del seed actual
+  // de planes_publicacion: tiers con sufijo "-owner" son para propietarios,
+  // el resto (incluye "-agent") son para agentes. Si el tier no trae sufijo,
+  // por defecto cae a agentes (la mayoría de planes pagos son de agente).
+  function planTarget(planTier: string | null | undefined): "propietario" | "agente" {
+    const t = (planTier ?? "").toLowerCase();
+    if (t.endsWith("-owner") || t.endsWith("_owner") || t.includes("propietario")) return "propietario";
+    return "agente";
+  }
 
   const counts = useMemo(() => {
     const c = { todas: rows.length, pendiente: 0, aprobada: 0, rechazada: 0 };
@@ -126,13 +137,19 @@ export default function SolicitudesServicioClient({
   }, [rows]);
   const visible = useMemo(() => filter === "todas" ? rows : rows.filter((r) => r.estado === filter), [rows, filter]);
 
-  // Auto-match propietario por email/teléfono al abrir el modal de aprobar.
-  function suggestPropietario(row: SolicitudServicioRow): string {
-    const byEmail = row.email ? propietarios.find((p) => p.email?.toLowerCase() === row.email!.toLowerCase()) : null;
+  // Auto-match por email/teléfono al abrir el modal de aprobar.
+  function suggestFromList(row: SolicitudServicioRow, list: PropOption[]): string {
+    const byEmail = row.email ? list.find((p) => p.email?.toLowerCase() === row.email!.toLowerCase()) : null;
     if (byEmail) return byEmail.id;
-    const byTel = row.telefono ? propietarios.find((p) => p.telefono?.replace(/\s/g, "") === row.telefono!.replace(/\s/g, "")) : null;
+    const byTel = row.telefono ? list.find((p) => p.telefono?.replace(/\s/g, "") === row.telefono!.replace(/\s/g, "")) : null;
     if (byTel) return byTel.id;
-    return row.propietario_id ?? "";
+    return "";
+  }
+  function suggestPropietario(row: SolicitudServicioRow): string {
+    return suggestFromList(row, propietarios) || (row.propietario_id ?? "");
+  }
+  function suggestAgente(row: SolicitudServicioRow): string {
+    return suggestFromList(row, agentes) || (row.agente_id ?? "");
   }
 
   async function aprobar() {
@@ -141,11 +158,21 @@ export default function SolicitudesServicioClient({
     setBusyId(row.id); setErr(null);
     try {
       const body: Record<string, unknown> = { action: "aprobar" };
-      if (row.kind === "cambio_plan" || row.kind === "impulsos") {
+      if (row.kind === "cambio_plan") {
+        // Para cambio de plan el target depende del tier: agente o propietario.
+        const target = planTarget(row.plan_tier);
+        if (target === "agente") {
+          if (!pending.agenteId) throw new Error("Seleccioná un agente");
+          body.agente_id = pending.agenteId;
+        } else {
+          if (!pending.propietarioId) throw new Error("Seleccioná un propietario");
+          body.propietario_id = pending.propietarioId;
+        }
+      } else if (row.kind === "impulsos") {
+        // Los impulsos siempre se acreditan al propietario (saldo).
         if (!pending.propietarioId) throw new Error("Seleccioná un propietario");
         body.propietario_id = pending.propietarioId;
-      }
-      if (row.kind === "verificacion") {
+      } else if (row.kind === "verificacion") {
         if (!pending.propiedadId) throw new Error("Pegá el UUID de la propiedad a verificar");
         body.propiedad_id = pending.propiedadId;
       }
@@ -258,7 +285,7 @@ export default function SolicitudesServicioClient({
                     {r.estado === "pendiente" ? (
                       <div className="inline-flex items-center gap-1">
                         <button type="button" disabled={busyId === r.id}
-                          onClick={() => setPending({ kind: "aprobar", row: r, propietarioId: suggestPropietario(r), propiedadId: r.propiedad_id ?? "" })}
+                          onClick={() => setPending({ kind: "aprobar", row: r, propietarioId: suggestPropietario(r), agenteId: suggestAgente(r), propiedadId: r.propiedad_id ?? "" })}
                           className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">Aprobar</button>
                         <button type="button" disabled={busyId === r.id}
                           onClick={() => setPending({ kind: "rechazar", row: r, motivo: "" })}
@@ -295,13 +322,26 @@ export default function SolicitudesServicioClient({
             ) : null}
 
             {(pending.row.kind === "cambio_plan" || pending.row.kind === "impulsos") ? (() => {
-              const matched = pending.propietarioId
-                ? propietarios.find((p) => p.id === pending.propietarioId) ?? null
-                : null;
+              // cambio_plan: target depende del tier (agente/propietario).
+              // impulsos: siempre propietario (saldo de impulsos).
+              const isAgenteTarget =
+                pending.row.kind === "cambio_plan" && planTarget(pending.row.plan_tier) === "agente";
+              const list = isAgenteTarget ? agentes : propietarios;
+              const selectedId = isAgenteTarget ? pending.agenteId : pending.propietarioId;
+              const matched = selectedId ? list.find((p) => p.id === selectedId) ?? null : null;
+              const targetLabel = isAgenteTarget ? "agente" : "propietario";
+              const updateSelected = (v: string) =>
+                setPending((p) =>
+                  p?.kind === "aprobar"
+                    ? isAgenteTarget
+                      ? { ...p, agenteId: v }
+                      : { ...p, propietarioId: v }
+                    : p
+                );
               return (
                 <div className="mt-4">
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-600">
-                    Se aplicará a
+                    Se aplicará a ({targetLabel})
                   </label>
                   {matched ? (
                     <div className="mt-1 flex items-start justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
@@ -318,13 +358,13 @@ export default function SolicitudesServicioClient({
                   ) : (
                     <>
                       <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                        No pudimos identificar al propietario por email/teléfono. Elegilo manualmente o creálo primero.
+                        No pudimos identificar al {targetLabel} por email/teléfono. Elegilo manualmente o creálo primero.
                       </div>
-                      <select value={pending.propietarioId}
-                        onChange={(e) => setPending((p) => p?.kind === "aprobar" ? { ...p, propietarioId: e.target.value } : p)}
+                      <select value={selectedId}
+                        onChange={(e) => updateSelected(e.target.value)}
                         className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[#4FAEB2] focus:outline-none focus:ring-2 focus:ring-[#4FAEB2]/30">
                         <option value="">— elegí uno —</option>
-                        {propietarios.map((p) => (
+                        {list.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.nombre} {p.email ? `· ${p.email}` : p.telefono ? `· ${p.telefono}` : ""}
                           </option>

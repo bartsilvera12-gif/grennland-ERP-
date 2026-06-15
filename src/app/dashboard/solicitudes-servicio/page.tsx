@@ -6,6 +6,8 @@ import {
 import {
   listErpPropietarios,
   type ErpPropietarioRow,
+  listErpAgentesInmobiliarios,
+  type ErpAgenteInmobiliarioRow,
 } from "@/lib/alquiloya/erp-agentes-inmobiliarios";
 import SolicitudesServicioClient from "./SolicitudesServicioClient";
 
@@ -15,6 +17,7 @@ export const runtime = "nodejs";
 export default async function SolicitudesServicioPage() {
   let rows: SolicitudServicioRow[] = [];
   let propietarios: ErpPropietarioRow[] = [];
+  let agentes: ErpAgenteInmobiliarioRow[] = [];
   let loadError: string | null = null;
   try {
     rows = await listErpSolicitudesServicio();
@@ -24,6 +27,11 @@ export default async function SolicitudesServicioPage() {
   }
   try {
     propietarios = await listErpPropietarios();
+  } catch {
+    // best-effort
+  }
+  try {
+    agentes = await listErpAgentesInmobiliarios();
   } catch {
     // best-effort
   }
@@ -53,6 +61,7 @@ export default async function SolicitudesServicioPage() {
         <SolicitudesServicioClient
           initial={rows}
           propietarios={propietarios.map((p) => ({ id: p.id, nombre: p.nombre, email: p.email, telefono: p.telefono }))}
+          agentes={agentes.map((a) => ({ id: a.id, nombre: a.nombre ?? "(sin nombre)", email: a.email, telefono: a.telefono }))}
         />
       )}
     </div>
