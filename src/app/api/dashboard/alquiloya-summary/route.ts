@@ -92,11 +92,13 @@ export async function GET(request: Request) {
            count(*) FILTER (WHERE activo = true AND visible_web = true)::int AS publicadas,
            count(*) FILTER (WHERE destacada = true)::int AS destacadas,
            -- Pendientes de aprobacion: criterio identico a listErpPropiedadesPendientes
-           -- (activo=false AND visible_web=false AND estado != 'rechazada' or NULL).
+           -- y countErpPropiedadesPendientes (estado IS NULL o 'inactiva'). Antes
+           -- el filtro era "estado distinto de rechazada" y contaba mas propiedades
+           -- que las que realmente aparecian en /dashboard/propiedades-pendientes.
            count(*) FILTER (
              WHERE activo = false
                AND visible_web = false
-               AND (estado IS NULL OR estado <> 'rechazada')
+               AND (estado IS NULL OR estado IN ('inactiva'))
            )::int AS pendientes
          FROM ${t("propiedades")} WHERE empresa_id = $1::uuid`,
         [ALQUILOYA_EMPRESA_ID]
