@@ -84,6 +84,7 @@ async function _sharePropiedad(property) {
 
 function Gallery({ photos = [], active, setActive, property }) {
   const [openFull, setOpenFull] = React.useState(false);
+  const [zoomIdx, setZoomIdx] = React.useState(null);
   const [saved, setSaved] = React.useState(false);
   React.useEffect(() => { setSaved(_isSaved(property && (property.apiId || property.id))); }, [property]);
   const real = (Array.isArray(photos) ? photos : []).filter(Boolean);
@@ -91,17 +92,17 @@ function Gallery({ photos = [], active, setActive, property }) {
   return (
     <div className="container" style={{ padding: '8px 32px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '2.2fr 1fr 1fr', gridTemplateRows: '230px 230px', gap: 8, borderRadius: 16, overflow: 'hidden' }}>
-        <Photo src={real[0]} style={{ gridRow: '1 / 3', borderRadius: 0, cursor: 'pointer' }}/>
-        <Photo src={real[1]} style={{ borderRadius: 0, cursor: 'pointer' }}/>
-        <Photo src={real[2]} style={{ borderRadius: 0, cursor: 'pointer' }}/>
-        <Photo src={real[3]} style={{ borderRadius: 0, cursor: 'pointer' }}/>
-        <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setOpenFull(true)}>
+        <Photo src={real[0]} onClick={() => real[0] && setZoomIdx(0)} style={{ gridRow: '1 / 3', borderRadius: 0, cursor: real[0] ? 'zoom-in' : 'default' }}/>
+        <Photo src={real[1]} onClick={() => real[1] && setZoomIdx(1)} style={{ borderRadius: 0, cursor: real[1] ? 'zoom-in' : 'default' }}/>
+        <Photo src={real[2]} onClick={() => real[2] && setZoomIdx(2)} style={{ borderRadius: 0, cursor: real[2] ? 'zoom-in' : 'default' }}/>
+        <Photo src={real[3]} onClick={() => real[3] && setZoomIdx(3)} style={{ borderRadius: 0, cursor: real[3] ? 'zoom-in' : 'default' }}/>
+        <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => (totalExtra > 0 ? setOpenFull(true) : real[4] ? setZoomIdx(4) : null)}>
           {/* La 5ta tile ya no repite la primera foto: si no hay 5ta real,
               queda el placeholder. El overlay "+N fotos" solo aparece si
               realmente hay fotos extra. */}
           <Photo src={real[4]} style={{ borderRadius: 0, height: '100%' }}/>
           {totalExtra > 0 && (
-            <button onClick={() => setOpenFull(true)} style={{
+            <button onClick={(e) => { e.stopPropagation(); setOpenFull(true); }} style={{
               position: 'absolute', inset: 0, background: 'rgba(11,22,34,.55)', color: '#fff', border: 'none',
               fontFamily: 'Montserrat', fontWeight: 700, fontSize: 14, cursor: 'pointer'
             }}>+ {totalExtra} foto{totalExtra !== 1 ? 's' : ''}</button>
@@ -122,12 +123,92 @@ function Gallery({ photos = [], active, setActive, property }) {
         </div>
         <button onClick={() => setOpenFull(true)} className="btn btn-outline btn-sm">Ver galería completa <I.arrow s={14}/></button>
       </div>
-      {openFull && <FullGalleryModal property={property} onClose={() => setOpenFull(false)}/>}
+      {openFull && <FullGalleryModal property={property} onClose={() => setOpenFull(false)} onZoom={(i) => { setOpenFull(false); setZoomIdx(i); }}/>}
+      {zoomIdx != null && <ImageZoomModal photos={real} initialIndex={zoomIdx} onClose={() => setZoomIdx(null)}/>}
     </div>
   );
 }
 
-function FullGalleryModal({ property, onClose }) {
+function ImageZoomModal({ photos, initialIndex = 0, onClose }) {
+  const [index, setIndex] = React.useState(initialIndex);
+  const [zoomed, setZoomed] = React.useState(false);
+  const [pan, setPan] = React.useState({ x: 0, y: 0 });
+  React.useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowRight') setIndex(i => Math.min(photos.length - 1, i + 1));
+      else if (e.key === 'ArrowLeft') setIndex(i => Math.max(0, i - 1));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
+  }, [photos.length]);
+  React.useEffect(() => { setZoomed(false); setPan({ x: 0, y: 0 }); }, [index]);
+  const src = photos[index];
+  function toggleZoom() { setZoomed(z => !z); setPan({ x: 0, y: 0 }); }
+  function onMouseMove(e) {
+    if (!zoomed) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const dx = (e.clientX - r.left) / r.width - 0.5;
+    const dy = (e.clientY - r.top) / r.height - 0.5;
+    setPan({ x: -dx * r.width * 0.5, y: -dy * r.height * 0.5 });
+  }
+  return ReactDOM.createPortal(
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,.92)', zIndex: 700,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn .15s ease both',
+    }}>
+      <button onClick={(e) => { e.stopPropagation(); onClose(); }} title="Cerrar (Esc)" style={{
+        position: 'absolute', top: 14, right: 14, background: 'rgba(255,255,255,.15)', color: '#fff',
+        border: 'none', width: 40, height: 40, borderRadius: '50%', cursor: 'pointer',
+        display: 'grid', placeItems: 'center', zIndex: 2,
+      }}><I.x s={18}/></button>
+      {photos.length > 1 && (
+        <>
+          <button onClick={(e) => { e.stopPropagation(); setIndex(i => Math.max(0, i - 1)); }}
+            disabled={index === 0}
+            style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)',
+              background: 'rgba(255,255,255,.15)', color: '#fff', border: 'none', width: 48, height: 48,
+              borderRadius: '50%', cursor: index === 0 ? 'default' : 'pointer', opacity: index === 0 ? .3 : 1,
+              display: 'grid', placeItems: 'center', zIndex: 2, fontSize: 26, lineHeight: 1, fontFamily: 'inherit' }}>‹</button>
+          <button onClick={(e) => { e.stopPropagation(); setIndex(i => Math.min(photos.length - 1, i + 1)); }}
+            disabled={index === photos.length - 1}
+            style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)',
+              background: 'rgba(255,255,255,.15)', color: '#fff', border: 'none', width: 48, height: 48,
+              borderRadius: '50%', cursor: index === photos.length - 1 ? 'default' : 'pointer', opacity: index === photos.length - 1 ? .3 : 1,
+              display: 'grid', placeItems: 'center', zIndex: 2, fontSize: 26, lineHeight: 1, fontFamily: 'inherit' }}>›</button>
+        </>
+      )}
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: '94vw', height: '88vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden',
+      }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={src} alt=""
+          onClick={toggleZoom}
+          onMouseMove={onMouseMove}
+          draggable={false}
+          style={{
+            maxWidth: '100%', maxHeight: '100%', objectFit: 'contain',
+            cursor: zoomed ? 'zoom-out' : 'zoom-in',
+            transform: zoomed ? `scale(2) translate(${pan.x}px, ${pan.y}px)` : 'none',
+            transition: zoomed ? 'transform .06s linear' : 'transform .15s ease',
+            userSelect: 'none',
+          }}/>
+      </div>
+      {photos.length > 1 && (
+        <div style={{ position: 'absolute', bottom: 18, left: '50%', transform: 'translateX(-50%)',
+          color: '#fff', background: 'rgba(0,0,0,.5)', padding: '6px 14px', borderRadius: 999, fontSize: 13 }}>
+          {index + 1} / {photos.length}
+        </div>
+      )}
+    </div>,
+    document.body
+  );
+}
+
+function FullGalleryModal({ property, onClose, onZoom }) {
   const [tab, setTab] = React.useState('fotos');
   const propId = property && (property.apiId || property.id);
   const [favorite, setFavorite] = React.useState(() => _isSaved(propId));
@@ -200,7 +281,7 @@ function FullGalleryModal({ property, onClose }) {
             ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {photos.map((src, i) => (
-                <div key={i} style={{ position: 'relative', overflow: 'hidden', borderRadius: 10, aspectRatio: i === 0 ? '16 / 9' : '4 / 3', gridColumn: i === 0 ? '1 / 3' : 'auto' }}>
+                <div key={i} onClick={() => onZoom && onZoom(i)} style={{ position: 'relative', overflow: 'hidden', borderRadius: 10, aspectRatio: i === 0 ? '16 / 9' : '4 / 3', gridColumn: i === 0 ? '1 / 3' : 'auto', cursor: 'zoom-in' }}>
                   <Photo src={src} style={{ borderRadius: 0, height: '100%' }}/>
                   {i === 0 && property.title && (
                     <div style={{
@@ -343,10 +424,6 @@ function DetailHeader({ p }) {
       <h2 style={{ fontSize: 32, lineHeight: 1.2 }}>{p.title}</h2>
       <div className="row gap-12 muted" style={{ marginTop: 10, fontSize: 14 }}>
         <span className="row gap-4"><I.pin s={14}/> {p.barrio}, {p.ciudad}, {p.depto}</span>
-        <span>·</span>
-        <span className="mono">{p.id}</span>
-        <span>·</span>
-        <span className="row gap-4"><I.eye s={14}/> 248 visitas esta semana</span>
       </div>
       <div className="row between" style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--line-2)' }}>
         <div>
@@ -623,7 +700,6 @@ function AgentCard({ agent, price, tipo, onNav, property }) {
         <div className="col gap-10" style={{ marginTop: 16 }}>
           <button type="button" className="btn btn-wa btn-lg" style={{ justifyContent: 'center' }} onClick={onClickWhatsApp}><I.whats s={18}/> Consultar por WhatsApp</button>
           <button type="button" className="btn btn-blue" style={{ justifyContent: 'center' }} onClick={onClickVisita}><I.cal s={16}/> Solicitar visita</button>
-          <button type="button" className="btn btn-outline" style={{ justifyContent: 'center' }} onClick={onClickMensaje}><I.chat s={16}/> Enviar mensaje</button>
         </div>
         <div style={{ marginTop: 16, padding: 12, background: 'var(--yellow-50)', borderRadius: 10, fontSize: 12.5, color: '#8a5e00', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
           <I.shield s={14}/>
@@ -669,7 +745,6 @@ function AgentCard({ agent, price, tipo, onNav, property }) {
       <div className="col gap-10" style={{ marginTop: 16 }}>
         <button type="button" className="btn btn-wa btn-lg" style={{ justifyContent: 'center' }} onClick={onClickWhatsApp}><I.whats s={18}/> Consultar por WhatsApp</button>
         <button type="button" className="btn btn-blue" style={{ justifyContent: 'center' }} onClick={onClickVisita}><I.cal s={16}/> Solicitar visita</button>
-        <button type="button" className="btn btn-outline" style={{ justifyContent: 'center' }} onClick={onClickMensaje}><I.chat s={16}/> Enviar mensaje</button>
       </div>
       <div style={{ marginTop: 16, padding: 12, background: 'var(--yellow-50)', borderRadius: 10, fontSize: 12.5, color: '#8a5e00', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
         <I.shield s={14}/>

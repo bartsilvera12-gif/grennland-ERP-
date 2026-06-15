@@ -341,9 +341,9 @@ function FootCol({ title, items }) {
   );
 }
 
-function Photo({ src, alt, label, style, children, className = '' }) {
+function Photo({ src, alt, label, style, children, className = '', onClick }) {
   return (
-    <div className={`photo ${className}`} style={{ borderRadius: 12, ...style }}>
+    <div onClick={onClick} className={`photo ${className}`} style={{ borderRadius: 12, ...style }}>
       {src && <img src={src} alt={alt || ''} loading="lazy" />}
       {label && <div className="photo-label">{label}</div>}
       {children}
