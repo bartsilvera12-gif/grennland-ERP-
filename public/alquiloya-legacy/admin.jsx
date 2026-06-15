@@ -13,7 +13,7 @@ function goPublishCleanUrl(onNav) {
   if (onNav) onNav('publish');
 }
 
-function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displayName, displayEmail, planInfo, planLoading, children }) {
+function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displayName, displayEmail, planInfo, planLoading, agentRoute, children }) {
   const items = kind === 'global' ? [
     { id: 'admin-global', label: 'Dashboard', icon: 'grid' },
     { id: 'admin-global-properties', label: 'Inmuebles', icon: 'house' },
@@ -120,8 +120,8 @@ function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displ
               )}
               {/* "Ver mi perfil publico" SOLO para agentes — los propietarios
                   no tienen perfil publico que mostrar. */}
-              {role === 'agente' && (
-                <button onClick={() => onNav('agent/mariana-lopez')} className="card" style={{ marginTop: 12, padding: 12, fontSize: 12.5, width: '100%', textAlign: 'left', cursor: 'pointer', border: '1px dashed var(--blue-100)' }}>
+              {role === 'agente' && agentRoute && (
+                <button onClick={() => onNav(agentRoute)} className="card" style={{ marginTop: 12, padding: 12, fontSize: 12.5, width: '100%', textAlign: 'left', cursor: 'pointer', border: '1px dashed var(--blue-100)' }}>
                   <div className="row gap-8">
                     <I.eye s={14}/>
                     <span style={{ fontWeight: 700, color: 'var(--blue)' }}>Ver mi perfil público</span>
@@ -623,6 +623,19 @@ function AdminAgentPage({ route, onNav }) {
           } catch { /* ignore */ }
         }
         return { name: planName, vencimiento: venc };
+      })()}
+      agentRoute={(() => {
+        // URL al perfil público del AGENTE logueado (no de mariana-lopez,
+        // que era hardcoded). Usa el id como fallback robusto si cambia el
+        // nombre / slug.
+        const ag = !isPropietario ? meData?.agente : null;
+        if (!ag?.id) return null;
+        const nombreSlug = String(ag.nombre || '')
+          .normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '') || 'agente';
+        return 'agent/' + (ag.slug || nombreSlug) + '?id=' + ag.id;
       })()}
     >
       {view === 'overview' && <ImpulseBanner free={impulsesFree} paid={impulsesPaid} freeMax={10} onBuy={() => setBuyOpen(true)}/>}

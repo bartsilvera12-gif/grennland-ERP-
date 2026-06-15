@@ -217,6 +217,16 @@ function PostersPage({ route, onNav }) {
         }
         return { name: planName, vencimiento: venc };
       })()}
+      agentRoute={(() => {
+        const ag = !isPropietario ? SNAP.meData?.agente : null;
+        if (!ag?.id) return null;
+        const nombreSlug = String(ag.nombre || '')
+          .normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '') || 'agente';
+        return 'agent/' + (ag.slug || nombreSlug) + '?id=' + ag.id;
+      })()}
       title="Carteles QR"
       subtitle="Cada propiedad genera su QR único automáticamente. Descargá o imprimí el cartel listo para la fachada."
       actions={
