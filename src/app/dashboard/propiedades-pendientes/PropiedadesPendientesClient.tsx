@@ -134,7 +134,7 @@ export default function PropiedadesPendientesClient({
 
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <Link
-                  href={`/dashboard/propiedades/${p.id}`}
+                  href={`/dashboard/propiedades/${p.id}?from=pendientes`}
                   className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-200"
                 >
                   Ver detalle

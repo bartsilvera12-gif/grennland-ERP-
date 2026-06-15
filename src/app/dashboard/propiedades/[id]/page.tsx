@@ -30,10 +30,14 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
 
 export default async function PropiedadDetallePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
+  const sp = (await searchParams) ?? {};
+  const fromPendientes = sp.from === "pendientes";
   const p = await getErpPropiedad(id);
   if (!p) notFound();
 
@@ -42,10 +46,10 @@ export default async function PropiedadDetallePage({
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <Link
-            href="/dashboard/propiedades"
+            href={fromPendientes ? "/dashboard/propiedades-pendientes" : "/dashboard/propiedades"}
             className="mb-3 inline-flex items-center text-xs font-medium text-slate-500 hover:text-[#3F8E91]"
           >
-            ← Volver al listado
+            {fromPendientes ? "← Volver a pendientes de aprobación" : "← Volver al listado"}
           </Link>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{p.titulo ?? "Sin título"}</h1>
           <p className="mt-1 text-sm text-slate-500">
