@@ -608,14 +608,21 @@ function AdminAgentPage({ route, onNav }) {
       }
       planInfo={(() => {
         const src = isPropietario ? meData?.propietario : meData?.agente;
-        if (!src || !src.plan_nombre) return null;
+        if (!src) return null;
+        // /api/agente/me expone el plan como objeto anidado `agente.plan` (con
+        // nombre, tier, billing). Antes leíamos `src.plan_nombre` (campo flat
+        // inexistente) → el sidebar mostraba "Sin plan asignado" aunque el
+        // agente tuviera plan. Soportamos ambos por si algún endpoint lo
+        // expone diferente.
+        const planName = (src.plan && src.plan.nombre) || src.plan_nombre || null;
+        if (!planName) return null;
         let venc = null;
         if (src.plan_vencimiento_at) {
           try {
             venc = new Date(src.plan_vencimiento_at).toLocaleDateString('es-PY', { day: 'numeric', month: 'long' });
           } catch { /* ignore */ }
         }
-        return { name: src.plan_nombre, vencimiento: venc };
+        return { name: planName, vencimiento: venc };
       })()}
     >
       {view === 'overview' && <ImpulseBanner free={impulsesFree} paid={impulsesPaid} freeMax={10} onBuy={() => setBuyOpen(true)}/>}
