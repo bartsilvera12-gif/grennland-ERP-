@@ -1185,9 +1185,11 @@ function Faq() {
 }
 
 function RequestAccessModal({ onClose, planTier, planLabel, onSuccess }) {
-  // Solo flujo de agente: los propietarios ya publican sin cuenta, asi
-  // que el toggle "Propietario / Agente" se saca. El modal queda como
-  // "Solicitar acceso" puro (kind=agente del endpoint solicitudes-acceso).
+  // Si el plan elegido es de propietario (tier contiene "owner"), el modal
+  // se reutiliza como "formulario de propietario" — sin segmento de tipo de
+  // agente ni campo de razón social. Caso contrario es el flujo de agente
+  // original (alta o cambio de plan agente).
+  const isOwnerPlan = !!planTier && /owner/i.test(String(planTier));
   const tipo = 'agente';
   const [subTipo, setSubTipo] = React.useState('Independiente');
   const [form, setForm] = React.useState({ nombre: '', email: '', telefono: '', empresa: '', ciudad: '', mensaje: '' });
@@ -1212,9 +1214,10 @@ function RequestAccessModal({ onClose, planTier, planLabel, onSuccess }) {
         // "Quiero este plan" → es una solicitud de servicio (cambio de plan),
         // NO un alta de agente. Mensaje + plan elegido + extras como contexto.
         const extras = [];
-        if (form.empresa.trim()) extras.push('Inmobiliaria: ' + form.empresa.trim());
+        if (!isOwnerPlan && form.empresa.trim()) extras.push('Inmobiliaria: ' + form.empresa.trim());
         if (form.ciudad.trim()) extras.push('Ciudad: ' + form.ciudad.trim());
-        if (subTipo) extras.push('Tipo: ' + subTipo);
+        if (isOwnerPlan) extras.push('Tipo: Propietario');
+        else if (subTipo) extras.push('Tipo: ' + subTipo);
         const mensajeFinal = [form.mensaje.trim(), extras.join(' · ')].filter(Boolean).join('\n');
         const payload = {
           kind: 'cambio_plan',
@@ -1281,7 +1284,9 @@ function RequestAccessModal({ onClose, planTier, planLabel, onSuccess }) {
         {/* Header sticky */}
         <div style={{ padding: '20px 24px 14px', borderBottom: '1px solid var(--line-2)', flexShrink: 0 }}>
           <h2 style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 20, margin: 0 }}>{planTier ? 'Quiero este plan' : 'Solicitar acceso de agente'}</h2>
-          <p style={{ marginTop: 6, fontSize: 13.5, color: 'var(--ink-3)' }}>Contanos quién sos. Nuestro equipo revisa cada pedido y te contactamos. Si sos propietario, podés publicar directo desde "Publicar inmueble" sin crear cuenta.</p>
+          <p style={{ marginTop: 6, fontSize: 13.5, color: 'var(--ink-3)' }}>{isOwnerPlan
+            ? 'Contanos quién sos y tus datos de contacto. Nuestro equipo revisa cada pedido y te contactamos para activar el plan.'
+            : 'Contanos quién sos. Nuestro equipo revisa cada pedido y te contactamos. Si sos propietario, podés publicar directo desde "Publicar inmueble" sin crear cuenta.'}</p>
           {planTier && (
             <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10, background: 'var(--blue-50)', border: '1px solid var(--blue-100)' }}>
               <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', color: 'var(--blue)', textTransform: 'uppercase' }}>Plan elegido</div>
@@ -1292,20 +1297,22 @@ function RequestAccessModal({ onClose, planTier, planLabel, onSuccess }) {
 
         {/* Body scrollable */}
         <div style={{ padding: '16px 24px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
-          <div>
-            <label style={fieldLabel}>Tipo de agente</label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <button type="button" style={segBtn(subTipo === 'Independiente')} onClick={() => setSubTipo('Independiente')}>
-                <span style={{ display: 'block', fontFamily: 'Montserrat', fontWeight: 800, fontSize: 13.5 }}>Independiente</span>
-                <span style={{ display: 'block', fontSize: 11, color: subTipo === 'Independiente' ? 'var(--blue)' : 'var(--ink-3)', marginTop: 2, fontWeight: 500 }}>Trabajo por mi cuenta</span>
-              </button>
-              <button type="button" style={segBtn(subTipo === 'Inmobiliaria')} onClick={() => setSubTipo('Inmobiliaria')}>
-                <span style={{ display: 'block', fontFamily: 'Montserrat', fontWeight: 800, fontSize: 13.5 }}>Inmobiliaria</span>
-                <span style={{ display: 'block', fontSize: 11, color: subTipo === 'Inmobiliaria' ? 'var(--blue)' : 'var(--ink-3)', marginTop: 2, fontWeight: 500 }}>Tengo una empresa</span>
-              </button>
+          {!isOwnerPlan && (
+            <div>
+              <label style={fieldLabel}>Tipo de agente</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <button type="button" style={segBtn(subTipo === 'Independiente')} onClick={() => setSubTipo('Independiente')}>
+                  <span style={{ display: 'block', fontFamily: 'Montserrat', fontWeight: 800, fontSize: 13.5 }}>Independiente</span>
+                  <span style={{ display: 'block', fontSize: 11, color: subTipo === 'Independiente' ? 'var(--blue)' : 'var(--ink-3)', marginTop: 2, fontWeight: 500 }}>Trabajo por mi cuenta</span>
+                </button>
+                <button type="button" style={segBtn(subTipo === 'Inmobiliaria')} onClick={() => setSubTipo('Inmobiliaria')}>
+                  <span style={{ display: 'block', fontFamily: 'Montserrat', fontWeight: 800, fontSize: 13.5 }}>Inmobiliaria</span>
+                  <span style={{ display: 'block', fontSize: 11, color: subTipo === 'Inmobiliaria' ? 'var(--blue)' : 'var(--ink-3)', marginTop: 2, fontWeight: 500 }}>Tengo una empresa</span>
+                </button>
+              </div>
             </div>
-          </div>
-          <div style={{ marginTop: 14 }}>
+          )}
+          <div style={{ marginTop: isOwnerPlan ? 0 : 14 }}>
             <label style={fieldLabel}>Nombre completo *</label>
             <input style={inputStyle} maxLength={160} value={form.nombre} onChange={e => set('nombre', e.target.value)} required/>
           </div>
@@ -1317,17 +1324,19 @@ function RequestAccessModal({ onClose, planTier, planLabel, onSuccess }) {
             <label style={fieldLabel}>Teléfono / WhatsApp</label>
             <input style={inputStyle} type="tel" maxLength={40} placeholder="+595 9XX XXX XXX" value={form.telefono} onChange={e => set('telefono', e.target.value)}/>
           </div>
-          <div style={{ marginTop: 14 }}>
-            <label style={fieldLabel}>Inmobiliaria / Razón social</label>
-            <input style={inputStyle} maxLength={160} value={form.empresa} onChange={e => set('empresa', e.target.value)}/>
-          </div>
+          {!isOwnerPlan && (
+            <div style={{ marginTop: 14 }}>
+              <label style={fieldLabel}>Inmobiliaria / Razón social</label>
+              <input style={inputStyle} maxLength={160} value={form.empresa} onChange={e => set('empresa', e.target.value)}/>
+            </div>
+          )}
           <div style={{ marginTop: 14 }}>
             <label style={fieldLabel}>Ciudad</label>
             <input style={inputStyle} maxLength={80} value={form.ciudad} onChange={e => set('ciudad', e.target.value)}/>
           </div>
           <div style={{ marginTop: 14 }}>
             <label style={fieldLabel}>Mensaje (opcional)</label>
-            <textarea style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }} maxLength={1200} value={form.mensaje} onChange={e => set('mensaje', e.target.value)} placeholder="Contanos cuántos inmuebles tenés, qué buscás, etc."/>
+            <textarea style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }} maxLength={1200} value={form.mensaje} onChange={e => set('mensaje', e.target.value)} placeholder={isOwnerPlan ? 'Contanos qué inmueble querés publicar (tipo, ubicación), o cualquier dato útil.' : 'Contanos cuántos inmuebles tenés, qué buscás, etc.'}/>
           </div>
 
           {feedback && (
