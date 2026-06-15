@@ -948,6 +948,7 @@ function HowItWorks() {
 function OwnersBlock({ onNav }) {
   const [reqOpen, setReqOpen] = React.useState(false);
   const [apiTestimonios, setApiTestimonios] = React.useState(null);
+  const [propsActivas, setPropsActivas] = React.useState(null);
   React.useEffect(() => {
     let cancelled = false;
     fetch('/api/public/alquiloya/testimonios', { cache: 'no-store' })
@@ -956,6 +957,16 @@ function OwnersBlock({ onNav }) {
         if (cancelled) return;
         const arr = body && body.success && body.data && Array.isArray(body.data.testimonios) ? body.data.testimonios : null;
         if (arr && arr.length > 0) setApiTestimonios(arr);
+      })
+      .catch(() => {});
+    // Conteo real de propiedades activas/publicas (las que devuelve el feed
+    // publico del catalogo) para reemplazar el "+15.000" hardcodeado.
+    fetch('/api/public/alquiloya/propiedades', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(body => {
+        if (cancelled) return;
+        const arr = body && body.success && body.data && Array.isArray(body.data.propiedades) ? body.data.propiedades : null;
+        if (arr) setPropsActivas(arr.length);
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -997,11 +1008,11 @@ function OwnersBlock({ onNav }) {
             {reqOpen && <RequestAccessModal onClose={() => setReqOpen(false)}/>}
             <div className="row gap-32" style={{ marginTop: 32 }}>
               {[
-                ['+15.000','propietarios activos'],
+                [propsActivas != null ? Number(propsActivas).toLocaleString('es-PY') : '—','propiedades activas'],
                 ['+2.400','consultas por día'],
                 ['72 hs','tiempo medio para alquilar'],
               ].map(([k,v]) => (
-                <div key={k}>
+                <div key={v}>
                   <div style={{ fontFamily: 'Montserrat', fontWeight: 900, fontSize: 28, color: 'var(--yellow)' }}>{k}</div>
                   <div style={{ fontSize: 13, color: '#cfe0f4' }}>{v}</div>
                 </div>
