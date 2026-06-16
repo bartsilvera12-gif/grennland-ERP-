@@ -4,6 +4,8 @@ import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
+import { bustOverviewCache } from "@/lib/cache/dashboard-overview-cache";
+import { getClientSchema } from "@/lib/env/instance-mode";
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
@@ -415,6 +417,14 @@ export async function DELETE(request: Request, ctx: RouteCtx) {
         [ALQUILOYA_EMPRESA_ID, id]
       );
     }
+    // Invalida el cache SWR del overview del dashboard. Sin esto, el contador
+    // "Pendientes de aprobacion" sigue mostrando el numero viejo hasta 30 min
+    // despues de que el dueno borra su propiedad — la lista de pendientes ya
+    // esta vacia pero la tarjeta del dashboard miente.
+    bustOverviewCache(
+      getClientSchema(),
+      process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || ALQUILOYA_EMPRESA_ID
+    );
     return NextResponse.json({ success: true, id, message: "Propiedad eliminada." });
   } catch (err) {
     console.error("[api/public/alquiloya/propiedades/[id] DELETE]", err);
