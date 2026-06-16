@@ -53,41 +53,69 @@ export async function POST(request: Request) {
     const mensaje = s(body.mensaje, 1200);
     const planTier = s(body.plan_tier_solicitado, 40);
 
+    // Afiliados (referido_partner): obligamos a aceptar las Bases y Condiciones
+    // antes de aceptar la solicitud. Para los demas tipos quedan opcionales (al
+    // menos por ahora) para no romper flujos existentes.
+    const aceptoTerminos = body.acepto_terminos === true;
+    const terminosVersion = s(body.terminos_version, 40);
+    if (tipo === "referido_partner" && !aceptoTerminos) {
+      return NextResponse.json(
+        errorResponse("Tenes que aceptar las Bases y Condiciones del Programa de Afiliados."),
+        { status: 400 }
+      );
+    }
+
     const pool = getChatPostgresPool();
     if (!pool) {
       return NextResponse.json(errorResponse("Pool no disponible"), { status: 500 });
     }
 
-    // Detectar si la columna plan_tier_solicitado existe (tolerar instancias sin la migration)
-    let hasPlanTier = false;
-    try {
-      const { rows: cols } = await queryWithRetry<{ ok: boolean }>(
-        pool,
-        `SELECT EXISTS (
-           SELECT 1 FROM information_schema.columns
-            WHERE table_schema='alquiloya' AND table_name='solicitudes_acceso' AND column_name='plan_tier_solicitado'
-         ) AS ok`,
-        []
-      );
-      hasPlanTier = cols[0]?.ok === true;
-    } catch {
-      hasPlanTier = false;
+    // Detectar columnas opcionales (instancias sin la migration corren igual).
+    async function colExists(name: string): Promise<boolean> {
+      try {
+        const { rows: cols } = await queryWithRetry<{ ok: boolean }>(
+          pool!,
+          `SELECT EXISTS (
+             SELECT 1 FROM information_schema.columns
+              WHERE table_schema='alquiloya' AND table_name='solicitudes_acceso' AND column_name=$1
+           ) AS ok`,
+          [name]
+        );
+        return cols[0]?.ok === true;
+      } catch {
+        return false;
+      }
     }
+    const [hasPlanTier, hasTerminosAt, hasTerminosVer, hasTerminosIp] = await Promise.all([
+      colExists("plan_tier_solicitado"),
+      colExists("terminos_aceptados_at"),
+      colExists("terminos_version"),
+      colExists("terminos_ip"),
+    ]);
 
-    const sql = hasPlanTier
-      ? `INSERT INTO "alquiloya"."solicitudes_acceso"
-           (empresa_id, tipo, sub_tipo, nombre, email, telefono, empresa, ciudad, mensaje, plan_tier_solicitado, estado)
-         VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pendiente')
-         RETURNING id`
-      : `INSERT INTO "alquiloya"."solicitudes_acceso"
-           (empresa_id, tipo, sub_tipo, nombre, email, telefono, empresa, ciudad, mensaje, estado)
-         VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, 'pendiente')
-         RETURNING id`;
-    const params = hasPlanTier
-      ? [ALQUILOYA_EMPRESA_ID, tipo, subTipo, nombre, email, telefono, empresa, ciudad, mensaje, planTier]
-      : [ALQUILOYA_EMPRESA_ID, tipo, subTipo, nombre, email, telefono, empresa, ciudad, mensaje];
+    // IP del solicitante para auditoria de la aceptacion (mejor esfuerzo:
+    // proxies / CDN inyectan x-forwarded-for; tomamos la primera entrada).
+    const ipHeader =
+      request.headers.get("x-forwarded-for") ??
+      request.headers.get("x-real-ip") ??
+      null;
+    const terminosIp = aceptoTerminos
+      ? (ipHeader ? ipHeader.split(",")[0]?.trim().slice(0, 64) : null)
+      : null;
 
-    const { rows } = await queryWithRetry<{ id: string }>(pool, sql, params);
+    const cols: string[] = ["empresa_id", "tipo", "sub_tipo", "nombre", "email", "telefono", "empresa", "ciudad", "mensaje", "estado"];
+    const vals: unknown[] = [ALQUILOYA_EMPRESA_ID, tipo, subTipo, nombre, email, telefono, empresa, ciudad, mensaje, "pendiente"];
+    if (hasPlanTier) { cols.push("plan_tier_solicitado"); vals.push(planTier); }
+    if (hasTerminosAt && aceptoTerminos) { cols.push("terminos_aceptados_at"); vals.push(new Date().toISOString()); }
+    if (hasTerminosVer && aceptoTerminos) { cols.push("terminos_version"); vals.push(terminosVersion); }
+    if (hasTerminosIp && aceptoTerminos && terminosIp) { cols.push("terminos_ip"); vals.push(terminosIp); }
+
+    const placeholders = cols.map((c, i) => (c === "empresa_id" ? `$${i + 1}::uuid` : `$${i + 1}`)).join(", ");
+    const sql = `INSERT INTO "alquiloya"."solicitudes_acceso" (${cols.map((c) => `"${c}"`).join(", ")})
+                 VALUES (${placeholders})
+                 RETURNING id`;
+
+    const { rows } = await queryWithRetry<{ id: string }>(pool, sql, vals);
     return NextResponse.json(successResponse({ id: rows[0].id }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

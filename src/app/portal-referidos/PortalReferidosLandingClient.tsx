@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { CONTRATO_AFILIADOS_VERSION } from "@/lib/legal/contrato-afiliados";
 
 type Canal = "instagram" | "tiktok" | "whatsapp" | "web" | "otro";
 
@@ -43,6 +44,7 @@ function PortalReferidosLandingInner() {
   const [telefono, setTelefono] = useState("");
   const [canal, setCanal] = useState<Canal>("instagram");
   const [mensaje, setMensaje] = useState("");
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +54,10 @@ function PortalReferidosLandingInner() {
     if (!nombre.trim()) { setError("Ingresá tu nombre."); return; }
     if (!email.trim() && !telefono.trim()) {
       setError("Ingresá al menos email o teléfono.");
+      return;
+    }
+    if (!aceptaTerminos) {
+      setError("Tenés que aceptar las Bases y Condiciones del Programa de Afiliados.");
       return;
     }
     setSubmitting(true);
@@ -66,6 +72,8 @@ function PortalReferidosLandingInner() {
           email: email.trim() || null,
           telefono: telefono.trim() || null,
           mensaje: mensaje.trim() || null,
+          acepto_terminos: true,
+          terminos_version: CONTRATO_AFILIADOS_VERSION,
         }),
       });
       const json = (await res.json().catch(() => ({}))) as {
@@ -197,6 +205,26 @@ function PortalReferidosLandingInner() {
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-[#0F172A] shadow-sm focus:border-[#0058A5] focus:outline-none focus:ring-2 focus:ring-[#0058A5]/30"
                 />
               </div>
+              <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={aceptaTerminos}
+                  onChange={(e) => setAceptaTerminos(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-[#0058A5] focus:ring-[#0058A5]"
+                />
+                <span>
+                  Leí y acepto las{" "}
+                  <Link
+                    href="/legal/contrato-afiliados"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-semibold text-[#0058A5] underline-offset-2 hover:underline"
+                  >
+                    Bases y Condiciones del Programa de Afiliados
+                  </Link>
+                  .
+                </span>
+              </label>
               {error ? (
                 <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-700">
                   {error}

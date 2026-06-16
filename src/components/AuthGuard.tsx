@@ -20,6 +20,7 @@ const PUBLIC_ROUTES = [
   "/portal-referidos",
   "/portal-referidos/login",
   "/portal-referidos/dashboard",
+  "/legal/contrato-afiliados",
 ];
 
 type ModuleAccess = { superAdmin: boolean; slugs: Set<string> };
