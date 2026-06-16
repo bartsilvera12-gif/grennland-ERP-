@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { CONTRATO_AFILIADOS_VERSION } from "@/lib/legal/contrato-afiliados";
+import {
+  CONTRATO_AFILIADOS_CLAUSULAS,
+  CONTRATO_AFILIADOS_INTRO,
+  CONTRATO_AFILIADOS_VERSION,
+} from "@/lib/legal/contrato-afiliados";
 
 type Canal = "instagram" | "tiktok" | "whatsapp" | "web" | "otro";
 
@@ -45,8 +49,23 @@ function PortalReferidosLandingInner() {
   const [canal, setCanal] = useState<Canal>("instagram");
   const [mensaje, setMensaje] = useState("");
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
+  const [showTerminos, setShowTerminos] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showTerminos) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setShowTerminos(false);
+    }
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [showTerminos]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -214,14 +233,13 @@ function PortalReferidosLandingInner() {
                 />
                 <span>
                   Leí y acepto las{" "}
-                  <Link
-                    href="/legal/contrato-afiliados"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => setShowTerminos(true)}
                     className="font-semibold text-[#0058A5] underline-offset-2 hover:underline"
                   >
                     Bases y Condiciones del Programa de Afiliados
-                  </Link>
+                  </button>
                   .
                 </span>
               </label>
@@ -279,6 +297,99 @@ function PortalReferidosLandingInner() {
           </Link>
         ) : null}
       </div>
+
+      {showTerminos ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="terminos-titulo"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 px-3 py-4 sm:items-center sm:px-4 sm:py-8"
+          onClick={() => setShowTerminos(false)}
+        >
+          <div
+            className="flex max-h-[85dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-[#0058A5]">
+                  Programa de afiliados
+                </p>
+                <h2 id="terminos-titulo" className="mt-0.5 text-lg font-bold text-[#0F172A]">
+                  Contrato de Adhesión
+                </h2>
+                <p className="mt-0.5 text-[11px] text-slate-500">
+                  Versión {CONTRATO_AFILIADOS_VERSION}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTerminos(false)}
+                aria-label="Cerrar"
+                className="-mr-1 -mt-1 inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </header>
+            <div className="flex-1 overflow-y-auto px-5 py-4 text-sm leading-relaxed text-slate-700">
+              <div className="space-y-2">
+                {CONTRATO_AFILIADOS_INTRO.map((p, i) => (
+                  <p key={i}>{p}</p>
+                ))}
+              </div>
+              <div className="mt-5 space-y-5">
+                {CONTRATO_AFILIADOS_CLAUSULAS.map((c) => (
+                  <section key={c.titulo}>
+                    <h3 className="text-xs font-bold uppercase tracking-wide text-[#0F172A]">
+                      {c.titulo}
+                    </h3>
+                    <div className="mt-1.5 space-y-1.5">
+                      {c.bloques.map((b, i) =>
+                        b.tipo === "p" ? (
+                          <p key={i}>{b.texto}</p>
+                        ) : (
+                          <ul key={i} className="ml-5 list-disc space-y-1">
+                            {b.items.map((it, j) => (
+                              <li key={j}>{it}</li>
+                            ))}
+                          </ul>
+                        ),
+                      )}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </div>
+            <footer className="flex flex-col gap-2 border-t border-slate-200 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[11px] leading-relaxed text-slate-500">
+                Tildá la casilla para aceptar electrónicamente.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowTerminos(false)}
+                  className="rounded-full border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cerrar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAceptaTerminos(true);
+                    setShowTerminos(false);
+                  }}
+                  className="rounded-full bg-[#0058A5] px-4 py-2 text-xs font-semibold text-white hover:bg-[#004B8F]"
+                >
+                  Acepto
+                </button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
