@@ -14,6 +14,13 @@ function goPublishCleanUrl(onNav) {
 }
 
 function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displayName, displayEmail, planInfo, planLoading, agentRoute, children }) {
+  // Drawer del sidebar en mobile. En desktop el CSS `.admin-shell` rinde el
+  // sidebar fijo, asi que `navOpen` solo se usa en breakpoints chicos.
+  const [navOpen, setNavOpen] = React.useState(false);
+  const handleNav = React.useCallback((id) => {
+    setNavOpen(false);
+    if (onNav) onNav(id);
+  }, [onNav]);
   const items = kind === 'global' ? [
     { id: 'admin-global', label: 'Dashboard', icon: 'grid' },
     { id: 'admin-global-properties', label: 'Inmuebles', icon: 'house' },
@@ -36,8 +43,9 @@ function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displ
 
   return (
     <div className="fade-in" style={{ background: 'var(--bg-2)', minHeight: 'calc(100vh - 76px)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr' }}>
-        <aside style={{ background: '#fff', borderRight: '1px solid var(--line)', minHeight: 'calc(100vh - 76px)', padding: '24px 16px' }}>
+      <div className={"admin-backdrop" + (navOpen ? ' open' : '')} onClick={() => setNavOpen(false)}/>
+      <div className="admin-shell">
+        <aside className={"admin-aside" + (navOpen ? ' open' : '')} style={{ background: '#fff', borderRight: '1px solid var(--line)', minHeight: 'calc(100vh - 76px)', padding: '24px 16px' }}>
           {/* Boton volver al sitio publico (pedido del cliente). */}
           <button
             onClick={() => {
@@ -84,7 +92,7 @@ function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displ
           </div>
           <nav className="col gap-2">
             {items.map(it => (
-              <button key={it.id} onClick={() => onNav(it.id)} style={{
+              <button key={it.id} onClick={() => handleNav(it.id)} style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
                 background: route === it.id ? 'var(--blue-50)' : 'transparent',
                 color: route === it.id ? 'var(--blue)' : 'var(--ink-2)',
@@ -138,12 +146,17 @@ function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displ
             </div>
           )}
         </aside>
-        <main style={{ padding: '20px 28px' }}>
+        <main className="admin-main" style={{ padding: '20px 28px' }}>
           {(title || actions) && (
-            <div className="row between" style={{ marginBottom: 18, alignItems: 'center' }}>
-              <div>
-                {title && <h2 style={{ fontSize: 19, lineHeight: 1.2 }}>{title}</h2>}
-                {subtitle && <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>{subtitle}</div>}
+            <div className="row between admin-main-header" style={{ marginBottom: 18, alignItems: 'center' }}>
+              <div className="row gap-10" style={{ alignItems: 'center', flex: 1, minWidth: 0 }}>
+                <button type="button" className="admin-burger" onClick={() => setNavOpen(true)} aria-label="Abrir menú">
+                  <I.grid s={18}/>
+                </button>
+                <div style={{ minWidth: 0 }}>
+                  {title && <h2 style={{ fontSize: 19, lineHeight: 1.2 }}>{title}</h2>}
+                  {subtitle && <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>{subtitle}</div>}
+                </div>
               </div>
               <div className="row gap-8">
                 {actions || (
@@ -157,7 +170,11 @@ function AdminLayout({ kind, role, route, onNav, title, subtitle, actions, displ
           )}
           {/* Floating action buttons when no header */}
           {!title && (
-            <div className="row gap-8" style={{ justifyContent: 'flex-end', marginBottom: 14 }}>
+            <div className="row gap-8" style={{ alignItems: 'center', marginBottom: 14 }}>
+              <button type="button" className="admin-burger" onClick={() => setNavOpen(true)} aria-label="Abrir menú">
+                <I.grid s={18}/>
+              </button>
+              <div style={{ flex: 1 }}/>
               {/* Contador "4 nuevas" (consultas) ocultado en limpieza UI legacy. */}
               {kind !== 'global' && <button onClick={() => goPublishCleanUrl(onNav)} style={{ padding: '6px 14px', height: 32, borderRadius: 8, background: 'var(--yellow)', border: 'none', color: 'var(--ink)', cursor: 'pointer', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6 }}><I.plus s={12}/> Cargar propiedad</button>}
             </div>
