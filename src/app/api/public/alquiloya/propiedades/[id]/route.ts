@@ -71,8 +71,52 @@ async function ensureEstadoConstraint(pool: import("pg").Pool): Promise<void> {
 // Alias compat con el nombre viejo del helper.
 const ensureEstadoEliminada = ensureEstadoConstraint;
 
-export async function GET(_request: NextRequest, ctx: RouteCtx) {
+export async function GET(request: NextRequest, ctx: RouteCtx) {
   const { id } = await ctx.params;
+  // Si el caller es el dueño (agente o propietario) de la propiedad, devolvemos
+  // la ficha aunque esté pausada / pendiente / no visible — sino el wizard del
+  // panel agente no puede prefillear para editarla y aparece "No pudimos cargar
+  // la propiedad para editar". Para visitantes anónimos seguimos aplicando el
+  // filtro de visible_web=true + activo=true.
+  if (UUID_RE.test(id)) {
+    try {
+      const authUser = await getAuthUserForApiRoute(request);
+      if (authUser?.id) {
+        const supabase = createServiceRoleClient();
+        const usuarioErp = await resolveUsuarioErpFromAuthUser(supabase, authUser);
+        if (usuarioErp && usuarioErp.empresa_id === ALQUILOYA_EMPRESA_ID) {
+          const { data: uExt } = await supabase
+            .from("usuarios")
+            .select("agente_id, propietario_id")
+            .eq("id", usuarioErp.id)
+            .limit(1)
+            .maybeSingle();
+          const userAgenteId = (uExt as { agente_id?: string | null } | null)?.agente_id ?? null;
+          const userPropietarioId = (uExt as { propietario_id?: string | null } | null)?.propietario_id ?? null;
+          if (userAgenteId || userPropietarioId) {
+            const pool = getChatPostgresPool();
+            if (pool) {
+              const own = await pool.query<{ propietario_id: string | null; agente_id: string | null }>(
+                `SELECT propietario_id::text AS propietario_id, agente_id::text AS agente_id
+                   FROM "alquiloya"."propiedades"
+                  WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
+                [ALQUILOYA_EMPRESA_ID, id]
+              );
+              const owns =
+                own.rows.length > 0 &&
+                ((userPropietarioId && own.rows[0].propietario_id === userPropietarioId) ||
+                  (userAgenteId && own.rows[0].agente_id === userAgenteId));
+              if (owns) return getPublicPropiedad(id, { includeAnyState: true });
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // No bloqueamos la GET pública por un fallo de auth — caemos al filtro
+      // público estricto.
+      console.warn("[api/public/alquiloya/propiedades/[id] GET ownership]", e instanceof Error ? e.message : e);
+    }
+  }
   return getPublicPropiedad(id);
 }
 

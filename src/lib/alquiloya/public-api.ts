@@ -200,7 +200,7 @@ export async function listPublicPropiedades(request: NextRequest) {
   }
 }
 
-export async function getPublicPropiedad(id: string) {
+export async function getPublicPropiedad(id: string, opts?: { includeAnyState?: boolean }) {
   try {
     const invalid = validateUuid(id);
     if (invalid) return invalid;
@@ -291,8 +291,7 @@ export async function getPublicPropiedad(id: string) {
          AND pr.empresa_id = p.empresa_id
         WHERE p.empresa_id = $1::uuid
           AND p.id = $2::uuid
-          AND p.activo = true
-          AND p.visible_web = true
+          ${opts?.includeAnyState ? "" : "AND p.activo = true AND p.visible_web = true"}
         LIMIT 1
       `,
       [ALQUILOYA_EMPRESA_ID, id]
