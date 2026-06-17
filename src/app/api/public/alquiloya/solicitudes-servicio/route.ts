@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { successResponse, errorResponse } from "@/lib/api/response";
+import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { createServiceRoleClient } from "@/lib/supabase/service-admin";
+import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -135,6 +138,38 @@ export async function POST(request: Request) {
       // propiedad_id puede ser null si el usuario aún no la registró; el ERP la vincula al revisar.
     }
 
+    // Si el caller esta autenticado (panel propietario o agente), resolvemos
+    // su agente_id / propietario_id desde alquiloya.usuarios. Lo guardamos en
+    // la fila para que el modal de aprobacion en /dashboard/solicitudes-servicio
+    // pueda preseleccionar al titular correcto sin tener que hacer fuzzy match
+    // por email/telefono. Es OPCIONAL — anonimos (publico) siguen funcionando.
+    let resolvedAgenteId: string | null = null;
+    let resolvedPropietarioId: string | null = null;
+    try {
+      const authUser = await getAuthUserForApiRoute(request);
+      if (authUser?.id) {
+        const supabase = createServiceRoleClient();
+        const usuarioErp = await resolveUsuarioErpFromAuthUser(supabase, authUser);
+        if (usuarioErp && usuarioErp.empresa_id === ALQUILOYA_EMPRESA_ID) {
+          const { data: uExt } = await supabase
+            .from("usuarios")
+            .select("agente_id, propietario_id")
+            .eq("id", usuarioErp.id)
+            .limit(1)
+            .maybeSingle();
+          resolvedAgenteId = (uExt as { agente_id?: string | null } | null)?.agente_id ?? null;
+          resolvedPropietarioId = (uExt as { propietario_id?: string | null } | null)?.propietario_id ?? null;
+        }
+      }
+    } catch (authErr) {
+      // No bloqueamos: si falla la autenticacion, dejamos los ids en null y
+      // el admin los selecciona manualmente con el fuzzy-match por email.
+      console.warn(
+        "[api/public/alquiloya/solicitudes-servicio] auth lookup fail:",
+        authErr instanceof Error ? authErr.message : authErr
+      );
+    }
+
     const pool = getChatPostgresPool();
     if (!pool) return NextResponse.json(errorResponse("Pool no disponible"), { status: 500 });
 
@@ -182,12 +217,16 @@ export async function POST(request: Request) {
       pool,
       `INSERT INTO "alquiloya"."solicitudes_servicio"
          (empresa_id, kind, nombre, email, telefono,
-          propiedad_id, plan_tier, pack_id, pack_qty, monto, mensaje, estado)
-       VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pendiente')
+          propiedad_id, propietario_id, agente_id,
+          plan_tier, pack_id, pack_qty, monto, mensaje, estado)
+       VALUES ($1::uuid, $2, $3, $4, $5,
+               $6, $7, $8,
+               $9, $10, $11, $12, $13, 'pendiente')
        RETURNING id`,
       [
         ALQUILOYA_EMPRESA_ID, kind, nombre, email, telefono,
-        propiedadId, planTier, packId, packQty, monto, mensaje,
+        propiedadId, resolvedPropietarioId, resolvedAgenteId,
+        planTier, packId, packQty, monto, mensaje,
       ]
     );
     return NextResponse.json(successResponse({ id: rows[0].id }));

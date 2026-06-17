@@ -145,11 +145,20 @@ export default function SolicitudesServicioClient({
     if (byTel) return byTel.id;
     return "";
   }
+  // Si la fila ya trae propietario_id / agente_id (guardado en el POST cuando
+  // el titular esta logueado), confiamos en eso: identifica de forma directa
+  // al solicitante y NO buscamos en la otra lista. Solo si no hay ningun id
+  // explicito caemos al fuzzy-match por email/telefono. Antes el fuzzy se
+  // hacia siempre y le pegaba a propietarios con email parecido al del agente.
   function suggestPropietario(row: SolicitudServicioRow): string {
-    return suggestFromList(row, propietarios) || (row.propietario_id ?? "");
+    if (row.propietario_id) return row.propietario_id;
+    if (row.agente_id) return "";
+    return suggestFromList(row, propietarios);
   }
   function suggestAgente(row: SolicitudServicioRow): string {
-    return suggestFromList(row, agentes) || (row.agente_id ?? "");
+    if (row.agente_id) return row.agente_id;
+    if (row.propietario_id) return "";
+    return suggestFromList(row, agentes);
   }
 
   async function aprobar() {

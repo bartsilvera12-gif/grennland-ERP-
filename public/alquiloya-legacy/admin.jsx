@@ -559,7 +559,12 @@ function AdminAgentPage({ route, onNav }) {
     const telefono = profile?.telefono || profile?.whatsapp || '';
     try {
       const res = await fetch('/api/public/alquiloya/solicitudes-servicio', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // credentials: include para que la cookie de sesion viaje y el server
+        // pueda guardar agente_id / propietario_id en la solicitud — sino el
+        // admin tiene que adivinar al titular por email/telefono.
+        credentials: 'include',
         body: JSON.stringify({
           kind: 'impulsos',
           nombre,
