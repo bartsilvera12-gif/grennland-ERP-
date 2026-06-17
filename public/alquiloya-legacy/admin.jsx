@@ -542,35 +542,40 @@ function AdminAgentPage({ route, onNav }) {
     else setImpulsesPaid(v => v - 1);
   };
   const onBuy = async (pack) => {
-    // Propietario logueado → solicitud real (kind=impulsos) con sus datos.
-    // Agente logueado → MISMA solicitud, pero con los datos del agente. Antes
-    // este branch solo corria para propietarios y la compra del agente caia
-    // al mock; resultado: las solicitudes nunca aparecian en /solicitudes-
-    // servicio del admin.
+    // SIEMPRE generamos una solicitud_servicio (kind=impulsos). El saldo
+    // recien se acredita cuando el admin la aprueba — NUNCA aca en el cliente.
+    // Antes habia un "fallback mock" que sumaba pack.qty al impulsesPaid si
+    // meData no estaba cargado todavia, lo que hacia parecer que los impulsos
+    // se cargaban automaticamente y la solicitud no llegaba al admin.
     const profile = isPropietario ? meData?.propietario : meData?.agente;
-    if (profile) {
-      try {
-        const res = await fetch('/api/public/alquiloya/solicitudes-servicio', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            kind: 'impulsos',
-            nombre: profile.nombre,
-            email: profile.email,
-            telefono: profile.telefono || profile.whatsapp || '',
-            pack_id: pack.id, pack_qty: pack.qty, monto: pack.price,
-            mensaje: isPropietario ? 'Compra desde portal propietario' : 'Compra desde portal agente',
-          }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || data.success === false) throw new Error((data && data.error) || ('HTTP ' + res.status));
-        return { ok: true };
-      } catch (e) {
-        return { ok: false, error: e.message || 'error' };
-      }
+    const nombre = profile?.nombre || meData?.usuario?.email || '';
+    const email = profile?.email || meData?.usuario?.email || '';
+    const telefono = profile?.telefono || profile?.whatsapp || '';
+    if (!nombre || (!email && !telefono)) {
+      return {
+        ok: false,
+        error:
+          'No pudimos identificar tu contacto. Refrescá la página y volvé a intentar.',
+      };
     }
-    // Fallback (mock para preview).
-    setImpulsesPaid(v => v + pack.qty);
-    return { ok: true, mock: true };
+    try {
+      const res = await fetch('/api/public/alquiloya/solicitudes-servicio', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'impulsos',
+          nombre,
+          email: email || null,
+          telefono: telefono || null,
+          pack_id: pack.id, pack_qty: pack.qty, monto: pack.price,
+          mensaje: isPropietario ? 'Compra desde portal propietario' : 'Compra desde portal agente',
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) throw new Error((data && data.error) || ('HTTP ' + res.status));
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message || 'error' };
+    }
   };
 
   // Reset scroll when changing section
