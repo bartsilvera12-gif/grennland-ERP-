@@ -536,18 +536,23 @@ function AdminAgentPage({ route, onNav }) {
     else setImpulsesPaid(v => v - 1);
   };
   const onBuy = async (pack) => {
-    // Si es propietario logueado, generamos solicitud real.
-    if (isPropietario && meData?.propietario) {
+    // Propietario logueado → solicitud real (kind=impulsos) con sus datos.
+    // Agente logueado → MISMA solicitud, pero con los datos del agente. Antes
+    // este branch solo corria para propietarios y la compra del agente caia
+    // al mock; resultado: las solicitudes nunca aparecian en /solicitudes-
+    // servicio del admin.
+    const profile = isPropietario ? meData?.propietario : meData?.agente;
+    if (profile) {
       try {
         const res = await fetch('/api/public/alquiloya/solicitudes-servicio', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             kind: 'impulsos',
-            nombre: meData.propietario.nombre,
-            email: meData.propietario.email,
-            telefono: meData.propietario.telefono,
+            nombre: profile.nombre,
+            email: profile.email,
+            telefono: profile.telefono || profile.whatsapp || '',
             pack_id: pack.id, pack_qty: pack.qty, monto: pack.price,
-            mensaje: 'Compra desde portal propietario',
+            mensaje: isPropietario ? 'Compra desde portal propietario' : 'Compra desde portal agente',
           }),
         });
         const data = await res.json().catch(() => ({}));
