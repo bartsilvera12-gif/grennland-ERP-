@@ -50,6 +50,41 @@ export function AgenteForm({
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [planes, setPlanes] = useState<PlanRow[] | null>(null);
+  const [uploadingFoto, setUploadingFoto] = useState(false);
+  const [fotoErr, setFotoErr] = useState<string | null>(null);
+
+  async function onPickFoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setFotoErr(null);
+    if (!/^image\/(jpe?g|png|webp)$/i.test(file.type)) {
+      setFotoErr("Formato no válido. Usá JPG, PNG o WEBP.");
+      return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      setFotoErr("La imagen supera el máximo de 4 MB.");
+      return;
+    }
+    setUploadingFoto(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetchWithSupabaseSession("/api/dashboard/alquiloya-agentes/foto-upload", {
+        method: "POST",
+        body: fd,
+      });
+      const data = (await r.json().catch(() => ({}))) as { success?: boolean; foto_url?: string; error?: string };
+      if (!r.ok || !data.success || !data.foto_url) {
+        throw new Error(data.error ?? `HTTP ${r.status}`);
+      }
+      set("foto_url", data.foto_url);
+    } catch (e) {
+      setFotoErr(e instanceof Error ? e.message : "No pudimos subir la foto");
+    } finally {
+      setUploadingFoto(false);
+    }
+  }
 
   function set<K extends keyof AgenteFormData>(k: K, v: AgenteFormData[K]) {
     setForm((f) => ({ ...f, [k]: v }));
@@ -160,8 +195,33 @@ export function AgenteForm({
             <input className={inputCls} value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} placeholder="ej. 595981000000" />
           </div>
           <div className={fieldCls}>
-            <label className={labelCls}>URL de foto</label>
-            <input className={inputCls} value={form.foto_url} onChange={(e) => set("foto_url", e.target.value)} placeholder="https://..." />
+            <label className={labelCls}>Foto de perfil</label>
+            <div className="flex items-start gap-3">
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100">
+                {form.foto_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={form.foto_url} alt="Foto" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[10px] text-slate-400">Sin foto</div>
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <input className={inputCls} value={form.foto_url} onChange={(e) => set("foto_url", e.target.value)} placeholder="https://... o subí una imagen" />
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                    {uploadingFoto ? "Subiendo…" : form.foto_url ? "Cambiar foto" : "Subir foto"}
+                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploadingFoto} onChange={onPickFoto} />
+                  </label>
+                  {form.foto_url ? (
+                    <button type="button" onClick={() => set("foto_url", "")} className="rounded-lg px-2 py-1 text-[11px] font-medium text-rose-600 hover:bg-rose-50">
+                      Quitar
+                    </button>
+                  ) : null}
+                  <span className="text-[11px] text-slate-500">JPG/PNG/WEBP — máx 4 MB</span>
+                </div>
+                {fotoErr ? <p className="text-[11px] text-rose-600">{fotoErr}</p> : null}
+              </div>
+            </div>
           </div>
           <div className={fieldCls}>
             <label className={labelCls}>URL del logo de la empresa</label>
