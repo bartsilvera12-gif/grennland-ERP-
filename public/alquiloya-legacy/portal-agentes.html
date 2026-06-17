@@ -243,6 +243,14 @@
         backdrop.classList.remove('open');
         feedback.className = 'feedback';
         feedback.textContent = '';
+        // Restauramos el formulario para que la proxima apertura no muestre
+        // el estado "ya enviado" (campos ocultos / boton "Cerrar").
+        var fields = form.querySelectorAll('.field');
+        for (var i = 0; i < fields.length; i++) fields[i].style.display = '';
+        submitBtn.style.display = '';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Enviar solicitud';
+        cancelBtn.textContent = 'Cancelar';
       }
       openBtn.addEventListener('click', openModal);
       cancelBtn.addEventListener('click', closeModal);
@@ -288,13 +296,19 @@
           if (!res.ok || !data || data.success === false) {
             throw new Error((data && (data.error || (data.data && data.data.error))) || ('HTTP ' + res.status));
           }
+          // Tras enviar con exito: ocultamos los campos y el boton "Enviar
+          // solicitud" para que quede claro que ya fue enviada. Cambiamos
+          // el boton "Cancelar" a "Cerrar" como unica accion disponible.
           feedback.className = 'feedback success';
           feedback.textContent = '¡Listo! Recibimos tu solicitud. En 24 hs hábiles vas a recibir un correo con tus accesos si tu solicitud es aceptada.';
           form.reset();
+          var fields = form.querySelectorAll('.field');
+          for (var i = 0; i < fields.length; i++) fields[i].style.display = 'none';
+          submitBtn.style.display = 'none';
+          cancelBtn.textContent = 'Cerrar';
         } catch (err) {
           feedback.className = 'feedback error';
           feedback.textContent = 'No pudimos registrar tu solicitud. ' + (err && err.message ? err.message : '');
-        } finally {
           submitBtn.disabled = false;
           submitBtn.textContent = 'Enviar solicitud';
         }
