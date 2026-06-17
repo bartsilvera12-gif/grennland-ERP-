@@ -48,13 +48,31 @@ export async function GET(request: Request) {
         .maybeSingle();
       const agenteId = (uExt as { agente_id?: string | null } | null)?.agente_id ?? null;
       if (agenteId) {
-        const { data: ag } = await supabase
+        // Tolerar instancias donde la columna `impulsos_saldo` todavia no fue
+        // bootstrapeada (la migration corre lazy en el endpoint de aprobacion
+        // de impulsos). Si el SELECT con impulsos_saldo falla, reintentamos
+        // sin esa columna para no romper la carga del perfil del agente.
+        let ag: Record<string, unknown> | null = null;
+        const withImpulsos = await supabase
           .from("agentes")
           .select("id, nombre, email, telefono, whatsapp, foto_url, cargo, bio, orden, activo, plan_publicacion_id, plan_vencimiento_at, impulsos_saldo")
           .eq("id", agenteId)
           .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
           .limit(1)
           .maybeSingle();
+        if (withImpulsos.error) {
+          const fallback = await supabase
+            .from("agentes")
+            .select("id, nombre, email, telefono, whatsapp, foto_url, cargo, bio, orden, activo, plan_publicacion_id, plan_vencimiento_at")
+            .eq("id", agenteId)
+            .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+            .limit(1)
+            .maybeSingle();
+          ag = (fallback.data ?? null) as Record<string, unknown> | null;
+          if (ag) ag.impulsos_saldo = 0;
+        } else {
+          ag = (withImpulsos.data ?? null) as Record<string, unknown> | null;
+        }
         if (ag) {
           agente = ag as Record<string, unknown>;
           // Plan info + cuota: lee el plan asignado y cuenta propiedades activas
