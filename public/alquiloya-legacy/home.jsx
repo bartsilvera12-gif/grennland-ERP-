@@ -1308,6 +1308,34 @@ function RequestAccessModal({ onClose, planTier, planLabel, onSuccess }) {
 
         {/* Body scrollable */}
         <div style={{ padding: '16px 24px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
+          {feedback?.kind === 'success' ? (
+            <div style={{
+              padding: '20px 18px', borderRadius: 12,
+              background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46',
+              display: 'flex', gap: 14, alignItems: 'flex-start',
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: '50%', background: '#10b981',
+                color: '#fff', display: 'grid', placeItems: 'center', flexShrink: 0,
+              }}>
+                <I.check s={20}/>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'Montserrat', fontWeight: 800, fontSize: 16, color: '#065f46' }}>
+                  ¡Solicitud enviada!
+                </div>
+                <div style={{ marginTop: 6, fontSize: 13.5, lineHeight: 1.5 }}>
+                  {feedback.text}
+                </div>
+                {feedback.portalUrl && (
+                  <a href={feedback.portalUrl} style={{ display: 'inline-block', marginTop: 10, fontWeight: 700, color: '#065f46', textDecoration: 'underline' }}>
+                    Ir al portal de acceso →
+                  </a>
+                )}
+              </div>
+            </div>
+          ) : (
+          <>
           {!isOwnerPlan && (
             <div>
               <label style={fieldLabel}>Tipo de agente</label>
@@ -1350,25 +1378,28 @@ function RequestAccessModal({ onClose, planTier, planLabel, onSuccess }) {
             <textarea style={{ ...inputStyle, minHeight: 70, resize: 'vertical' }} maxLength={1200} value={form.mensaje} onChange={e => set('mensaje', e.target.value)} placeholder={isOwnerPlan ? 'Contanos qué inmueble querés publicar (tipo, ubicación), o cualquier dato útil.' : 'Contanos cuántos inmuebles tenés, qué buscás, etc.'}/>
           </div>
 
-          {feedback && (
+          {feedback?.kind === 'error' && (
             <div style={{
               marginTop: 12, padding: '10px 12px', borderRadius: 10, fontSize: 13,
-              background: feedback.kind === 'error' ? '#fef2f2' : '#ecfdf5',
-              color: feedback.kind === 'error' ? '#991b1b' : '#065f46',
-              border: '1px solid ' + (feedback.kind === 'error' ? '#fecaca' : '#a7f3d0'),
+              background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca',
             }}>
               <div>{feedback.text}</div>
-              {feedback.kind === 'success' && feedback.portalUrl && (
-                <a href={feedback.portalUrl} style={{ display: 'inline-block', marginTop: 8, fontWeight: 700, color: '#065f46', textDecoration: 'underline' }}>Ir al portal de acceso →</a>
-              )}
             </div>
+          )}
+          </>
           )}
         </div>
 
         {/* Footer sticky */}
         <div style={{ padding: '14px 24px', borderTop: '1px solid var(--line-2)', background: '#fff', flexShrink: 0, display: 'flex', gap: 8 }}>
-          <button type="button" disabled={busy} onClick={onClose} className="btn" style={{ flex: 1, background: '#f1f5f9', color: 'var(--ink-2)' }}>Cancelar</button>
-          <button type="submit" disabled={busy} className="btn btn-primary" style={{ flex: 1 }}>{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
+          {feedback?.kind === 'success' ? (
+            <button type="button" onClick={onClose} className="btn btn-primary" style={{ flex: 1 }}>Cerrar</button>
+          ) : (
+            <>
+              <button type="button" disabled={busy} onClick={onClose} className="btn" style={{ flex: 1, background: '#f1f5f9', color: 'var(--ink-2)' }}>Cancelar</button>
+              <button type="submit" disabled={busy} className="btn btn-primary" style={{ flex: 1 }}>{busy ? 'Enviando…' : 'Enviar solicitud'}</button>
+            </>
+          )}
         </div>
       </form>
     </div>,
