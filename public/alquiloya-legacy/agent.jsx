@@ -904,21 +904,30 @@ function SolicitarAgenteModal({ agent, onClose }) {
   }
 
   return ReactDOM.createPortal(
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 16, overflowY: 'auto' }}>
-      <form onClick={(e) => e.stopPropagation()} onSubmit={submit} className="card" style={{ maxWidth: 480, width: '100%', position: 'relative', maxHeight: 'calc(100dvh - 32px)', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, margin: 'auto 0' }}>
+    // Overlay: padding mas chico en mobile (8px) para que el modal use el
+    // viewport casi entero. overflowY:auto deja al usuario hacer scroll del
+    // overlay completo si el form fuera mas alto que el viewport (failsafe).
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(11,22,34,.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 'clamp(8px, 2vw, 16px)', overflowY: 'auto' }}>
+      {/* Form card:
+          - 100svh (small viewport height) en lugar de 100dvh: no se mueve
+            cuando la URL bar de Android colapsa/expande, evitando que el
+            footer quede fuera del viewport efectivo.
+          - safe-area-inset-bottom para respetar gesture bar / notch.
+          - maxHeight calc considerando el padding del overlay (clamp). */}
+      <form onClick={(e) => e.stopPropagation()} onSubmit={submit} className="card" style={{ maxWidth: 480, width: '100%', position: 'relative', maxHeight: 'calc(100svh - 16px - env(safe-area-inset-bottom, 0px))', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0, margin: 'auto 0' }}>
         <button type="button" onClick={onClose} style={{ position: 'absolute', top: 14, right: 14, background: 'var(--bg-2)', border: 'none', width: 32, height: 32, borderRadius: 8, cursor: 'pointer', display: 'grid', placeItems: 'center', zIndex: 2 }}>
           <I.x s={14}/>
         </button>
 
-        <div style={{ padding: '22px 26px 14px', borderBottom: '1px solid var(--line-2)', flexShrink: 0 }}>
+        <div style={{ padding: '18px 20px 12px', borderBottom: '1px solid var(--line-2)', flexShrink: 0 }}>
           <div className="tag">Solicitar agente</div>
-          <h3 style={{ fontSize: 20, marginTop: 6 }}>Contactá a {agent.name || 'este agente'}</h3>
-          <p className="muted" style={{ fontSize: 13.5, marginTop: 6, lineHeight: 1.5 }}>
+          <h3 style={{ fontSize: 18, marginTop: 6, paddingRight: 36 }}>Contactá a {agent.name || 'este agente'}</h3>
+          <p className="muted" style={{ fontSize: 13, marginTop: 6, lineHeight: 1.5 }}>
             Para propietarios que quieren publicar o gestionar su inmueble. Dejá tus datos y el agente te contacta.
           </p>
         </div>
 
-        <div style={{ padding: '16px 26px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
+        <div style={{ padding: '14px 20px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
           <div className="field">
             <label>Tu nombre *</label>
             <input className="input" value={form.nombre} onChange={(e) => set('nombre', e.target.value)} placeholder="Ej: Pablo Ramírez" maxLength={120}/>
@@ -936,13 +945,15 @@ function SolicitarAgenteModal({ agent, onClose }) {
           <div className="muted xs" style={{ marginTop: 4 }}>Dejá al menos un teléfono o un email para que te puedan contactar.</div>
           <div className="field" style={{ marginTop: 14 }}>
             <label>Tu mensaje (opcional)</label>
-            <textarea className="input" rows={4} value={form.mensaje} onChange={(e) => set('mensaje', e.target.value)} placeholder="Contanos sobre tu inmueble y qué necesitás." maxLength={1000}/>
+            <textarea className="input" rows={3} value={form.mensaje} onChange={(e) => set('mensaje', e.target.value)} placeholder="Contanos sobre tu inmueble y qué necesitás." maxLength={1000}/>
             <div className="muted xs" style={{ textAlign: 'right' }}>{form.mensaje.length} caracteres</div>
           </div>
           {error ? <div style={{ marginTop: 8, color: '#b91c1c', fontSize: 13 }}>{error}</div> : null}
         </div>
 
-        <div style={{ padding: '14px 26px', borderTop: '1px solid var(--line-2)', background: '#fff', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
+        {/* Footer sticky con safe-area-inset para que NUNCA quede tapado por
+            la gesture bar / home indicator del mobile. */}
+        <div style={{ padding: '12px 20px calc(12px + env(safe-area-inset-bottom, 0px))', borderTop: '1px solid var(--line-2)', background: '#fff', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, position: 'sticky', bottom: 0 }}>
           <button type="button" onClick={onClose} className="btn btn-outline" disabled={sending}>Cancelar</button>
           <button type="submit" className="btn btn-blue" disabled={!ready || sending} style={{ opacity: ready && !sending ? 1 : .5, cursor: ready && !sending ? 'pointer' : 'not-allowed' }}>
             {sending ? 'Enviando…' : <>Enviar solicitud <I.arrow s={14}/></>}
