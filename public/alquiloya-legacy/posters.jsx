@@ -30,24 +30,140 @@ async function downloadQR(p) {
     window.open(qrImgSrc(p, 600), '_blank', 'noopener');
   }
 }
-// Imprime uno o varios carteles abriendo una ventana con el layout listo.
+
+// Convierte el QR (imagen remota api.qrserver.com) a un data:URL para embebir
+// dentro del SVG/HTML del cartel. Sin esto, html2canvas/SVG-to-canvas explota
+// por CORS al intentar leer la imagen ajena.
+async function qrAsDataUrl(p, size = 600) {
+  const res = await fetch(qrImgSrc(p, size));
+  const blob = await res.blob();
+  return await new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+
+function escapeXml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+// Arma el cartel completo como SVG con el QR ya embebido como data URL. Mismo
+// layout visual que printPosters (header azul + banner amarillo "SE ALQUILA"
+// + QR + codigo/direccion + footer azul). Es independiente del DOM, asi se
+// usa tanto para descargar PNG como para la vista previa.
+function buildPosterSvg(p, qrDataUrl, opts = {}) {
+  const W = opts.width || 720;
+  const H = opts.height || 980;
+  const codigo = escapeXml(p.codigo || '');
+  const addr = escapeXml(p.address || '');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Arial, Helvetica, sans-serif">
+  <rect width="${W}" height="${H}" fill="#ffffff"/>
+  <!-- Header azul -->
+  <rect x="0" y="0" width="${W}" height="78" fill="#0058A5"/>
+  <text x="32" y="50" font-size="30" font-weight="900" fill="#ffffff" letter-spacing="2">ALQUILOYA</text>
+  <!-- Banner amarillo -->
+  <rect x="0" y="78" width="${W}" height="170" fill="#F9B000"/>
+  <text x="${W / 2}" y="170" font-size="68" font-weight="900" font-style="italic" fill="#0b1622" text-anchor="middle">SE ALQUILA</text>
+  <text x="${W / 2}" y="210" font-size="16" font-weight="700" font-style="italic" fill="#0b1622" text-anchor="middle" letter-spacing="2">ESCANEÁ Y MIRÁ FOTOS, PRECIO Y DETALLES</text>
+  <!-- QR centrado -->
+  <rect x="${(W - 400) / 2}" y="290" width="400" height="400" fill="#0b1622" rx="10"/>
+  <image href="${qrDataUrl}" x="${(W - 380) / 2}" y="300" width="380" height="380"/>
+  <!-- Codigo + direccion -->
+  <text x="${W / 2}" y="740" font-size="20" font-family="monospace" fill="#5b6573" text-anchor="middle">${codigo}</text>
+  <text x="${W / 2}" y="775" font-size="22" font-weight="700" fill="#2a3543" text-anchor="middle">${addr}</text>
+  <!-- Footer azul -->
+  <rect x="0" y="${H - 70}" width="${W}" height="70" fill="#0058A5"/>
+  <text x="${W / 2}" y="${H - 27}" font-size="18" font-weight="800" font-style="italic" fill="#ffffff" text-anchor="middle">ALQUILOYA.COM.PY · ¡DONDE ENCONTRÁS MÁS RÁPIDO!</text>
+</svg>`;
+}
+
+// Descarga el cartel COMPLETO (no solo el QR) como PNG. Convierte el SVG a
+// PNG via <canvas> para que el cliente reciba un archivo listo para imprimir
+// o pegar en una publicacion.
+async function downloadPoster(p) {
+  try {
+    const qrDataUrl = await qrAsDataUrl(p, 600);
+    const svg = buildPosterSvg(p, qrDataUrl);
+    const W = 720;
+    const H = 980;
+    const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    const svgUrl = URL.createObjectURL(svgBlob);
+    await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = W;
+          canvas.height = H;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, W, H);
+          ctx.drawImage(img, 0, 0, W, H);
+          URL.revokeObjectURL(svgUrl);
+          canvas.toBlob((blob) => {
+            if (!blob) { reject(new Error('canvas vacío')); return; }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'cartel-' + (p.codigo || 'inmueble') + '.png';
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+            resolve();
+          }, 'image/png');
+        } catch (e) { reject(e); }
+      };
+      img.onerror = () => { URL.revokeObjectURL(svgUrl); reject(new Error('SVG load error')); };
+      img.src = svgUrl;
+    });
+  } catch (err) {
+    // Fallback: si el render del cartel falla por CORS u otra razon, al menos
+    // bajamos el QR suelto para que el usuario tenga algo accionable.
+    console.warn('[downloadPoster] fallo, fallback a QR suelto:', err && err.message);
+    return downloadQR(p);
+  }
+}
+
+// Imprime uno o varios carteles. Antes abria una ventana nueva (window.open)
+// y el usuario veia el cartel en un popup antes de imprimir. Ahora usamos un
+// iframe oculto: el dialogo de impresion sale directo, sin previews.
 function printPosters(list) {
   const arr = Array.isArray(list) ? list : [list];
   if (!arr.length) return;
-  const w = window.open('', '_blank', 'width=820,height=1000');
-  if (!w) { window.alert('Habilitá las ventanas emergentes para imprimir.'); return; }
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  iframe.style.visibility = 'hidden';
+  document.body.appendChild(iframe);
+  const cleanup = () => {
+    setTimeout(() => { try { document.body.removeChild(iframe); } catch (e) { /* ignore */ } }, 1000);
+  };
   const carteles = arr.map(p => `
     <div class="cartel">
       <div class="hd">ALQUILOYA</div>
       <div class="yellow"><div class="big">SE ALQUILA</div><div class="sub">ESCANEÁ Y MIRÁ FOTOS, PRECIO Y DETALLES</div></div>
       <div class="body">
-        <img src="${qrImgSrc(p, 360)}" alt="QR" class="qr"/>
+        <img src="${qrImgSrc(p, 600)}" alt="QR" class="qr"/>
         <div class="code">${p.codigo || ''}</div>
         <div class="addr">${(p.address || '').replace(/</g, '')}</div>
       </div>
       <div class="ft">ALQUILOYA.COM.PY · ¡DONDE ENCONTRÁS MÁS RÁPIDO!</div>
     </div>`).join('');
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Carteles QR</title>
+  // Para que el QR salga nitido y no como un cuadro gris (cuando el navegador
+  // dispara print() antes de que termine la red), esperamos a que todas las
+  // imagenes carguen y recien ahi triggereamos iframe.contentWindow.print().
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Carteles QR</title>
     <style>
       *{box-sizing:border-box;margin:0;font-family:Arial,Helvetica,sans-serif}
       body{padding:0}
@@ -61,11 +177,33 @@ function printPosters(list) {
       .code{font-family:monospace;font-size:14px;font-weight:600;color:#5b6573;margin-top:14px}
       .addr{font-size:15px;font-weight:600;color:#2a3543;margin-top:4px}
       .ft{background:#0058A5;color:#fff;text-align:center;padding:12px;font-weight:800;font-style:italic;font-size:12px}
-      @media print{.cartel{border:none}}
-    </style></head><body>${carteles}</body></html>`);
-  w.document.close();
-  // Esperamos a que carguen las imagenes del QR antes de imprimir.
-  w.onload = () => { setTimeout(() => { w.focus(); w.print(); }, 400); };
+      @media print{.cartel{border:none;page-break-after:always}}
+      @page { margin: 12mm }
+    </style></head><body>${carteles}</body></html>`;
+  iframe.onload = () => {
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    const win = iframe.contentWindow;
+    const imgs = doc.images || [];
+    let pending = imgs.length;
+    let fired = false;
+    const fire = () => {
+      if (fired) return;
+      fired = true;
+      try { win.focus(); win.print(); } catch (e) { /* ignore */ }
+      cleanup();
+    };
+    const done = () => { if (--pending <= 0) fire(); };
+    if (!imgs.length) { setTimeout(fire, 200); return; }
+    for (let i = 0; i < imgs.length; i++) {
+      if (imgs[i].complete && imgs[i].naturalWidth) { done(); }
+      else {
+        imgs[i].addEventListener('load', done);
+        imgs[i].addEventListener('error', done);
+      }
+    }
+    setTimeout(fire, 6000); // failsafe por si alguna imagen nunca dispara load
+  };
+  iframe.srcdoc = html;
 }
 
 function PostersPage({ route, onNav }) {
@@ -315,7 +453,7 @@ function PostersPage({ route, onNav }) {
                 </td>
                 <td style={{ padding: '14px 18px', textAlign: 'right' }}>
                   <div className="row gap-6" style={{ justifyContent: 'flex-end' }}>
-                    <button title="Descargar QR" onClick={() => downloadQR(p)} style={{ padding: 0, width: 30, height: 30, borderRadius: 8, background: 'transparent', color: 'var(--ink-3)', border: '1px solid var(--line)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+                    <button title="Descargar cartel" onClick={() => downloadPoster(p)} style={{ padding: 0, width: 30, height: 30, borderRadius: 8, background: 'transparent', color: 'var(--ink-3)', border: '1px solid var(--line)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)'; }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--line)'; e.currentTarget.style.color = 'var(--ink-3)'; }}><I.download s={13}/></button>
                     <button title="Imprimir cartel" onClick={() => printPosters(p)} style={{ padding: 0, width: 30, height: 30, borderRadius: 8, background: 'transparent', color: 'var(--ink-3)', border: '1px solid var(--line)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
@@ -399,7 +537,7 @@ function PosterModal({ p, onClose }) {
             </div>
 
             <div className="col gap-8" style={{ marginTop: 'auto' }}>
-              <button className="btn btn-blue" style={{ justifyContent: 'center' }} onClick={() => downloadQR(p)}><I.download s={14}/> Descargar QR</button>
+              <button className="btn btn-blue" style={{ justifyContent: 'center' }} onClick={() => downloadPoster(p)}><I.download s={14}/> Descargar cartel</button>
               <button className="btn btn-outline" style={{ justifyContent: 'center' }} onClick={() => printPosters(p)}><I.print s={14}/> Imprimir cartel</button>
               <button className="btn btn-outline" style={{ justifyContent: 'center' }} onClick={async () => {
                 const url = qrPublicUrl(p);
