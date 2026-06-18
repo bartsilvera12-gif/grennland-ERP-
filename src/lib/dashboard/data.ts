@@ -87,6 +87,14 @@ export interface VentaRaw {
   moneda: string;
   tipo_cambio?: number;
   fecha: string;
+  /** Modo SERVICIOS (nuevo): razón social del cliente. */
+  cliente_razon_social?: string | null;
+  /** Modo SERVICIOS: RUC del cliente. */
+  cliente_ruc?: string | null;
+  /** Modo SERVICIOS: IVA aplicado a la cabecera. */
+  tipo_iva_cabecera?: "EXENTA" | "5%" | "10%" | null;
+  /** Modo SERVICIOS: lista de servicios facturados (descripcion + monto). */
+  servicios?: { descripcion: string; monto: number }[];
 }
 
 export interface CompraRaw {
@@ -420,6 +428,23 @@ export async function getDashboardData(): Promise<DashboardData> {
 
     ventas = (d.ventas ?? []).map((r: Record<string, unknown>) => {
       const id = r.id as string;
+      const tipoIvaCab = r.tipo_iva_cabecera as string | null | undefined;
+      const tipoIvaCabValid: VentaRaw["tipo_iva_cabecera"] =
+        tipoIvaCab === "EXENTA" || tipoIvaCab === "5%" || tipoIvaCab === "10%" ? tipoIvaCab : null;
+      const rawSrv = r.descripcion_servicios;
+      let servicios: VentaRaw["servicios"];
+      if (Array.isArray(rawSrv)) {
+        servicios = rawSrv
+          .map((x) => {
+            if (!x || typeof x !== "object") return null;
+            const o = x as Record<string, unknown>;
+            const d = String(o.descripcion ?? "");
+            const m = Number(o.monto);
+            if (!d || !Number.isFinite(m)) return null;
+            return { descripcion: d, monto: m };
+          })
+          .filter((y): y is { descripcion: string; monto: number } => y !== null);
+      }
       return {
         id,
         numero_control: (r.numero_control as string) ?? "",
@@ -431,6 +456,10 @@ export async function getDashboardData(): Promise<DashboardData> {
         moneda: (r.moneda as string) ?? "GS",
         tipo_cambio: Number(r.tipo_cambio) ?? 1,
         fecha: toCalendarDateStr(r.fecha as string) || toIsoTimestampStr(r.fecha as string),
+        cliente_razon_social: (r.cliente_razon_social as string) ?? null,
+        cliente_ruc: (r.cliente_ruc as string) ?? null,
+        tipo_iva_cabecera: tipoIvaCabValid,
+        servicios,
       };
     });
 

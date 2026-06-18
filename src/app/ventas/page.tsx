@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getVentas } from "@/lib/ventas/storage";
-import type { Venta, TipoVenta, TipoIvaVenta } from "@/lib/ventas/types";
+import type { Venta, TipoIvaVenta } from "@/lib/ventas/types";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function formatGs(valor: number) {
-  return `Gs. ${Math.round(valor).toLocaleString("es-PY")}`;
+function formatMoneda(valor: number, moneda: "GS" | "USD") {
+  const prefix = moneda === "USD" ? "USD" : "Gs.";
+  return `${prefix} ${Math.round(valor).toLocaleString("es-PY")}`;
 }
 
 function formatFecha(iso: string) {
@@ -25,20 +26,19 @@ function formatFecha(iso: string) {
   }
 }
 
-// ── Constantes de estilo ───────────────────────────────────────────────────────
-
 const inputFilterClass =
   "border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#4FAEB2]/40 focus:border-[#4FAEB2] focus:outline-none";
-
-const tipoVentaBadge: Record<TipoVenta, string> = {
-  CONTADO: "bg-blue-50 text-blue-700",
-  CREDITO: "bg-orange-50 text-orange-700",
-};
 
 const ivaLabel: Record<TipoIvaVenta, string> = {
   EXENTA: "Exenta",
   "5%":   "IVA 5%",
   "10%":  "IVA 10%",
+};
+
+const ivaBadge: Record<TipoIvaVenta, string> = {
+  EXENTA: "bg-slate-100 text-slate-600",
+  "5%":   "bg-amber-50 text-amber-700",
+  "10%":  "bg-indigo-50 text-indigo-700",
 };
 
 // ── Métricas del día ──────────────────────────────────────────────────────────
@@ -58,10 +58,9 @@ function esDeHoy(iso: string): boolean {
 }
 
 interface MetricasHoy {
-  facturacion:       number;
-  cantidadVentas:    number;
-  ticketPromedio:    number;
-  productosVendidos: number;  // suma de todas las cantidades en todos los ítems
+  facturacion:    number;
+  cantidadVentas: number;
+  ticketPromedio: number;
 }
 
 function calcularMetricas(ventas: Venta[]): MetricasHoy {
@@ -69,11 +68,7 @@ function calcularMetricas(ventas: Venta[]): MetricasHoy {
   const facturacion      = deHoy.reduce((s, v) => s + v.total, 0);
   const cantidadVentas   = deHoy.length;
   const ticketPromedio   = cantidadVentas > 0 ? facturacion / cantidadVentas : 0;
-  const productosVendidos = deHoy.reduce(
-    (s, v) => s + v.items.reduce((si, i) => si + i.cantidad, 0),
-    0
-  );
-  return { facturacion, cantidadVentas, ticketPromedio, productosVendidos };
+  return { facturacion, cantidadVentas, ticketPromedio };
 }
 
 // ── Tarjeta métrica ───────────────────────────────────────────────────────────
@@ -118,20 +113,37 @@ function MetricCard({
 
 // ── Helpers de fila ───────────────────────────────────────────────────────────
 
-/** Muestra el primer producto de la venta y un badge con el resto. */
-function ResumenProductos({ v }: { v: Venta }) {
-  const primero = v.items[0];
-  if (!primero) {
+/** Identificacion del cliente / contenido de la venta. */
+function ResumenCliente({ v }: { v: Venta }) {
+  if (v.cliente_razon_social) {
+    const primera = v.servicios?.[0]?.descripcion;
+    const extra = (v.servicios?.length ?? 0) - 1;
     return (
-      <span className="text-xs text-gray-400">Sin líneas cargadas</span>
+      <div className="flex flex-col gap-0.5">
+        <span className="font-medium text-gray-800 leading-tight">{v.cliente_razon_social}</span>
+        <div className="flex items-center gap-2 mt-0.5">
+          {v.cliente_ruc ? (
+            <span className="font-mono text-xs text-gray-400">RUC {v.cliente_ruc}</span>
+          ) : null}
+          {primera ? (
+            <span className="text-xs text-gray-500 truncate max-w-[260px]">{primera}</span>
+          ) : null}
+          {extra > 0 ? (
+            <span className="bg-gray-100 text-gray-500 text-xs px-1.5 py-0.5 rounded-full font-medium">
+              +{extra} más
+            </span>
+          ) : null}
+        </div>
+      </div>
     );
   }
-  const extra   = v.items.length - 1;
+  // Modo viejo (productos): mostramos el primer item como antes.
+  const primero = v.items[0];
+  if (!primero) return <span className="text-xs text-gray-400">Sin líneas cargadas</span>;
+  const extra = v.items.length - 1;
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="font-medium text-gray-800 leading-tight">
-        {primero.producto_nombre}
-      </span>
+      <span className="font-medium text-gray-800 leading-tight">{primero.producto_nombre}</span>
       <div className="flex items-center gap-2 mt-0.5">
         <span className="font-mono text-xs text-gray-400">{primero.sku}</span>
         {extra > 0 && (
@@ -144,20 +156,34 @@ function ResumenProductos({ v }: { v: Venta }) {
   );
 }
 
-/** Determina qué mostrar en la celda IVA cuando hay múltiples ítems. */
-function ivaResumen(v: Venta): string {
+/** Determina qué IVA mostrar: cabecera nueva, o resumen de items (modo viejo). */
+function ivaDeVenta(v: Venta): TipoIvaVenta | "Mixto" {
+  if (v.tipo_iva_cabecera) return v.tipo_iva_cabecera;
   const tipos = [...new Set(v.items.map((i) => i.tipo_iva))];
-  if (tipos.length === 1) return ivaLabel[tipos[0]];
+  if (tipos.length === 1) return tipos[0];
   return "Mixto";
+}
+
+// ── Filtros utilitarios ───────────────────────────────────────────────────────
+
+function ymdToDate(s: string): Date | null {
+  if (!s) return null;
+  const d = new Date(s + "T00:00:00");
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 // ── Componente principal ───────────────────────────────────────────────────────
 
 export default function VentasPage() {
-  const [todas,      setTodas]      = useState<Venta[]>([]);
-  const [busqueda,   setBusqueda]   = useState("");
-  const [filtroTipo, setFiltroTipo] = useState<TipoVenta | "">("");
-  const [filtroIva,  setFiltroIva]  = useState<TipoIvaVenta | "">("");
+  const [todas, setTodas] = useState<Venta[]>([]);
+
+  const [busqueda,      setBusqueda]      = useState("");
+  const [fechaDesde,    setFechaDesde]    = useState(""); // YYYY-MM-DD
+  const [fechaHasta,    setFechaHasta]    = useState("");
+  const [mes,           setMes]           = useState(""); // YYYY-MM
+  const [montoDesde,    setMontoDesde]    = useState("");
+  const [montoHasta,    setMontoHasta]    = useState("");
+  const [filtroIva,     setFiltroIva]     = useState<TipoIvaVenta | "">("");
 
   useEffect(() => {
     let cancelled = false;
@@ -170,42 +196,69 @@ export default function VentasPage() {
       });
       setTodas(ordenadas);
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   const metricas = calcularMetricas(todas);
 
-  const filtradas = todas.filter((v) => {
-    // Búsqueda global: número de control, nombre o SKU de cualquier ítem
+  const filtradas = useMemo(() => todas.filter((v) => {
     if (busqueda.trim() !== "") {
       const t = busqueda.toLowerCase().trim();
-      const coincide =
-        v.numero_control.toLowerCase().includes(t) ||
-        v.items.some(
-          (i) =>
-            i.producto_nombre.toLowerCase().includes(t) ||
-            i.sku.toLowerCase().includes(t)
-        );
-      if (!coincide) return false;
+      const haystack = [
+        v.numero_control,
+        v.cliente_razon_social ?? "",
+        v.cliente_ruc ?? "",
+        ...(v.servicios ?? []).map((s) => s.descripcion),
+        ...v.items.map((i) => `${i.producto_nombre} ${i.sku}`),
+      ].join(" ").toLowerCase();
+      if (!haystack.includes(t)) return false;
     }
-    // Tipo de venta
-    if (filtroTipo !== "" && v.tipo_venta !== filtroTipo) return false;
-    // IVA: coincide si al menos un ítem tiene ese tipo
-    if (filtroIva !== "" && !v.items.some((i) => i.tipo_iva === filtroIva))
-      return false;
+    const fechaVenta = new Date(v.fecha);
+    if (Number.isNaN(fechaVenta.getTime())) return false;
+    const desde = ymdToDate(fechaDesde);
+    if (desde && fechaVenta < desde) return false;
+    const hasta = ymdToDate(fechaHasta);
+    if (hasta) {
+      const fin = new Date(hasta);
+      fin.setHours(23, 59, 59, 999);
+      if (fechaVenta > fin) return false;
+    }
+    if (mes) {
+      // mes es YYYY-MM
+      const [yy, mm] = mes.split("-");
+      const yi = Number(yy), mi = Number(mm) - 1;
+      if (!(fechaVenta.getFullYear() === yi && fechaVenta.getMonth() === mi)) return false;
+    }
+    const md = Number(montoDesde);
+    if (montoDesde !== "" && Number.isFinite(md) && v.total < md) return false;
+    const mh = Number(montoHasta);
+    if (montoHasta !== "" && Number.isFinite(mh) && v.total > mh) return false;
+    if (filtroIva !== "") {
+      const iva = ivaDeVenta(v);
+      if (iva !== filtroIva) return false;
+    }
     return true;
-  });
+  }), [todas, busqueda, fechaDesde, fechaHasta, mes, montoDesde, montoHasta, filtroIva]);
 
-  const hayFiltros = busqueda || filtroTipo || filtroIva;
+  const hayFiltros =
+    busqueda || fechaDesde || fechaHasta || mes || montoDesde || montoHasta || filtroIva;
+
+  function limpiarFiltros() {
+    setBusqueda("");
+    setFechaDesde("");
+    setFechaHasta("");
+    setMes("");
+    setMontoDesde("");
+    setMontoHasta("");
+    setFiltroIva("");
+  }
 
   return (
     <div className="space-y-8">
 
       <div>
         <h1 className="text-3xl font-bold text-gray-800">Ventas</h1>
-        <p className="text-gray-600">Registro de ventas y salidas de inventario</p>
+        <p className="text-gray-600">Registro de ventas al contado por servicios</p>
       </div>
 
       {/* ── Métricas del día ──────────────────────────────────────────────────── */}
@@ -216,7 +269,7 @@ export default function VentasPage() {
             weekday: "long", day: "numeric", month: "long", year: "numeric",
           })}
         </p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <MetricCard
             label="Facturación de hoy"
             value={`Gs. ${metricas.facturacion.toLocaleString("es-PY")}`}
@@ -237,11 +290,6 @@ export default function VentasPage() {
             }
             sub="Por orden de venta"
           />
-          <MetricCard
-            label="Unidades vendidas"
-            value={String(metricas.productosVendidos)}
-            sub="Unidades despachadas"
-          />
         </div>
       </div>
 
@@ -259,44 +307,70 @@ export default function VentasPage() {
         </div>
 
         {/* Filtros */}
-        <div className="flex flex-wrap items-center gap-3 mb-5 pb-5 border-b border-gray-100">
-          <input
-            type="text"
-            placeholder="Buscar por número, producto o SKU..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className={`${inputFilterClass} min-w-64`}
-          />
-          <select
-            value={filtroTipo}
-            onChange={(e) => setFiltroTipo(e.target.value as TipoVenta | "")}
-            className={inputFilterClass}
-          >
-            <option value="">Todos los tipos</option>
-            <option value="CONTADO">Contado</option>
-            <option value="CREDITO">Crédito</option>
-          </select>
-          <select
-            value={filtroIva}
-            onChange={(e) => setFiltroIva(e.target.value as TipoIvaVenta | "")}
-            className={inputFilterClass}
-          >
-            <option value="">Todos los IVA</option>
-            <option value="EXENTA">Exenta</option>
-            <option value="5%">IVA 5%</option>
-            <option value="10%">IVA 10%</option>
-          </select>
-          {hayFiltros && (
-            <button
-              onClick={() => { setBusqueda(""); setFiltroTipo(""); setFiltroIva(""); }}
-              className="text-sm text-gray-400 hover:text-gray-600 transition-colors px-2"
+        <div className="mb-5 pb-5 border-b border-gray-100 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="text"
+              placeholder="Buscar por número, razón social, RUC o concepto…"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className={`${inputFilterClass} min-w-72 flex-1`}
+            />
+            <select
+              value={filtroIva}
+              onChange={(e) => setFiltroIva(e.target.value as TipoIvaVenta | "")}
+              className={inputFilterClass}
             >
-              Limpiar filtros
-            </button>
-          )}
-          <span className="ml-auto text-sm text-gray-400">
-            {filtradas.length} de {todas.length} ventas
-          </span>
+              <option value="">Todos los tipos (IVA)</option>
+              <option value="EXENTA">Exenta</option>
+              <option value="5%">IVA 5%</option>
+              <option value="10%">IVA 10%</option>
+            </select>
+            {hayFiltros && (
+              <button
+                onClick={limpiarFiltros}
+                className="text-sm text-gray-400 hover:text-gray-600 transition-colors px-2"
+              >
+                Limpiar filtros
+              </button>
+            )}
+            <span className="ml-auto text-sm text-gray-400">
+              {filtradas.length} de {todas.length} ventas
+            </span>
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <FieldFiltro label="Desde">
+              <input type="date" value={fechaDesde} onChange={(e) => setFechaDesde(e.target.value)} className={inputFilterClass} />
+            </FieldFiltro>
+            <FieldFiltro label="Hasta">
+              <input type="date" value={fechaHasta} onChange={(e) => setFechaHasta(e.target.value)} className={inputFilterClass} />
+            </FieldFiltro>
+            <FieldFiltro label="Mes">
+              <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className={inputFilterClass} />
+            </FieldFiltro>
+            <FieldFiltro label="Monto mínimo (Gs.)">
+              <input
+                type="number"
+                inputMode="numeric"
+                value={montoDesde}
+                onChange={(e) => setMontoDesde(e.target.value)}
+                className={`${inputFilterClass} w-36`}
+                placeholder="0"
+                min={0}
+              />
+            </FieldFiltro>
+            <FieldFiltro label="Monto máximo (Gs.)">
+              <input
+                type="number"
+                inputMode="numeric"
+                value={montoHasta}
+                onChange={(e) => setMontoHasta(e.target.value)}
+                className={`${inputFilterClass} w-36`}
+                placeholder="—"
+                min={0}
+              />
+            </FieldFiltro>
+          </div>
         </div>
 
         {/* Tabla */}
@@ -305,19 +379,17 @@ export default function VentasPage() {
             <thead>
               <tr className="bg-slate-50 text-slate-600 text-sm font-semibold">
                 <th className="py-3 pr-4 font-medium">Número</th>
-                <th className="py-3 pr-4 font-medium">Productos</th>
-                <th className="py-3 pr-4 font-medium text-center">Ítems</th>
-                <th className="py-3 pr-4 font-medium text-right">Cant. total</th>
+                <th className="py-3 pr-4 font-medium">Cliente / Concepto</th>
                 <th className="py-3 pr-4 font-medium">IVA</th>
+                <th className="py-3 pr-4 font-medium text-right">Subtotal</th>
                 <th className="py-3 pr-4 font-medium text-right">Total</th>
-                <th className="py-3 pr-4 font-medium">Tipo</th>
                 <th className="py-3 font-medium">Fecha</th>
               </tr>
             </thead>
             <tbody>
               {filtradas.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-gray-400">
+                  <td colSpan={6} className="py-12 text-center text-gray-400">
                     {todas.length === 0
                       ? "No hay ventas registradas"
                       : "Ninguna venta coincide con los filtros"}
@@ -325,37 +397,29 @@ export default function VentasPage() {
                 </tr>
               ) : (
                 filtradas.map((v) => {
-                  const cantTotal = v.items.reduce((s, i) => s + i.cantidad, 0);
+                  const iva = ivaDeVenta(v);
                   return (
                     <tr key={v.id} className="border-b border-slate-200 last:border-0 hover:bg-slate-50 transition-colors">
                       <td className="py-4 pr-4 font-mono text-xs text-gray-500 align-middle">
                         {v.numero_control}
                       </td>
                       <td className="py-4 pr-4 align-middle">
-                        <ResumenProductos v={v} />
+                        <ResumenCliente v={v} />
                       </td>
-                      <td className="py-4 pr-4 text-center align-middle">
-                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 text-xs font-semibold text-gray-600">
-                          {v.items.length}
+                      <td className="py-4 pr-4 align-middle">
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            iva === "Mixto" ? "bg-slate-100 text-slate-600" : ivaBadge[iva]
+                          }`}
+                        >
+                          {iva === "Mixto" ? "Mixto" : ivaLabel[iva]}
                         </span>
                       </td>
                       <td className="py-4 pr-4 text-right tabular-nums text-gray-700 align-middle">
-                        {cantTotal}
-                      </td>
-                      <td className="py-4 pr-4 align-middle">
-                        <span className="px-2 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">
-                          {ivaResumen(v)}
-                        </span>
+                        {formatMoneda(v.subtotal, v.moneda)}
                       </td>
                       <td className="py-4 pr-4 text-right tabular-nums font-semibold text-gray-800 align-middle">
-                        {formatGs(v.total)}
-                      </td>
-                      <td className="py-4 pr-4 align-middle">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${tipoVentaBadge[v.tipo_venta]}`}>
-                          {v.tipo_venta === "CONTADO"
-                            ? "Contado"
-                            : `Crédito ${v.plazo_dias ?? ""}d`}
-                        </span>
+                        {formatMoneda(v.total, v.moneda)}
                       </td>
                       <td className="py-4 text-gray-500 text-xs tabular-nums align-middle">
                         {formatFecha(v.fecha)}
@@ -371,5 +435,14 @@ export default function VentasPage() {
       </div>
 
     </div>
+  );
+}
+
+function FieldFiltro({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+      {label}
+      {children}
+    </label>
   );
 }

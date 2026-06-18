@@ -2148,10 +2148,72 @@ function DashVentas({
 }) {
   const { desde, hasta } = useMemo(() => getRango(periodo), [periodo]);
 
-  const ventasFilt = useMemo(() =>
-    ventas.filter(v => enRango(v.fecha, desde, hasta)),
-    [ventas, desde, hasta]
-  );
+  // Filtros nuevos (mismo set que /ventas): fecha desde/hasta, mes, monto, tipo IVA.
+  // Conviven con el filtro `periodo` del header — se intersectan.
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+  const [mes,        setMes]        = useState("");
+  const [montoDesde, setMontoDesde] = useState("");
+  const [montoHasta, setMontoHasta] = useState("");
+  const [filtroIva,  setFiltroIva]  = useState<"" | "EXENTA" | "5%" | "10%">("");
+
+  function ivaDeVenta(v: VentaRaw): "EXENTA" | "5%" | "10%" | "Mixto" {
+    if (v.tipo_iva_cabecera) return v.tipo_iva_cabecera;
+    const tipos = new Set<string>();
+    for (const l of v.lineas ?? []) {
+      // Si las lineas no traen tipo_iva, lo inferimos del ratio iva/subtotal.
+      const sub = l.subtotal || 0;
+      const iva = l.monto_iva || 0;
+      if (sub <= 0) continue;
+      const ratio = iva / sub;
+      if (Math.abs(ratio - 0.1) < 0.02) tipos.add("10%");
+      else if (Math.abs(ratio - 0.05) < 0.02) tipos.add("5%");
+      else if (ratio === 0) tipos.add("EXENTA");
+    }
+    if (tipos.size === 1) return [...tipos][0] as "EXENTA" | "5%" | "10%";
+    if (tipos.size === 0) return "EXENTA";
+    return "Mixto";
+  }
+
+  function ymdToDate(s: string): Date | null {
+    if (!s) return null;
+    const d = new Date(s + "T00:00:00");
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  const ventasFilt = useMemo(() => ventas.filter(v => {
+    if (!enRango(v.fecha, desde, hasta)) return false;
+    const fechaVenta = new Date(v.fecha);
+    if (Number.isNaN(fechaVenta.getTime())) return false;
+    const fd = ymdToDate(fechaDesde);
+    if (fd && fechaVenta < fd) return false;
+    const fh = ymdToDate(fechaHasta);
+    if (fh) {
+      const fin = new Date(fh);
+      fin.setHours(23, 59, 59, 999);
+      if (fechaVenta > fin) return false;
+    }
+    if (mes) {
+      const [yy, mm] = mes.split("-");
+      const yi = Number(yy), mi = Number(mm) - 1;
+      if (!(fechaVenta.getFullYear() === yi && fechaVenta.getMonth() === mi)) return false;
+    }
+    const md = Number(montoDesde);
+    if (montoDesde !== "" && Number.isFinite(md) && v.total < md) return false;
+    const mh = Number(montoHasta);
+    if (montoHasta !== "" && Number.isFinite(mh) && v.total > mh) return false;
+    if (filtroIva !== "") {
+      if (ivaDeVenta(v) !== filtroIva) return false;
+    }
+    return true;
+  }), [ventas, desde, hasta, fechaDesde, fechaHasta, mes, montoDesde, montoHasta, filtroIva]);
+
+  const hayFiltrosLocales =
+    fechaDesde || fechaHasta || mes || montoDesde || montoHasta || filtroIva;
+  function limpiarFiltros() {
+    setFechaDesde(""); setFechaHasta(""); setMes("");
+    setMontoDesde(""); setMontoHasta(""); setFiltroIva("");
+  }
 
   const ventasHoy = useMemo(() => {
     const { desde: d, hasta: h } = getRango("hoy");
@@ -2221,6 +2283,34 @@ function DashVentas({
     });
   }, [ventasFilt]);
 
+  // Desglose por tipo de IVA — reemplaza al desglose por tipo de venta para
+  // que el dashboard refleje el nuevo modelo de ventas (todas al contado, lo
+  // que cambia es la alicuota).
+  const desgloseIva = useMemo(() => {
+    const tipos: ("EXENTA" | "5%" | "10%" | "Mixto")[] = ["EXENTA", "5%", "10%", "Mixto"];
+    return tipos
+      .map(tipo => {
+        const lst = ventasFilt.filter(v => ivaDeVenta(v) === tipo);
+        const total = lst.reduce((s, v) => s + v.total, 0);
+        const iva   = lst.reduce((s, v) => s + v.monto_iva, 0);
+        return {
+          tipo,
+          ventas: lst.length,
+          total,
+          iva,
+          ticket: lst.length ? total / lst.length : 0,
+        };
+      })
+      .filter(r => r.ventas > 0);
+  }, [ventasFilt]);
+
+  const ultimasVentas = useMemo(() =>
+    [...ventasFilt]
+      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+      .slice(0, 10),
+    [ventasFilt]
+  );
+
   const vtaPanel =
     "rounded-2xl border border-[#4FAEB2]/45 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-200 hover:shadow-md";
   const vtaTitle =
@@ -2229,8 +2319,58 @@ function DashVentas({
     <span aria-hidden="true" className="block h-5 w-1 rounded-full bg-[#4FAEB2]" />
   );
 
+  const filtroInputCls =
+    "border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-[#4FAEB2]/40 focus:border-[#4FAEB2] focus:outline-none";
+
   return (
     <div className="space-y-6">
+      {/* Filtros (replican /ventas): fecha, mes, monto, tipo IVA. */}
+      <motion.div whileHover={{ y: -2 }} className={vtaPanel}>
+        <div className="flex items-center gap-2">
+          {vtaBar}
+          <h3 className={vtaTitle}>
+            <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-[#4FAEB2]" />
+            Filtros de ventas
+          </h3>
+        </div>
+        <p className="mt-1 pl-3 text-[11px] text-slate-500">
+          Se intersectan con el período seleccionado arriba. {hayFiltrosLocales ? (
+            <button onClick={limpiarFiltros} className="ml-2 text-[#3F8E91] hover:underline">Limpiar filtros</button>
+          ) : null}
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Desde
+            <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)} className={filtroInputCls} />
+          </label>
+          <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Hasta
+            <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)} className={filtroInputCls} />
+          </label>
+          <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Mes
+            <input type="month" value={mes} onChange={e => setMes(e.target.value)} className={filtroInputCls} />
+          </label>
+          <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Monto mín (Gs.)
+            <input type="number" inputMode="numeric" min={0} value={montoDesde} onChange={e => setMontoDesde(e.target.value)} placeholder="0" className={filtroInputCls} />
+          </label>
+          <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Monto máx (Gs.)
+            <input type="number" inputMode="numeric" min={0} value={montoHasta} onChange={e => setMontoHasta(e.target.value)} placeholder="—" className={filtroInputCls} />
+          </label>
+          <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Tipo (IVA)
+            <select value={filtroIva} onChange={e => setFiltroIva(e.target.value as typeof filtroIva)} className={filtroInputCls}>
+              <option value="">Todos</option>
+              <option value="EXENTA">Exenta</option>
+              <option value="5%">IVA 5%</option>
+              <option value="10%">IVA 10%</option>
+            </select>
+          </label>
+        </div>
+      </motion.div>
+
       {/* KPIs principales */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <CardSt
@@ -2377,18 +2517,18 @@ function DashVentas({
         </motion.div>
       </div>
 
-      {/* Desglose por tipo */}
+      {/* Desglose por tipo de IVA — reemplaza al desglose por tipo de venta */}
       <motion.div whileHover={{ y: -2 }} className={vtaPanel}>
         <div className="flex items-center gap-2">
           {vtaBar}
           <h3 className={vtaTitle}>
             <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-[#4FAEB2]" />
-            Desglose por tipo de venta
+            Desglose por tipo de IVA
           </h3>
         </div>
-        <p className="mt-1 pl-3 text-[11px] text-slate-500">Contado vs. crédito en el período</p>
+        <p className="mt-1 pl-3 text-[11px] text-slate-500">Exenta / 5% / 10% en el período</p>
 
-        {ventasFilt.length === 0 ? (
+        {desgloseIva.length === 0 ? (
           <p className="mt-6 py-6 text-center text-sm text-slate-400">Sin ventas en el periodo seleccionado.</p>
         ) : (
           <div className="mt-5 overflow-hidden rounded-xl border border-[#4FAEB2]/30">
@@ -2396,7 +2536,7 @@ function DashVentas({
               <table className="w-full text-sm">
                 <thead className="bg-slate-50/80">
                   <tr>
-                    {["Tipo", "Cantidad", "Total", "Ticket promedio", "Unidades"].map((h) => (
+                    {["Tipo IVA", "Cantidad", "Total", "Ticket promedio", "IVA acumulado"].map((h) => (
                       <th
                         key={h}
                         className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500"
@@ -2407,21 +2547,21 @@ function DashVentas({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {desglose.map((r) => (
+                  {desgloseIva.map((r) => (
                     <tr key={r.tipo} className="transition-colors hover:bg-[#4FAEB2]/5">
                       <td className="px-3 py-3">
                         <span
                           className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${
-                            r.tipo === "CONTADO"
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-[#4FAEB2]/30 bg-[#4FAEB2]/10 text-[#3F8E91]"
+                            r.tipo === "EXENTA"
+                              ? "border-slate-200 bg-slate-50 text-slate-700"
+                              : r.tipo === "5%"
+                                ? "border-amber-200 bg-amber-50 text-amber-700"
+                                : r.tipo === "10%"
+                                  ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                                  : "border-[#4FAEB2]/30 bg-[#4FAEB2]/10 text-[#3F8E91]"
                           }`}
                         >
-                          <span
-                            aria-hidden="true"
-                            className={`h-1.5 w-1.5 rounded-full ${r.tipo === "CONTADO" ? "bg-emerald-500" : "bg-[#4FAEB2]"}`}
-                          />
-                          {r.tipo}
+                          {r.tipo === "EXENTA" ? "Exenta" : r.tipo === "Mixto" ? "Mixto" : `IVA ${r.tipo}`}
                         </span>
                       </td>
                       <td className="px-3 py-3 text-xs tabular-nums text-slate-700">{r.ventas}</td>
@@ -2431,9 +2571,73 @@ function DashVentas({
                       <td className="px-3 py-3 text-xs tabular-nums text-slate-500">
                         Gs. {formatGs(Math.round(r.ticket))}
                       </td>
-                      <td className="px-3 py-3 text-xs tabular-nums text-slate-500">{r.unid}</td>
+                      <td className="px-3 py-3 text-xs tabular-nums text-slate-500">
+                        Gs. {formatGs(Math.round(r.iva))}
+                      </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </motion.div>
+
+      {/* Últimas ventas — replica la lista de /ventas con cliente, IVA y total */}
+      <motion.div whileHover={{ y: -2 }} className={vtaPanel}>
+        <div className="flex items-center gap-2">
+          {vtaBar}
+          <h3 className={vtaTitle}>
+            <span aria-hidden="true" className="inline-block h-1.5 w-1.5 rounded-full bg-[#4FAEB2]" />
+            Últimas ventas
+          </h3>
+        </div>
+        <p className="mt-1 pl-3 text-[11px] text-slate-500">10 más recientes en el período + filtros</p>
+        {ultimasVentas.length === 0 ? (
+          <p className="mt-6 py-6 text-center text-sm text-slate-400">Sin ventas que coincidan.</p>
+        ) : (
+          <div className="mt-5 overflow-hidden rounded-xl border border-[#4FAEB2]/30">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50/80">
+                  <tr>
+                    {["Número", "Cliente / Concepto", "IVA", "Total", "Fecha"].map((h) => (
+                      <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {ultimasVentas.map((v) => {
+                    const iva = ivaDeVenta(v);
+                    const concepto = v.cliente_razon_social
+                      ? v.cliente_razon_social
+                      : (v.lineas?.[0]?.producto_nombre ?? "—");
+                    const extra = v.cliente_razon_social
+                      ? v.cliente_ruc ? `RUC ${v.cliente_ruc}` : (v.servicios?.[0]?.descripcion ?? "")
+                      : "";
+                    return (
+                      <tr key={v.id} className="transition-colors hover:bg-[#4FAEB2]/5">
+                        <td className="px-3 py-3 font-mono text-[11px] text-slate-500">{v.numero_control}</td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col">
+                            <span className="text-xs font-medium text-slate-800">{concepto}</span>
+                            {extra ? <span className="text-[11px] text-slate-400">{extra}</span> : null}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-[11px] text-slate-600">
+                          {iva === "Mixto" ? "Mixto" : iva === "EXENTA" ? "Exenta" : `IVA ${iva}`}
+                        </td>
+                        <td className="px-3 py-3 text-xs font-semibold tabular-nums text-slate-900">
+                          {v.moneda === "USD" ? "USD" : "Gs."} {formatGs(v.total)}
+                        </td>
+                        <td className="px-3 py-3 text-[11px] tabular-nums text-slate-500">
+                          {(() => {
+                            try { return new Date(v.fecha).toLocaleDateString("es-PY", { day: "2-digit", month: "2-digit", year: "numeric" }); } catch { return v.fecha; }
+                          })()}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

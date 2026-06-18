@@ -20,6 +20,12 @@ interface VentaRow {
   tipo_venta: string;
   plazo_dias: number | null;
   fecha: string;
+  // Columnas del modo "servicios" — opcionales: tenants viejos que aun no
+  // tienen estas columnas hacen fallback al SELECT minimo.
+  cliente_razon_social?: string | null;
+  cliente_ruc?: string | null;
+  tipo_iva_cabecera?: string | null;
+  descripcion_servicios?: unknown;
 }
 
 interface VentaItemRow {
@@ -72,13 +78,29 @@ export async function GET(request: NextRequest) {
     const tI = quoteSchemaTable(schema, "ventas_items");
 
     // Serializado (no Promise.all) para no agotar el pool session-mode (limite 15).
-    const ventasQ = await queryWithRetry<VentaRow>(pool,
-      `SELECT id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva,
-              total, tipo_venta, plazo_dias, fecha
-         FROM ${tV} WHERE empresa_id = $1::uuid
-        ORDER BY fecha DESC LIMIT 500`,
-      [empresaId]
-    );
+    // SELECT con columnas nuevas (modo servicios). Si falla porque el tenant
+    // todavia no tiene esas columnas, reintentamos sin ellas — asi seguimos
+    // mostrando las ventas viejas hasta que alguien cree una nueva (el POST
+    // de servicio bootstrapea las columnas).
+    let ventasQ;
+    try {
+      ventasQ = await queryWithRetry<VentaRow>(pool,
+        `SELECT id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva,
+                total, tipo_venta, plazo_dias, fecha,
+                cliente_razon_social, cliente_ruc, tipo_iva_cabecera, descripcion_servicios
+           FROM ${tV} WHERE empresa_id = $1::uuid
+          ORDER BY fecha DESC LIMIT 500`,
+        [empresaId]
+      );
+    } catch {
+      ventasQ = await queryWithRetry<VentaRow>(pool,
+        `SELECT id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva,
+                total, tipo_venta, plazo_dias, fecha
+           FROM ${tV} WHERE empresa_id = $1::uuid
+          ORDER BY fecha DESC LIMIT 500`,
+        [empresaId]
+      );
+    }
     const itemsQ = await queryWithRetry<VentaItemRow>(pool,
       `SELECT venta_id, producto_id, producto_nombre, sku, cantidad,
               precio_venta_original, precio_venta, tipo_iva, subtotal, monto_iva, total_linea
@@ -95,10 +117,31 @@ export async function GET(request: NextRequest) {
 
     const ventas: Venta[] = ventasQ.rows.map((r) => {
       const lineRows = byVenta.get(r.id) ?? [];
+      const tipoIvaCab = r.tipo_iva_cabecera;
+      const tipoIvaCabValid: TipoIvaVenta | null =
+        tipoIvaCab === "EXENTA" || tipoIvaCab === "5%" || tipoIvaCab === "10%" ? tipoIvaCab : null;
+      let serviciosArr: { descripcion: string; monto: number }[] | undefined;
+      const desc = r.descripcion_servicios;
+      if (Array.isArray(desc)) {
+        serviciosArr = desc
+          .map((x) => {
+            if (!x || typeof x !== "object") return null;
+            const o = x as Record<string, unknown>;
+            const d = String(o.descripcion ?? "");
+            const m = Number(o.monto);
+            if (!d || !Number.isFinite(m)) return null;
+            return { descripcion: d, monto: m };
+          })
+          .filter((y): y is { descripcion: string; monto: number } => y !== null);
+      }
       return {
         id: r.id,
         numero_control: r.numero_control,
         items: mapItems(lineRows),
+        servicios: serviciosArr,
+        cliente_razon_social: r.cliente_razon_social ?? null,
+        cliente_ruc: r.cliente_ruc ?? null,
+        tipo_iva_cabecera: tipoIvaCabValid,
         moneda: r.moneda === "USD" ? "USD" : "GS",
         tipo_cambio: num(r.tipo_cambio),
         subtotal: num(r.subtotal),

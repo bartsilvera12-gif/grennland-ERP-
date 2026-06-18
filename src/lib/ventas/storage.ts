@@ -1,9 +1,51 @@
-import type { Venta } from "./types";
+import type { LineaServicio, MonedaVenta, TipoIvaVenta, Venta } from "./types";
 import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session";
 
 export type ResultadoGuardarVenta =
   | { success: true; venta: Venta }
   | { success: false; error: string };
+
+export interface SaveVentaServicioInput {
+  cliente_razon_social: string;
+  cliente_ruc: string | null;
+  moneda: MonedaVenta;
+  tipo_cambio: number;
+  tipo_iva_cabecera: TipoIvaVenta;
+  servicios: LineaServicio[];
+  subtotal: number;
+  monto_iva: number;
+  total: number;
+  observaciones?: string | null;
+}
+
+/**
+ * Crea una venta en modo SERVICIOS (sin productos). POST a /api/ventas/servicio.
+ */
+export async function saveVentaServicio(
+  datos: SaveVentaServicioInput,
+): Promise<ResultadoGuardarVenta> {
+  if (!datos.servicios.length) {
+    return { success: false, error: "Agregá al menos un servicio." };
+  }
+  try {
+    const res = await fetchWithSupabaseSession("/api/ventas/servicio", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(datos),
+    });
+    const json = (await res.json()) as {
+      success?: boolean;
+      data?: { venta?: Venta };
+      error?: string;
+    };
+    if (!res.ok || !json.success || !json.data?.venta) {
+      return { success: false, error: json.error ?? `No se pudo registrar la venta (${res.status}).` };
+    }
+    return { success: true, venta: json.data.venta };
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Error de red." };
+  }
+}
 
 /**
  * Lista ventas del tenant (misma fuente que el dashboard: tablas `ventas` / `ventas_items`).
