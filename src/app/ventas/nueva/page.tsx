@@ -22,7 +22,7 @@ function ivaRate(tipo: TipoIvaVenta): number {
 // ── Estilos ────────────────────────────────────────────────────────────────────
 
 const inputClass =
-  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#0EA5E9] focus:outline-none bg-white text-sm";
+  "w-full border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-[#4FAEB2] focus:outline-none bg-white text-sm";
 const labelClass = "block text-sm font-medium text-slate-700 mb-1.5";
 
 function SegmentedControl<T extends string>({
@@ -43,7 +43,7 @@ function SegmentedControl<T extends string>({
           onClick={() => onChange(opt.value)}
           className={`flex-1 py-2 text-sm font-medium transition-colors ${
             value === opt.value
-              ? "bg-[#0EA5E9] text-white"
+              ? "bg-[#4FAEB2] text-white"
               : "bg-white text-slate-600 hover:bg-slate-50"
           }`}
         >
@@ -54,11 +54,11 @@ function SegmentedControl<T extends string>({
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+function GroupHeader({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
+    <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
       {children}
-    </p>
+    </h2>
   );
 }
 
@@ -79,10 +79,14 @@ export default function NuevaVentaPage() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // IVA INCLUIDO en el monto. El subtotal y el total son iguales al sumatorio
+  // de los montos cargados — el IVA mostrado es la porcion informativa que
+  // corresponde a esa alicuota (monto * rate). Asi una venta de Gs. 15.000.000
+  // con IVA 10% sigue cobrandose 15.000.000 (no 16.500.000).
   const { subtotal, montoIva, total } = useMemo(() => {
     const sub = servicios.reduce((acc, s) => acc + (Number(s.monto) || 0), 0);
     const iva = sub * ivaRate(tipoIva);
-    return { subtotal: sub, montoIva: iva, total: sub + iva };
+    return { subtotal: sub, montoIva: iva, total: sub };
   }, [servicios, tipoIva]);
 
   function updateServicio(i: number, patch: Partial<LineaServicio>) {
@@ -152,16 +156,18 @@ export default function NuevaVentaPage() {
         </p>
       </header>
 
-      <form onSubmit={onSubmit} className="space-y-6">
+      <form
+        onSubmit={onSubmit}
+        className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-6"
+      >
         {err ? (
           <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{err}</div>
         ) : null}
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle>Condiciones</SectionTitle>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className={labelClass}>Moneda</label>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <GroupHeader>Moneda</GroupHeader>
+            <div className="mt-2">
               <SegmentedControl<MonedaVenta>
                 value={moneda}
                 onChange={setMoneda}
@@ -171,55 +177,64 @@ export default function NuevaVentaPage() {
                 ]}
               />
             </div>
-            {moneda === "USD" ? (
-              <div>
-                <label className={labelClass}>Tipo de cambio (Gs. por USD)</label>
+          </div>
+          {moneda === "USD" ? (
+            <div>
+              <GroupHeader>Tipo de cambio (Gs. por USD)</GroupHeader>
+              <div className="mt-2">
                 <MontoInput value={tipoCambio} onChange={setTipoCambio} className={inputClass} />
               </div>
-            ) : null}
-            <div className="sm:col-span-2">
-              <label className={labelClass}>Tipo de IVA</label>
-              <SegmentedControl<TipoIvaVenta>
-                value={tipoIva}
-                onChange={setTipoIva}
-                options={[
-                  { value: "EXENTA", label: "Exenta" },
-                  { value: "5%", label: "5%" },
-                  { value: "10%", label: "10%" },
-                ]}
-              />
             </div>
-          </div>
-        </section>
+          ) : (
+            <div className="hidden sm:block" />
+          )}
+        </div>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle>Cliente</SectionTitle>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className={labelClass}>Razón social *</label>
-              <input
-                className={inputClass}
-                value={razonSocial}
-                onChange={(e) => setRazonSocial(e.target.value)}
-                placeholder="Ej: Constructora Aurora S.A."
-                required
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={labelClass}>Nº de RUC</label>
-              <input
-                className={inputClass}
-                value={ruc}
-                onChange={(e) => setRuc(e.target.value)}
-                placeholder="Ej: 80012345-6"
-              />
-            </div>
+        <div>
+          <GroupHeader>Tipo de IVA</GroupHeader>
+          <p className="mt-1 text-[11px] text-slate-400">El IVA está incluido en el monto cargado.</p>
+          <div className="mt-2">
+            <SegmentedControl<TipoIvaVenta>
+              value={tipoIva}
+              onChange={setTipoIva}
+              options={[
+                { value: "EXENTA", label: "Exenta" },
+                { value: "5%", label: "5%" },
+                { value: "10%", label: "10%" },
+              ]}
+            />
           </div>
-        </section>
+        </div>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="h-px bg-slate-100" />
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className={labelClass}>Razón social *</label>
+            <input
+              className={inputClass}
+              value={razonSocial}
+              onChange={(e) => setRazonSocial(e.target.value)}
+              placeholder="Ej: Constructora Aurora S.A."
+              required
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Nº de RUC</label>
+            <input
+              className={inputClass}
+              value={ruc}
+              onChange={(e) => setRuc(e.target.value)}
+              placeholder="Ej: 80012345-6"
+            />
+          </div>
+        </div>
+
+        <div className="h-px bg-slate-100" />
+
+        <div>
           <div className="mb-3 flex items-end justify-between gap-3">
-            <SectionTitle>Descripción de servicios</SectionTitle>
+            <GroupHeader>Descripción de servicios</GroupHeader>
             <button
               type="button"
               onClick={addServicio}
@@ -230,7 +245,7 @@ export default function NuevaVentaPage() {
           </div>
           <div className="space-y-3">
             {servicios.map((s, i) => (
-              <div key={i} className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_180px_auto] sm:items-end">
+              <div key={i} className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_200px_auto] sm:items-end">
                 <div>
                   <label className={labelClass}>Descripción</label>
                   <input
@@ -260,32 +275,38 @@ export default function NuevaVentaPage() {
               </div>
             ))}
           </div>
-        </section>
+        </div>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <SectionTitle>Totales</SectionTitle>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Total label="Subtotal" value={subtotal} moneda={moneda} />
+        <div className="h-px bg-slate-100" />
+
+        <div>
+          <GroupHeader>Totales</GroupHeader>
+          <p className="mt-1 text-[11px] text-slate-400">
+            El total es igual al monto cargado — el IVA mostrado es informativo y ya está incluido.
+          </p>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Total label="Subtotal (con IVA)" value={subtotal} moneda={moneda} />
             <Total
-              label={tipoIva === "EXENTA" ? "IVA (no aplica)" : `IVA ${tipoIva}`}
+              label={tipoIva === "EXENTA" ? "IVA (no aplica)" : `IVA ${tipoIva} incluido`}
               value={montoIva}
               moneda={moneda}
               muted={tipoIva === "EXENTA"}
             />
-            <Total label="Total" value={total} moneda={moneda} highlight />
+            <Total label="Total a cobrar" value={total} moneda={moneda} highlight />
           </div>
-          <div className="mt-4">
-            <label className={labelClass}>Observaciones</label>
-            <textarea
-              className={`${inputClass} min-h-[80px]`}
-              value={observaciones}
-              onChange={(e) => setObservaciones(e.target.value)}
-              placeholder="Notas internas (opcional)"
-            />
-          </div>
-        </section>
+        </div>
 
-        <div className="flex items-center gap-3">
+        <div>
+          <label className={labelClass}>Observaciones</label>
+          <textarea
+            className={`${inputClass} min-h-[80px]`}
+            value={observaciones}
+            onChange={(e) => setObservaciones(e.target.value)}
+            placeholder="Notas internas (opcional)"
+          />
+        </div>
+
+        <div className="flex items-center gap-3 pt-2">
           <button
             type="submit"
             disabled={saving}
@@ -330,7 +351,7 @@ function Total({
       }`}
     >
       <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
-      <div className={`mt-1 text-base font-semibold ${highlight ? "text-[#0EA5E9]" : "text-slate-800"}`}>
+      <div className={`mt-1 text-base font-semibold ${highlight ? "text-[#3F8E91]" : "text-slate-800"}`}>
         {formatMonto(value, moneda)}
       </div>
     </div>

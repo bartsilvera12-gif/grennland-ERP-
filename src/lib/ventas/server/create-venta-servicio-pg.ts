@@ -52,10 +52,12 @@ function ivaRate(tipo: TipoIvaVenta): number {
 function recalcServicios(servicios: LineaServicio[], tipoIva: TipoIvaVenta) {
   let subtotal = 0;
   for (const s of servicios) subtotal += Number(s.monto) || 0;
-  // El IVA se aplica sobre el subtotal total (cabecera). El subtotal queda neto.
+  // IVA INCLUIDO: el monto cargado ya incluye el IVA. monto_iva es informativo
+  // (monto * rate) y el total a cobrar es igual al subtotal. Asi una venta de
+  // Gs. 15M con IVA 10% queda en 15M (no en 16.5M).
   const rate = ivaRate(tipoIva);
   const montoIva = subtotal * rate;
-  const total = subtotal + montoIva;
+  const total = subtotal;
   return { subtotal, montoIva, total };
 }
 
