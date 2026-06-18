@@ -10,6 +10,8 @@ import {
 import { mergeCertificadoPasswordEncryptedForInsert } from "@/lib/sifen/sifen-config-persist";
 import { toEmpresaSifenConfigPublicDto } from "@/lib/sifen/sifen-config-response";
 import { encryptSecret } from "@/lib/sifen/security";
+import { ensureSifenConfigColumns } from "@/lib/sifen/server/ensure-sifen-config-columns";
+import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
 
 
 /**
@@ -53,6 +55,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
     const { auth, supabase } = ctx;
+
+    // Bootstrap aditivo de columnas (ver comentario en PATCH).
+    try {
+      const schema = await fetchDataSchemaForEmpresaId(auth.empresa_id);
+      await ensureSifenConfigColumns(schema);
+    } catch (e) {
+      console.warn(
+        "[sifen/POST] bootstrap de columnas fallo:",
+        e instanceof Error ? e.message : e,
+      );
+    }
 
     let body: unknown;
     try {
@@ -122,6 +135,20 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
     const { auth, supabase } = ctx;
+
+    // Bootstrap idempotente: garantiza que las columnas que vamos a escribir
+    // (certificado_password_encrypted, kude_*, sifen_plazo_cancelacion_horas,
+    // etc.) existan en <schema>.empresa_sifen_config. Cubre tenants clonados
+    // desde Zentra antes de que se sumaran esas columnas a la referencia.
+    try {
+      const schema = await fetchDataSchemaForEmpresaId(auth.empresa_id);
+      await ensureSifenConfigColumns(schema);
+    } catch (e) {
+      console.warn(
+        "[sifen/PATCH] bootstrap de columnas fallo:",
+        e instanceof Error ? e.message : e,
+      );
+    }
 
     let body: unknown;
     try {

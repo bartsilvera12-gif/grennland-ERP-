@@ -16,6 +16,8 @@ import { downloadSifenCertificadoObject } from "@/lib/sifen/sifen-certificados-s
 import { extractKeyAndCertFromP12, signSifenDocumentoXml } from "@/lib/sifen/sign-xml";
 import { SIFEN_TEST_CSC_GENERICO } from "@/lib/sifen/sifen-ambiente-test";
 import { parseAmbiente } from "@/lib/sifen/config-validation";
+import { ensureSifenConfigColumns } from "@/lib/sifen/server/ensure-sifen-config-columns";
+import { fetchDataSchemaForEmpresaId } from "@/lib/supabase/empresa-data-schema";
 import type {
   FacturaElectronicaDTO,
   SifenApiFirmarDetalle,
@@ -39,6 +41,19 @@ export async function POST(
       return NextResponse.json(errorResponse(API_ERRORS.UNAUTHORIZED), { status: 401 });
     }
     const { auth, supabase } = ctx;
+
+    // Bootstrap idempotente de columnas: asegura que el SELECT que viene mas
+    // abajo (incluye certificado_password_encrypted) sea legible y que los
+    // PATCH guardados desde la UI hayan persistido en columnas reales.
+    try {
+      const schema = await fetchDataSchemaForEmpresaId(auth.empresa_id);
+      await ensureSifenConfigColumns(schema);
+    } catch (e) {
+      console.warn(
+        "[sifen/firmar] bootstrap de columnas fallo:",
+        e instanceof Error ? e.message : e,
+      );
+    }
 
     const { id: facturaId } = await params;
     if (!facturaId?.trim()) {
