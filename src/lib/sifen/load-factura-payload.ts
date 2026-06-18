@@ -111,11 +111,16 @@ export async function loadValidatedSifenPayload(
   // cliente_id) sintetizamos desde la cabecera para que el receptor SIFEN
   // tenga al menos razon social + RUC, que es lo minimo que el form de
   // /ventas/nueva exige para crear la factura.
+  // El builder valida que cliente.id === factura.cliente_id. Cuando el cliente
+  // es sintetico (no vive en alquiloya.clientes) usamos como id el mismo
+  // valor que llevara factura.cliente_id en buildInput (cadena vacia si la
+  // factura no tiene cliente vinculado). Asi validateReceptor matchea.
+  const syntheticClienteId = (factura.cliente_id as string | null) ?? "";
   const clienteResuelto: BuildSifenPayloadInput["cliente"] = clienteRes.data
     ? (clienteRes.data as BuildSifenPayloadInput["cliente"])
     : facturaRazonSocial || facturaRuc
       ? {
-          id: "synthetic-from-factura",
+          id: syntheticClienteId,
           empresa: facturaRazonSocial,
           nombre_contacto: null,
           nombre: facturaRazonSocial,
