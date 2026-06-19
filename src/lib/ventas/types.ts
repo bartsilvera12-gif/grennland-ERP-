@@ -55,5 +55,6 @@ export interface Venta {
   tipo_venta: TipoVenta;     // siempre CONTADO en el modo nuevo
   plazo_dias?: number;       // solo si tipo_venta === "CREDITO"
 
+  factura_id?: string | null;     // Si la venta tiene factura electronica, su UUID
   fecha: string;             // ISO string
 }

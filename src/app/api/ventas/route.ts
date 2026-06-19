@@ -25,6 +25,7 @@ interface VentaRow {
   cliente_razon_social?: string | null;
   cliente_ruc?: string | null;
   tipo_iva_cabecera?: string | null;
+  factura_id?: string | null;
   descripcion_servicios?: unknown;
 }
 
@@ -87,7 +88,8 @@ export async function GET(request: NextRequest) {
       ventasQ = await queryWithRetry<VentaRow>(pool,
         `SELECT id, empresa_id, numero_control, moneda, tipo_cambio, subtotal, monto_iva,
                 total, tipo_venta, plazo_dias, fecha,
-                cliente_razon_social, cliente_ruc, tipo_iva_cabecera, descripcion_servicios
+                cliente_razon_social, cliente_ruc, tipo_iva_cabecera, descripcion_servicios,
+                factura_id
            FROM ${tV} WHERE empresa_id = $1::uuid
           ORDER BY fecha DESC LIMIT 500`,
         [empresaId]
@@ -150,6 +152,7 @@ export async function GET(request: NextRequest) {
         tipo_venta: r.tipo_venta === "CREDITO" ? "CREDITO" : "CONTADO",
         plazo_dias: r.plazo_dias ?? undefined,
         fecha: r.fecha,
+        factura_id: r.factura_id ?? null,
       };
     });
 

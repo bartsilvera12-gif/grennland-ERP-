@@ -400,8 +400,14 @@ export default function VentasPage() {
                   const iva = ivaDeVenta(v);
                   return (
                     <tr key={v.id} className="border-b border-slate-200 last:border-0 hover:bg-slate-50 transition-colors">
-                      <td className="py-4 pr-4 font-mono text-xs text-gray-500 align-middle">
-                        {v.numero_control}
+                      <td className="py-4 pr-4 font-mono text-xs align-middle">
+                        {v.factura_id ? (
+                          <Link href={`/facturas/${v.factura_id}`} className="text-[#0EA5E9] hover:underline">
+                            {v.numero_control}
+                          </Link>
+                        ) : (
+                          <span className="text-gray-500">{v.numero_control}</span>
+                        )}
                       </td>
                       <td className="py-4 pr-4 align-middle">
                         <ResumenCliente v={v} />
