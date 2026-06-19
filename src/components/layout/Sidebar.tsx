@@ -219,14 +219,13 @@ const MENU_STRUCTURE: MenuItem[] = [
   //   href: "/dashboard/propiedades-pendientes",
   //   icon: ListChecks,
   // },
-  // Oculto a pedido del cliente (ruta /dashboard/testimonios sigue activa):
-  // {
-  //   key: "testimonios",
-  //   slug: "propiedades",
-  //   label: "Testimonios",
-  //   href: "/dashboard/testimonios",
-  //   icon: Star,
-  // },
+  {
+    key: "testimonios",
+    slug: "propiedades",
+    label: "Testimonios",
+    href: "/dashboard/testimonios",
+    icon: Star,
+  },
   // Agentes inmobiliarios incluye "Solicitudes de acceso" como sub-item.
   // "Solicitudes de servicio" (pedidos de impulsos / cambio de plan) se
   // movio a Planes (mas arriba en este menu).
