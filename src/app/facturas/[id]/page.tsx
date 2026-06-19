@@ -176,13 +176,14 @@ function FacturaDetalleInner() {
           </p>
         </div>
         <div className="flex gap-2 print:hidden">
-          <button
-            type="button"
-            onClick={() => window.print()}
+          <a
+            href={`/api/facturas/${id}/sifen/kude`}
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
           >
-            Imprimir
-          </button>
+            Imprimir / KuDE PDF
+          </a>
         </div>
       </div>
 
