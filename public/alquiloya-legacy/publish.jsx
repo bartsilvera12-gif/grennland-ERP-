@@ -225,6 +225,15 @@ function PublishPage() {
     const kind = stepKinds[s];
     if (kind === 'plan') {
       if (!(form.plan_id || '').trim()) return 'Elegí un plan para continuar.';
+      // Si la solicitud para un plan pago fue enviada pero el admin
+      // todavia no lo activo (lo confirma manualmente desde el ERP),
+      // no dejamos avanzar el wizard. Una vez activado, el usuario
+      // recibe un correo con sus credenciales y al loguearse el plan
+      // se carga desde ctxPropietario.plan_publicacion_id (sin tocar
+      // form.plan_request_sent), asi que el bloqueo se levanta solo.
+      if (form.plan_request_sent) {
+        return 'Solicitud enviada. Te avisamos por correo cuando activemos tu plan. Despues podras publicar.';
+      }
       return null;
     }
     if (kind === 'plan_request') {
