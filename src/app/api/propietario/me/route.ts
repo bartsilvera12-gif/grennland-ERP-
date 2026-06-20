@@ -81,6 +81,20 @@ export async function GET(request: Request) {
           }
         }
       }
+      // Adjunta detalles del plan al propietario resuelto (cubre ambos paths).
+      if (propietario && propietario.plan_publicacion_id && !propietario.plan) {
+        const { data: planRow } = await supabase
+          .from("planes_publicacion")
+          .select("id, nombre, tier, billing")
+          .eq("id", propietario.plan_publicacion_id as string)
+          .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+          .limit(1)
+          .maybeSingle();
+        if (planRow) {
+          propietario.plan = planRow;
+          propietario.plan_nombre = (planRow as { nombre?: string | null }).nombre ?? null;
+        }
+      }
     }
 
     return NextResponse.json({
