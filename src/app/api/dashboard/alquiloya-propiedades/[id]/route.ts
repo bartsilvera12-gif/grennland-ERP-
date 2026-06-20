@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { PoolClient } from "pg";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { upsertPropietarioErp } from "@/lib/alquiloya/upsert-propietario-erp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,6 +68,13 @@ type PatchBody = {
   terreno_m2?: number | string | null;
   codigo?: string | null;
   agente_id?: string | null;
+  propietario_id?: string | null;
+  propietario_nombre?: string | null;
+  propietario_email?: string | null;
+  propietario_telefono?: string | null;
+  propietario_telefono_contacto?: string | null;
+  propietario_documento?: string | null;
+  propietario_observaciones?: string | null;
   activo?: boolean;
   visible_web?: boolean;
   destacada?: boolean;
@@ -138,6 +146,36 @@ export async function PATCH(
       }
       const previoAgenteId = existing.rows[0]?.agente_id ?? null;
 
+      // Upsert propietario: si vino propietario_id usa esa fila; si no, busca por email/telefono;
+      // si no encuentra y hay nombre, crea uno nuevo. Si el body no trae nada de propietario,
+      // mantenemos el vinculo existente.
+      const propietarioIdBody = s(body.propietario_id);
+      const propietarioInputNombre = s(body.propietario_nombre);
+      const propietarioInputEmail = s(body.propietario_email);
+      const propietarioInputTel = s(body.propietario_telefono);
+      const algunPropietarioField = !!(
+        propietarioIdBody ||
+        propietarioInputNombre ||
+        propietarioInputEmail ||
+        propietarioInputTel ||
+        s(body.propietario_telefono_contacto) ||
+        s(body.propietario_documento) ||
+        s(body.propietario_observaciones)
+      );
+      let nuevoPropietarioId: string | null = existing.rows[0]?.propietario_id ?? null;
+      if (algunPropietarioField) {
+        nuevoPropietarioId = await upsertPropietarioErp(client, {
+          empresaId: ALQUILOYA_EMPRESA_ID,
+          propietario_id: propietarioIdBody ?? nuevoPropietarioId,
+          nombre: propietarioInputNombre,
+          email: propietarioInputEmail,
+          telefono: propietarioInputTel,
+          telefono_contacto: s(body.propietario_telefono_contacto),
+          documento: s(body.propietario_documento),
+          observaciones: s(body.propietario_observaciones),
+        });
+      }
+
       await client.query(
         `UPDATE ${t("propiedades")} SET
            agente_id = $1::uuid,
@@ -163,6 +201,7 @@ export async function PATCH(
            lat = $23,
            lng = $24,
            publicacion_dias = $25,
+           propietario_id = $26::uuid,
            updated_at = now()
          WHERE id = $21::uuid AND empresa_id = $22::uuid`,
         [
@@ -191,6 +230,7 @@ export async function PATCH(
           n(body.lat),
           n(body.lng),
           pubDias,
+          nuevoPropietarioId,
         ]
       );
 

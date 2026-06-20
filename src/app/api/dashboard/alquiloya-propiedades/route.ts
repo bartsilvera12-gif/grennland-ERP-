@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { PoolClient } from "pg";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { upsertPropietarioErp } from "@/lib/alquiloya/upsert-propietario-erp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,6 +70,13 @@ type PostBody = {
   terreno_m2?: number | string;
   codigo?: string;
   agente_id?: string | null;
+  propietario_id?: string | null;
+  propietario_nombre?: string | null;
+  propietario_email?: string | null;
+  propietario_telefono?: string | null;
+  propietario_telefono_contacto?: string | null;
+  propietario_documento?: string | null;
+  propietario_observaciones?: string | null;
   activo?: boolean;
   visible_web?: boolean;
   destacada?: boolean;
@@ -102,20 +110,31 @@ export async function POST(request: Request) {
     try {
       await client.query("BEGIN");
 
+      const propietarioId = await upsertPropietarioErp(client, {
+        empresaId: ALQUILOYA_EMPRESA_ID,
+        propietario_id: s(body.propietario_id),
+        nombre: s(body.propietario_nombre),
+        email: s(body.propietario_email),
+        telefono: s(body.propietario_telefono),
+        telefono_contacto: s(body.propietario_telefono_contacto),
+        documento: s(body.propietario_documento),
+        observaciones: s(body.propietario_observaciones),
+      });
+
       const ins = await client.query(
         `INSERT INTO ${t("propiedades")} (
            empresa_id, agente_id, codigo, titulo, descripcion,
            tipo, operacion, estado, ciudad, barrio, direccion,
            precio, moneda, dormitorios, banos, cocheras,
            superficie_m2, terreno_m2,
-           destacada, visible_web, activo, lat, lng
+           destacada, visible_web, activo, lat, lng, propietario_id
          )
          VALUES (
            $1::uuid, $2::uuid, $3, $4, $5,
            $6, COALESCE($7, 'alquiler'), COALESCE($8, 'disponible'), $9, $10, $11,
            $12, COALESCE($13, 'PYG'), $14, $15, $16,
            $17, $18,
-           $19, $20, $21, $22, $23
+           $19, $20, $21, $22, $23, $24::uuid
          )
          RETURNING id`,
         [
@@ -142,6 +161,7 @@ export async function POST(request: Request) {
           b(body.activo, true),
           n(body.lat),
           n(body.lng),
+          propietarioId,
         ]
       );
       const propId = ins.rows[0].id as string;
