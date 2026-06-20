@@ -104,6 +104,15 @@ export type ErpPropiedadDetail = ErpPropiedadListRow & {
     cargo: string | null;
     bio: string | null;
   } | null;
+  propietario: {
+    id: string;
+    nombre: string | null;
+    email: string | null;
+    telefono: string | null;
+    telefono_contacto: string | null;
+    documento: string | null;
+    observaciones: string | null;
+  } | null;
   fotos: Array<{
     id: string;
     url: string;
@@ -209,6 +218,14 @@ export async function countErpPropiedadesPendientes(): Promise<number> {
 export async function listErpPropiedades(): Promise<ErpPropiedadListRow[]> {
   const pool = getChatPostgresPool();
   if (!pool) return [];
+  // Bootstrap idempotente: aseguramos columna telefono_contacto en propietarios
+  // (mirror de migration 20260704120000). Sin esto, el SELECT puede fallar si
+  // la DB de prod aun no corrio esa migration.
+  try {
+    await queryWithRetry(pool, `ALTER TABLE ${q("propietarios")} ADD COLUMN IF NOT EXISTS telefono_contacto text`, []);
+  } catch (err) {
+    console.warn("[getErpPropiedad] ensure telefono_contacto:", err instanceof Error ? err.message : err);
+  }
   const hasDH = await destacadaHastaExists();
   const dhSelect = hasDH
     ? "p.destacada_hasta::text AS destacada_hasta,\n        (p.destacada AND (p.destacada_hasta IS NULL OR p.destacada_hasta > now())) AS destacada_efectiva,"
@@ -236,6 +253,8 @@ export async function listErpPropiedades(): Promise<ErpPropiedadListRow[]> {
       FROM ${q("propiedades")} p
       LEFT JOIN ${q("agentes")} a
         ON a.id = p.agente_id AND a.empresa_id = p.empresa_id
+      LEFT JOIN ${q("propietarios")} pr
+        ON pr.id = p.propietario_id AND pr.empresa_id = p.empresa_id
       LEFT JOIN LATERAL (
         SELECT pf.url
         FROM ${q("propiedad_fotos")} pf
@@ -316,6 +335,11 @@ export async function getErpPropiedad(id: string): Promise<ErpPropiedadDetail | 
           'telefono', a.telefono, 'whatsapp', a.whatsapp,
           'foto_url', a.foto_url, 'cargo', a.cargo, 'bio', a.bio
         ) END AS agente,
+        CASE WHEN pr.id IS NULL THEN NULL ELSE json_build_object(
+          'id', pr.id, 'nombre', pr.nombre, 'email', pr.email,
+          'telefono', pr.telefono, 'telefono_contacto', pr.telefono_contacto,
+          'documento', pr.documento, 'observaciones', pr.observaciones
+        ) END AS propietario,
         COALESCE((
           SELECT json_agg(json_build_object(
             'id', pf.id, 'url', pf.url, 'alt', pf.alt,
@@ -339,6 +363,8 @@ export async function getErpPropiedad(id: string): Promise<ErpPropiedadDetail | 
       FROM ${q("propiedades")} p
       LEFT JOIN ${q("agentes")} a
         ON a.id = p.agente_id AND a.empresa_id = p.empresa_id
+      LEFT JOIN ${q("propietarios")} pr
+        ON pr.id = p.propietario_id AND pr.empresa_id = p.empresa_id
       LEFT JOIN LATERAL (
         SELECT pf.url
         FROM ${q("propiedad_fotos")} pf
