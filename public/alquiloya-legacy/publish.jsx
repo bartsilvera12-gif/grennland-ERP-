@@ -461,7 +461,7 @@ function PublishPage() {
             <div className="row gap-12">
               <span className="muted xs">Paso {step + 1} de {steps.length}</span>
               {step < steps.length - 1 ? (
-                <button className="btn btn-blue" onClick={() => {
+                <button className="btn btn-blue" disabled={stepKinds[step] === 'plan' && !!form.plan_request_sent} onClick={() => {
                   const err = validateStep(step);
                   if (err) { setStepError(err); return; }
                   setStepError(null);
@@ -1580,6 +1580,21 @@ function StepPlan({ form, setF, ctxAgente, ctxPropietario, editingId }) {
       <div className="tag">Paso 1</div>
       <h3 style={{ fontSize: 22, marginTop: 6 }}>Elegí un plan para tu publicación</h3>
       <p className="muted" style={{ fontSize: 14, marginTop: 6 }}>Podés cambiar de plan más adelante.</p>
+
+      {form.plan_request_sent && (
+        <div className="card" style={{
+          marginTop: 16, padding: '14px 16px',
+          background: '#fff9e6', border: '1px solid #f1d97a',
+          borderLeft: '4px solid #f5b400',
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>
+            Solicitud enviada — esperando activación
+          </div>
+          <div className="muted xs" style={{ marginTop: 4, lineHeight: 1.5 }}>
+            Te avisamos por correo cuando activemos tu plan. Recién entonces podrás continuar con la publicación.
+          </div>
+        </div>
+      )}
 
       {canRequestAgent && (
         <div className="card" style={{
