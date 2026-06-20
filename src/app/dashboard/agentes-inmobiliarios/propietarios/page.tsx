@@ -1,4 +1,5 @@
 import Link from "next/link";
+import CambiarPlanPropietarioButton from "./CambiarPlanPropietarioButton";
 import DeletePropietarioButton from "./DeletePropietarioButton";
 import {
   listErpPropietarios,
@@ -148,6 +149,7 @@ export default async function PropietariosPage() {
                       >
                         Editar
                       </Link>
+                      <CambiarPlanPropietarioButton id={p.id} nombre={p.nombre} currentPlanId={p.plan_publicacion_id} currentVencimiento={p.plan_vencimiento_at} />
                       <DeletePropietarioButton id={p.id} nombre={p.nombre} />
                     </div>
                   </td>

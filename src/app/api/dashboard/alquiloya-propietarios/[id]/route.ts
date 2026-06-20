@@ -191,6 +191,18 @@ export async function PATCH(request: Request, ctx: Ctx) {
       if (v && !uuidRe.test(v)) return NextResponse.json({ error: "plan_publicacion_id invalido" }, { status: 400 });
       push("plan_publicacion_id", v, "::uuid");
     }
+    if ("plan_vencimiento_at" in body) {
+      const raw = body.plan_vencimiento_at;
+      if (raw === null || raw === "") {
+        push("plan_vencimiento_at", null, "::timestamptz");
+      } else if (typeof raw === "string") {
+        const d = new Date(raw);
+        if (Number.isNaN(d.getTime())) {
+          return NextResponse.json({ error: "plan_vencimiento_at invalido" }, { status: 400 });
+        }
+        push("plan_vencimiento_at", d.toISOString(), "::timestamptz");
+      }
+    }
 
     if (sets.length === 0) return NextResponse.json({ error: "sin cambios" }, { status: 400 });
 
