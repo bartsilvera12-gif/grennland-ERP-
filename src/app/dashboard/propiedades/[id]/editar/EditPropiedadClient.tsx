@@ -8,6 +8,15 @@ import type { ErpPropiedadDetail } from "@/lib/alquiloya/erp-propiedades";
 import MapPicker from "@/components/MapPicker";
 
 type Agente = { id: string; nombre: string };
+type Propietario = {
+  id: string;
+  nombre: string;
+  email: string | null;
+  telefono: string | null;
+  telefono_contacto: string | null;
+  documento: string | null;
+  observaciones: string | null;
+};
 type Foto = { url: string; alt: string; es_portada: boolean };
 type Caracteristica = { nombre: string; valor: string };
 
@@ -36,6 +45,7 @@ export default function EditPropiedadClient({
   const router = useRouter();
   const fromQuery = fromPendientes ? "?from=pendientes" : "";
   const [agentes, setAgentes] = useState<Agente[]>([]);
+  const [propietarios, setPropietarios] = useState<Propietario[]>([]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -67,6 +77,13 @@ export default function EditPropiedadClient({
     destacada: !!initial.destacada,
     publicacion_dias: initial.publicacion_dias == null ? "" : String(initial.publicacion_dias),
     lat: initial.lat == null ? null : Number(initial.lat),
+    propietario_id: initial.propietario?.id ?? "",
+    propietario_nombre: initial.propietario?.nombre ?? "",
+    propietario_email: initial.propietario?.email ?? "",
+    propietario_telefono: initial.propietario?.telefono ?? "",
+    propietario_telefono_contacto: initial.propietario?.telefono_contacto ?? "",
+    propietario_documento: initial.propietario?.documento ?? "",
+    propietario_observaciones: initial.propietario?.observaciones ?? "",
     lng: initial.lng == null ? null : Number(initial.lng),
   });
 
@@ -90,6 +107,15 @@ export default function EditPropiedadClient({
       } catch {
         /* ignore */
       }
+    (async () => {
+      try {
+        const res = await fetchWithSupabaseSession("/api/dashboard/alquiloya-propietarios?limit=200", { cache: "no-store" });
+        const body = (await res.json()) as { success?: boolean; data?: { propietarios?: Propietario[] } };
+        if (body?.success && body.data?.propietarios) setPropietarios(body.data.propietarios);
+      } catch {
+        /* ignorar */
+      }
+    })();
     })();
   }, []);
 
@@ -106,6 +132,13 @@ export default function EditPropiedadClient({
       const payload = {
         ...form,
         agente_id: form.agente_id || null,
+        propietario_id: form.propietario_id || null,
+        propietario_nombre: form.propietario_nombre.trim() || null,
+        propietario_email: form.propietario_email.trim() || null,
+        propietario_telefono: form.propietario_telefono.trim() || null,
+        propietario_telefono_contacto: form.propietario_telefono_contacto.trim() || null,
+        propietario_documento: form.propietario_documento.trim() || null,
+        propietario_observaciones: form.propietario_observaciones.trim() || null,
         precio: form.precio || null,
         dormitorios: form.dormitorios || null,
         banos: form.banos || null,
@@ -301,6 +334,70 @@ export default function EditPropiedadClient({
           </div>
         </section>
 
+
+        {/* Datos del propietario */}
+        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-600">Datos del propietario</h2>
+          <p className="mb-4 text-xs text-slate-500">
+            Si el propietario ya cargó esta propiedad desde la web o tiene cuenta, elegilo del selector. Si no, completá los datos abajo y el sistema lo crea o lo vincula automáticamente por email/teléfono.
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className={`${fieldCls} sm:col-span-2`}>
+              <label className={labelCls}>Propietario existente</label>
+              <select
+                className={inputCls}
+                value={form.propietario_id}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const pr = propietarios.find((p) => p.id === id);
+                  setForm((f) => ({
+                    ...f,
+                    propietario_id: id,
+                    propietario_nombre: pr?.nombre ?? f.propietario_nombre,
+                    propietario_email: pr?.email ?? f.propietario_email,
+                    propietario_telefono: pr?.telefono ?? f.propietario_telefono,
+                    propietario_telefono_contacto: pr?.telefono_contacto ?? f.propietario_telefono_contacto,
+                    propietario_documento: pr?.documento ?? f.propietario_documento,
+                    propietario_observaciones: pr?.observaciones ?? f.propietario_observaciones,
+                  }));
+                }}
+              >
+                <option value="">— Cargar propietario nuevo / mantener actual —</option>
+                {propietarios.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                    {p.email ? ` · ${p.email}` : ""}
+                    {p.telefono ? ` · ${p.telefono}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Nombre</label>
+              <input className={inputCls} value={form.propietario_nombre} onChange={(e) => set("propietario_nombre", e.target.value)} placeholder="Nombre y apellido" />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Documento (CI / RUC)</label>
+              <input className={inputCls} value={form.propietario_documento} onChange={(e) => set("propietario_documento", e.target.value)} placeholder="opcional" />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Email</label>
+              <input type="email" className={inputCls} value={form.propietario_email} onChange={(e) => set("propietario_email", e.target.value)} placeholder="propietario@email.com" />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Teléfono</label>
+              <input className={inputCls} value={form.propietario_telefono} onChange={(e) => set("propietario_telefono", e.target.value)} placeholder="+595…" />
+            </div>
+            <div className={fieldCls}>
+              <label className={labelCls}>Teléfono de contacto (WhatsApp público)</label>
+              <input className={inputCls} value={form.propietario_telefono_contacto} onChange={(e) => set("propietario_telefono_contacto", e.target.value)} placeholder="opcional, si difiere del de arriba" />
+            </div>
+            <div className={`${fieldCls} sm:col-span-2`}>
+              <label className={labelCls}>Observaciones</label>
+              <textarea rows={2} className={inputCls} value={form.propietario_observaciones} onChange={(e) => set("propietario_observaciones", e.target.value)} placeholder="Notas internas sobre el propietario (no se muestran en la web)" />
+            </div>
+          </div>
+        </section>
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-600">Publicación</h2>
           <div className="flex flex-wrap gap-5">

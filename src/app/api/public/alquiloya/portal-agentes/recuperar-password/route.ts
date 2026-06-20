@@ -100,7 +100,8 @@ export async function POST(request: Request) {
   // 2) Resolver auth user. Preferimos auth_user_id; si no, fallback por email.
   let authUserId = usuario.auth_user_id;
   if (!authUserId) {
-    const found = await findAuthUserByEmail(supabaseAdmin, emailRaw);
+    const adminApi = supabaseAdmin.auth.admin as unknown as Parameters<typeof findAuthUserByEmail>[0];
+    const found = await findAuthUserByEmail(adminApi, emailRaw);
     if (!found) return successResponse;
     authUserId = found.id;
   }

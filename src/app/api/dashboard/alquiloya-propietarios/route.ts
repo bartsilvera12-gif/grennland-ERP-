@@ -37,6 +37,48 @@ type PostBody = {
   observaciones?: string | null;
 };
 
+/**
+ * GET /api/dashboard/alquiloya-propietarios?q=<search>
+ * Listado simple para selector del form de propiedades. Devuelve los
+ * propietarios activos, busca por nombre/email/telefono si llega ?q.
+ */
+export async function GET(request: Request) {
+  try {
+    const user = await getAuthUserForApiRoute(request);
+    if (!user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    const pool = getChatPostgresPool();
+    if (!pool) return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
+
+    const { searchParams } = new URL(request.url);
+    const q = (searchParams.get("q") ?? "").trim();
+    const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 50, 1), 200);
+
+    let sql = `SELECT id, nombre, email, telefono, telefono_contacto, documento, observaciones
+                 FROM ${t("propietarios")}
+                WHERE empresa_id = $1::uuid AND activo = true`;
+    const params: unknown[] = [ALQUILOYA_EMPRESA_ID];
+    if (q.length >= 1) {
+      params.push(`%${q}%`);
+      sql += ` AND (nombre ILIKE $2 OR email ILIKE $2 OR telefono ILIKE $2)`;
+    }
+    sql += ` ORDER BY nombre ASC LIMIT ${limit}`;
+
+    const { rows } = await queryWithRetry<{
+      id: string;
+      nombre: string;
+      email: string | null;
+      telefono: string | null;
+      telefono_contacto: string | null;
+      documento: string | null;
+      observaciones: string | null;
+    }>(pool, sql, params);
+    return NextResponse.json({ success: true, data: { propietarios: rows } });
+  } catch (err) {
+    console.error("[api/dashboard/alquiloya-propietarios GET]", err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "No se pudieron cargar los propietarios" }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const user = await getAuthUserForApiRoute(request);
