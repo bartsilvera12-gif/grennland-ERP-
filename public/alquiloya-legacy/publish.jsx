@@ -1625,12 +1625,15 @@ function StepPlan({ form, setF, ctxAgente, ctxPropietario, editingId }) {
               // abrimos un formulario de solicitud al admin. Plan gratis o
               // agente: comportamiento normal (selección directa).
               if (isPaid && isAnonOrOwner && !requestSent) {
-                setF({
-                  plan_id: p.tier,
-                  plan_fotos_max: limits.fotosPorInmueble,
-                  plan_propiedades_max: limits.propiedadesActivas,
+                // No seteamos plan_id todavia — recien se aplica al confirmar
+                // la solicitud. Asi, si el usuario cierra el modal sin enviar,
+                // el wizard sigue bloqueado por validateStep("plan").
+                setPlanRequestFor({
+                  tier: p.tier,
+                  name: p.name,
+                  fotos_max: limits.fotosPorInmueble,
+                  propiedades_max: limits.propiedadesActivas,
                 });
-                setPlanRequestFor({ tier: p.tier, name: p.name });
                 return;
               }
               setF({
@@ -1679,7 +1682,13 @@ function StepPlan({ form, setF, ctxAgente, ctxPropietario, editingId }) {
           planTier: planRequestFor.tier,
           planLabel: planRequestFor.name,
           onSuccess: () => {
-            setF({ plan_request_sent: true, plan_request_tier: planRequestFor.tier });
+            setF({
+              plan_id: planRequestFor.tier,
+              plan_fotos_max: planRequestFor.fotos_max,
+              plan_propiedades_max: planRequestFor.propiedades_max,
+              plan_request_sent: true,
+              plan_request_tier: planRequestFor.tier,
+            });
             if (window.ayToast) {
               window.ayToast('Solicitud de plan enviada. Te contactamos para activarla.', { variant: 'success', duration: 6000 });
             }
