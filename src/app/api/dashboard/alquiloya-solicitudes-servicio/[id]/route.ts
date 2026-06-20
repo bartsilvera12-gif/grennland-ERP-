@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
+import crypto from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { getClientSchema } from "@/lib/env/instance-mode";
 import { bustOverviewCache } from "@/lib/cache/dashboard-overview-cache";
+import { sendMail } from "@/lib/email/send-mail";
+import { renderPlanAprobadoEmail } from "@/lib/email/templates/plan-aprobado";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,6 +47,13 @@ function uuid(v: unknown): string | null {
   return x && uuidRe.test(x) ? x : null;
 }
 
+/** Misma politica que el flujo de aprobacion de solicitudes_acceso. */
+function generateTempPassword(): string {
+  return (
+    crypto.randomBytes(9).toString("base64").replace(/[+/=]/g, "x").slice(0, 12) + "!9"
+  );
+}
+
 type Sol = {
   id: string;
   kind: "cambio_plan" | "impulsos" | "verificacion";
@@ -65,20 +76,21 @@ type Ctx = { params: Promise<{ id: string }> };
  *   1) match exacto por email (case-insensitive)
  *   2) match exacto por telefono
  *   3) si pidio crear_propietario, INSERT nuevo con los datos de la solicitud
- * Devuelve el id o null si no hay para vincular.
+ * Devuelve { id, created } o null. `created=true` solo cuando insertamos
+ * una fila nueva (sirve para disparar el flujo de creacion de cuenta).
  */
 async function resolveOrCreatePropietario(
   client: import("pg").PoolClient,
   sol: Sol,
   crearPropietario: boolean
-): Promise<string | null> {
+): Promise<{ id: string; created: boolean } | null> {
   if (sol.email) {
     const m = await client.query<{ id: string }>(
       `SELECT id FROM ${t("propietarios")}
         WHERE empresa_id=$1::uuid AND lower(email)=lower($2) LIMIT 1`,
       [ALQUILOYA_EMPRESA_ID, sol.email]
     );
-    if (m.rows[0]?.id) return m.rows[0].id;
+    if (m.rows[0]?.id) return { id: m.rows[0].id, created: false };
   }
   if (sol.telefono) {
     const m = await client.query<{ id: string }>(
@@ -86,7 +98,7 @@ async function resolveOrCreatePropietario(
         WHERE empresa_id=$1::uuid AND telefono=$2 LIMIT 1`,
       [ALQUILOYA_EMPRESA_ID, sol.telefono]
     );
-    if (m.rows[0]?.id) return m.rows[0].id;
+    if (m.rows[0]?.id) return { id: m.rows[0].id, created: false };
   }
   if (!crearPropietario) return null;
   const ins = await client.query<{ id: string }>(
@@ -96,7 +108,95 @@ async function resolveOrCreatePropietario(
      RETURNING id`,
     [ALQUILOYA_EMPRESA_ID, sol.nombre, sol.email, sol.telefono]
   );
-  return ins.rows[0].id;
+  return { id: ins.rows[0].id, created: true };
+}
+
+/**
+ * Crea cuenta de portal para un propietario recien creado. Idempotente:
+ * si el email ya existe en Supabase Auth, no hace nada y devuelve null
+ * (asumimos que el usuario ya tiene como ingresar y le mandamos solo el
+ * mail de plan aprobado sin credenciales).
+ */
+async function provisionPortalAccountForPropietario(params: {
+  pool: import("pg").Pool;
+  propietarioId: string;
+  nombre: string;
+  email: string;
+}): Promise<{ tempPassword: string } | null> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!supabaseUrl || !serviceRole) {
+    console.warn("[provisionPortalAccount] faltan SUPABASE_* envs");
+    return null;
+  }
+  const supabaseAdmin = createClient(supabaseUrl, serviceRole, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  const tempPassword = generateTempPassword();
+  const { data: created, error: createErr } =
+    await supabaseAdmin.auth.admin.createUser({
+      email: params.email,
+      password: tempPassword,
+      email_confirm: true,
+      user_metadata: {
+        nombre: params.nombre,
+        fuente: "solicitud_servicio_aprobada",
+        tipo: "propietario",
+      },
+    });
+
+  if (createErr) {
+    const msg = (createErr.message ?? "").toLowerCase();
+    if (msg.includes("already") || msg.includes("exists") || msg.includes("registered")) {
+      console.info(
+        "[provisionPortalAccount] email ya existia en auth, sin nueva password:",
+        params.email
+      );
+      return null;
+    }
+    console.warn("[provisionPortalAccount] createUser:", createErr.message);
+    return null;
+  }
+  const authUserId = created.user?.id;
+  if (!authUserId) return null;
+
+  // Vinculo en alquiloya.usuarios. Si la fila ya existe (por algun otro flujo),
+  // ON CONFLICT NOTHING y seguimos.
+  try {
+    await params.pool.query(
+      `INSERT INTO "alquiloya"."usuarios"
+         (empresa_id, auth_user_id, email, nombre, rol, propietario_id)
+       VALUES ($1::uuid, $2::uuid, $3, $4, 'publicador-propietario', $5::uuid)
+       ON CONFLICT (auth_user_id) DO NOTHING`,
+      [ALQUILOYA_EMPRESA_ID, authUserId, params.email, params.nombre, params.propietarioId]
+    );
+    await params.pool.query(
+      `UPDATE "alquiloya"."propietarios"
+          SET usuario_id = (
+                SELECT id FROM "alquiloya"."usuarios"
+                 WHERE auth_user_id = $1::uuid LIMIT 1
+              ),
+              updated_at = now()
+        WHERE empresa_id = $2::uuid AND id = $3::uuid`,
+      [authUserId, ALQUILOYA_EMPRESA_ID, params.propietarioId]
+    );
+  } catch (e) {
+    console.warn(
+      "[provisionPortalAccount] insert usuarios:",
+      e instanceof Error ? e.message : e
+    );
+  }
+
+  return { tempPassword };
+}
+
+function vencimientoTextoFromBilling(billing: string): string | null {
+  const d = new Date();
+  if (billing === "gratis") return null;
+  if (billing === "anual") d.setDate(d.getDate() + 365);
+  else d.setDate(d.getDate() + 30);
+  return d.toLocaleDateString("es-PY", { dateStyle: "long" });
 }
 
 export async function PATCH(request: Request, ctx: Ctx) {
@@ -153,20 +253,27 @@ export async function PATCH(request: Request, ctx: Ctx) {
     const overrideAgente = uuid(body.agente_id) ?? sol.agente_id;
 
     const client = await pool.connect();
+    let effectivePropietarioId: string | null = overridePropietarioRaw;
+    let propietarioWasJustCreated = false;
+    let appliedPlan: { nombre: string | null; tier: string; vencimientoTexto: string | null } | null = null;
+    let appliedImpulsos: number | null = null;
+    let resultadoId: string | null = null;
+
     try {
       await client.query("BEGIN");
 
-      let effectivePropietarioId: string | null = overridePropietarioRaw;
       if (!effectivePropietarioId && !overrideAgente && crearPropietario) {
-        effectivePropietarioId = await resolveOrCreatePropietario(client, sol, true);
+        const r = await resolveOrCreatePropietario(client, sol, true);
+        if (r) {
+          effectivePropietarioId = r.id;
+          propietarioWasJustCreated = r.created;
+        }
       }
-
-      let resultadoId: string | null = null;
 
       if (sol.kind === "cambio_plan") {
         if (!sol.plan_tier) throw new Error("la solicitud no tiene plan_tier");
-        const pr = await client.query<{ id: string; billing: string | null }>(
-          `SELECT id, billing FROM ${t("planes_publicacion")}
+        const pr = await client.query<{ id: string; billing: string | null; nombre: string | null }>(
+          `SELECT id, billing, nombre FROM ${t("planes_publicacion")}
             WHERE empresa_id=$1::uuid AND tier=$2 AND activo=true LIMIT 1`,
           [ALQUILOYA_EMPRESA_ID, sol.plan_tier]
         );
@@ -180,6 +287,12 @@ export async function PATCH(request: Request, ctx: Ctx) {
             : billing === "anual"
               ? "now() + interval '365 days'"
               : "now() + interval '30 days'";
+        const vencimientoTexto = vencimientoTextoFromBilling(billing);
+        appliedPlan = {
+          nombre: planRow.nombre,
+          tier: sol.plan_tier,
+          vencimientoTexto,
+        };
 
         if (effectivePropietarioId) {
           await client.query(
@@ -212,6 +325,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
       if (sol.kind === "impulsos") {
         const qty = sol.pack_qty ?? 0;
         if (qty <= 0) throw new Error("pack_qty inválido");
+        appliedImpulsos = qty;
 
         if (effectivePropietarioId) {
           await client.query(
@@ -251,7 +365,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
         resultadoId = overridePropiedad;
       }
 
-      const upd = await client.query<{ id: string }>(
+      await client.query(
         `UPDATE ${t("solicitudes_servicio")}
             SET estado='aprobada',
                 resultado_id = $3::uuid,
@@ -259,8 +373,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
                 propiedad_id = COALESCE(propiedad_id, $5::uuid),
                 agente_id = COALESCE(agente_id, $6::uuid),
                 revisado_por = $7::uuid, revisado_at = now()
-          WHERE empresa_id=$1::uuid AND id=$2::uuid
-          RETURNING id`,
+          WHERE empresa_id=$1::uuid AND id=$2::uuid`,
         [
           ALQUILOYA_EMPRESA_ID, id, resultadoId,
           effectivePropietarioId, overridePropiedad, overrideAgente,
@@ -268,24 +381,86 @@ export async function PATCH(request: Request, ctx: Ctx) {
         ]
       );
       await client.query("COMMIT");
-      bustOverviewCache(
-        getClientSchema(),
-        process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || ALQUILOYA_EMPRESA_ID
-      );
-      return NextResponse.json({
-        success: true,
-        id: upd.rows[0].id,
-        estado: "aprobada",
-        resultado_id: resultadoId,
-        kind: sol.kind,
-        propietario_id: effectivePropietarioId,
-      });
     } catch (e) {
       await client.query("ROLLBACK").catch(() => {});
       throw e;
     } finally {
       client.release();
     }
+
+    // ───── post-commit: cuenta de portal + correo de aprobacion ─────
+    // Solo si creamos un propietario nuevo Y tenemos email valido. Si fallan
+    // estos pasos, ya esta aplicado el cambio en BD; el admin puede reenviar
+    // el correo manualmente desde el panel de Solicitudes de acceso.
+    let credentialsCreated: { email: string; password: string } | null = null;
+    let mailSent = false;
+    let mailError: string | null = null;
+
+    const shouldNotify =
+      !!sol.email && (propietarioWasJustCreated || sol.kind !== "verificacion");
+
+    if (effectivePropietarioId && propietarioWasJustCreated && sol.email) {
+      try {
+        const acc = await provisionPortalAccountForPropietario({
+          pool,
+          propietarioId: effectivePropietarioId,
+          nombre: sol.nombre,
+          email: sol.email,
+        });
+        if (acc) credentialsCreated = { email: sol.email, password: acc.tempPassword };
+      } catch (e) {
+        console.warn(
+          "[solicitudes-servicio PATCH] provision portal:",
+          e instanceof Error ? e.message : e
+        );
+      }
+    }
+
+    if (shouldNotify && sol.email) {
+      try {
+        const origin = new URL(request.url).origin;
+        const portalUrl = `${origin}/portal-agentes/login`;
+        const tpl = renderPlanAprobadoEmail({
+          nombre: sol.nombre,
+          planNombre: appliedPlan?.nombre ?? null,
+          planTier: appliedPlan?.tier ?? null,
+          vencimientoTexto: appliedPlan?.vencimientoTexto ?? null,
+          impulsosCantidad: appliedImpulsos,
+          credentials: credentialsCreated
+            ? { ...credentialsCreated, portalUrl }
+            : undefined,
+        });
+        const r = await sendMail({
+          to: sol.email,
+          subject: tpl.subject,
+          html: tpl.html,
+          text: tpl.text,
+        });
+        if (r.sent) mailSent = true;
+        else mailError = r.reason;
+      } catch (e) {
+        mailError = e instanceof Error ? e.message : "Error enviando mail";
+        console.warn("[solicitudes-servicio PATCH] sendMail:", mailError);
+      }
+    }
+
+    bustOverviewCache(
+      getClientSchema(),
+      process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || ALQUILOYA_EMPRESA_ID
+    );
+
+    return NextResponse.json({
+      success: true,
+      id,
+      estado: "aprobada",
+      resultado_id: resultadoId,
+      kind: sol.kind,
+      propietario_id: effectivePropietarioId,
+      propietario_creado: propietarioWasJustCreated,
+      cuenta_portal_creada: !!credentialsCreated,
+      mail_enviado: mailSent,
+      mail_error: mailError,
+    });
   } catch (err) {
     console.error("[api/dashboard/alquiloya-solicitudes-servicio/[id] PATCH]", err);
     return NextResponse.json(

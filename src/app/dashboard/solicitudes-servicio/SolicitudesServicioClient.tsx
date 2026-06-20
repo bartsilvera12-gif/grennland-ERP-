@@ -114,6 +114,7 @@ export default function SolicitudesServicioClient({
   const [filter, setFilter] = useState<Filter>("pendiente");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
   const [pending, setPending] = useState<
     | { kind: "aprobar"; row: SolicitudServicioRow; propietarioId: string; agenteId: string; propiedadId: string; crearPropietario: boolean }
     | { kind: "rechazar"; row: SolicitudServicioRow; motivo: string }
@@ -203,10 +204,16 @@ export default function SolicitudesServicioClient({
         `/api/dashboard/alquiloya-solicitudes-servicio/${row.id}`,
         { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
       );
-      const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string; propietario_creado?: boolean; cuenta_portal_creada?: boolean; mail_enviado?: boolean; mail_error?: string | null };
       if (!res.ok || !data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
       setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, estado: "aprobada", revisado_at: new Date().toISOString() } : r));
       setPending(null);
+      const parts: string[] = ["Solicitud aprobada."];
+      if (data.propietario_creado) parts.push("Se creo el propietario.");
+      if (data.cuenta_portal_creada) parts.push("Se creo cuenta de portal y se le envio la contrasena por mail.");
+      else if (data.mail_enviado) parts.push("Se aviso al solicitante por mail.");
+      else if (data.mail_error) parts.push(`El mail no salio: `);
+      setOkMsg(parts.join(" "));
       router.refresh();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Error");
@@ -222,7 +229,7 @@ export default function SolicitudesServicioClient({
         `/api/dashboard/alquiloya-solicitudes-servicio/${row.id}`,
         { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "rechazar", motivo_rechazo: pending.motivo.trim() || null }) }
       );
-      const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      const data = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string; propietario_creado?: boolean; cuenta_portal_creada?: boolean; mail_enviado?: boolean; mail_error?: string | null };
       if (!res.ok || !data.success) throw new Error(data.error ?? `HTTP ${res.status}`);
       setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, estado: "rechazada", motivo_rechazo: pending.motivo.trim() || null, revisado_at: new Date().toISOString() } : r));
       setPending(null);
@@ -247,6 +254,7 @@ export default function SolicitudesServicioClient({
       </div>
 
       {err ? <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{err}</div> : null}
+      {okMsg ? <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 flex items-start justify-between gap-3"><span>{okMsg}</span><button type="button" onClick={() => setOkMsg(null)} className="shrink-0 text-emerald-700/70 hover:text-emerald-900">x</button></div> : null}
 
       {visible.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">No hay solicitudes en este estado.</div>
