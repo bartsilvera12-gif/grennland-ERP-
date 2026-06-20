@@ -16,10 +16,6 @@ function t(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
 }
 
-// Bootstrap idempotente: agregamos `impulsos_saldo` a alquiloya.agentes si
-// todavia no existe. Antes la columna solo vivia en `propietarios` (migration
-// 20260626120000), asi que cuando un agente compraba impulsos no habia donde
-// acreditarselos. ADD COLUMN IF NOT EXISTS es seguro de correr varias veces.
 let agentesImpulsosColumnReady = false;
 async function ensureAgentesImpulsosColumn(pool: import("pg").Pool): Promise<void> {
   if (agentesImpulsosColumnReady) return;
@@ -36,6 +32,7 @@ async function ensureAgentesImpulsosColumn(pool: import("pg").Pool): Promise<voi
     );
   }
 }
+
 function s(v: unknown, max = 500): string | null {
   if (typeof v !== "string") return null;
   const x = v.trim();
@@ -62,6 +59,46 @@ type Sol = {
 
 type Ctx = { params: Promise<{ id: string }> };
 
+/**
+ * Resuelve un propietario para vincular a la solicitud cuando el admin no
+ * eligio uno explicito en el modal. Estrategia:
+ *   1) match exacto por email (case-insensitive)
+ *   2) match exacto por telefono
+ *   3) si pidio crear_propietario, INSERT nuevo con los datos de la solicitud
+ * Devuelve el id o null si no hay para vincular.
+ */
+async function resolveOrCreatePropietario(
+  client: import("pg").PoolClient,
+  sol: Sol,
+  crearPropietario: boolean
+): Promise<string | null> {
+  if (sol.email) {
+    const m = await client.query<{ id: string }>(
+      `SELECT id FROM ${t("propietarios")}
+        WHERE empresa_id=$1::uuid AND lower(email)=lower($2) LIMIT 1`,
+      [ALQUILOYA_EMPRESA_ID, sol.email]
+    );
+    if (m.rows[0]?.id) return m.rows[0].id;
+  }
+  if (sol.telefono) {
+    const m = await client.query<{ id: string }>(
+      `SELECT id FROM ${t("propietarios")}
+        WHERE empresa_id=$1::uuid AND telefono=$2 LIMIT 1`,
+      [ALQUILOYA_EMPRESA_ID, sol.telefono]
+    );
+    if (m.rows[0]?.id) return m.rows[0].id;
+  }
+  if (!crearPropietario) return null;
+  const ins = await client.query<{ id: string }>(
+    `INSERT INTO ${t("propietarios")}
+       (empresa_id, nombre, email, telefono, activo)
+     VALUES ($1::uuid, $2, $3, $4, true)
+     RETURNING id`,
+    [ALQUILOYA_EMPRESA_ID, sol.nombre, sol.email, sol.telefono]
+  );
+  return ins.rows[0].id;
+}
+
 export async function PATCH(request: Request, ctx: Ctx) {
   try {
     const user = await getAuthUserForApiRoute(request);
@@ -75,6 +112,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
     if (action !== "aprobar" && action !== "rechazar") {
       return NextResponse.json({ error: "action invalida" }, { status: 400 });
     }
+    const crearPropietario = body.crear_propietario === true;
 
     const pool = getChatPostgresPool();
     if (!pool) return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
@@ -110,16 +148,19 @@ export async function PATCH(request: Request, ctx: Ctx) {
       return NextResponse.json({ success: true, id: r.rows[0].id, estado: "rechazada" });
     }
 
-    // ───── APROBAR ─────
-    // El admin puede pasar overrides en el body para resolver vinculos:
-    //   propietario_id, propiedad_id (para verificacion + impulsos), agente_id (para cambio_plan agente)
-    const overridePropietario = uuid(body.propietario_id) ?? sol.propietario_id;
+    const overridePropietarioRaw = uuid(body.propietario_id) ?? sol.propietario_id;
     const overridePropiedad = uuid(body.propiedad_id) ?? sol.propiedad_id;
     const overrideAgente = uuid(body.agente_id) ?? sol.agente_id;
 
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
+
+      let effectivePropietarioId: string | null = overridePropietarioRaw;
+      if (!effectivePropietarioId && !overrideAgente && crearPropietario) {
+        effectivePropietarioId = await resolveOrCreatePropietario(client, sol, true);
+      }
+
       let resultadoId: string | null = null;
 
       if (sol.kind === "cambio_plan") {
@@ -132,7 +173,6 @@ export async function PATCH(request: Request, ctx: Ctx) {
         const planRow = pr.rows[0];
         if (!planRow?.id) throw new Error(`plan "${sol.plan_tier}" no existe`);
         const planId = planRow.id;
-        // vencimiento segun billing: gratis = null, unico/mensual = +30d, anual = +365d
         const billing = (planRow.billing ?? "").toLowerCase();
         const vencSql =
           billing === "gratis"
@@ -141,16 +181,16 @@ export async function PATCH(request: Request, ctx: Ctx) {
               ? "now() + interval '365 days'"
               : "now() + interval '30 days'";
 
-        if (overridePropietario) {
+        if (effectivePropietarioId) {
           await client.query(
             `UPDATE ${t("propietarios")}
                 SET plan_publicacion_id=$3::uuid,
                     plan_vencimiento_at=${vencSql},
                     updated_at=now()
               WHERE empresa_id=$1::uuid AND id=$2::uuid`,
-            [ALQUILOYA_EMPRESA_ID, overridePropietario, planId]
+            [ALQUILOYA_EMPRESA_ID, effectivePropietarioId, planId]
           );
-          resultadoId = overridePropietario;
+          resultadoId = effectivePropietarioId;
         } else if (overrideAgente) {
           await client.query(
             `UPDATE ${t("agentes")}
@@ -162,23 +202,25 @@ export async function PATCH(request: Request, ctx: Ctx) {
           );
           resultadoId = overrideAgente;
         } else {
-          throw new Error("Necesitás indicar propietario_id (o agente_id) al aprobar el cambio de plan");
+          throw new Error(
+            "Necesitás indicar propietario_id (o agente_id) al aprobar el cambio de plan. " +
+              "Tildá 'Crear propietario con los datos de la solicitud' si el solicitante no está registrado."
+          );
         }
       }
 
       if (sol.kind === "impulsos") {
         const qty = sol.pack_qty ?? 0;
         if (qty <= 0) throw new Error("pack_qty inválido");
-        // Los impulsos se pueden acreditar a un propietario O a un agente. Antes
-        // siempre iba al propietario y los agentes nunca recibian su saldo.
-        if (overridePropietario) {
+
+        if (effectivePropietarioId) {
           await client.query(
             `UPDATE ${t("propietarios")}
                 SET impulsos_saldo = COALESCE(impulsos_saldo, 0) + $3, updated_at=now()
               WHERE empresa_id=$1::uuid AND id=$2::uuid`,
-            [ALQUILOYA_EMPRESA_ID, overridePropietario, qty]
+            [ALQUILOYA_EMPRESA_ID, effectivePropietarioId, qty]
           );
-          resultadoId = overridePropietario;
+          resultadoId = effectivePropietarioId;
         } else if (overrideAgente) {
           await ensureAgentesImpulsosColumn(pool);
           await client.query(
@@ -190,7 +232,8 @@ export async function PATCH(request: Request, ctx: Ctx) {
           resultadoId = overrideAgente;
         } else {
           throw new Error(
-            "Necesitás indicar propietario_id o agente_id al aprobar la compra de impulsos"
+            "Necesitás indicar propietario_id o agente_id al aprobar la compra de impulsos. " +
+              "Tildá 'Crear propietario con los datos de la solicitud' si el solicitante no está registrado."
           );
         }
       }
@@ -220,7 +263,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
           RETURNING id`,
         [
           ALQUILOYA_EMPRESA_ID, id, resultadoId,
-          overridePropietario, overridePropiedad, overrideAgente,
+          effectivePropietarioId, overridePropiedad, overrideAgente,
           user.id,
         ]
       );
@@ -235,6 +278,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
         estado: "aprobada",
         resultado_id: resultadoId,
         kind: sol.kind,
+        propietario_id: effectivePropietarioId,
       });
     } catch (e) {
       await client.query("ROLLBACK").catch(() => {});

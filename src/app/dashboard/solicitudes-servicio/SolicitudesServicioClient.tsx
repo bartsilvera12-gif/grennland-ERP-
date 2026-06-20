@@ -115,7 +115,7 @@ export default function SolicitudesServicioClient({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, setPending] = useState<
-    | { kind: "aprobar"; row: SolicitudServicioRow; propietarioId: string; agenteId: string; propiedadId: string }
+    | { kind: "aprobar"; row: SolicitudServicioRow; propietarioId: string; agenteId: string; propiedadId: string; crearPropietario: boolean }
     | { kind: "rechazar"; row: SolicitudServicioRow; motivo: string }
     | null
   >(null);
@@ -174,8 +174,13 @@ export default function SolicitudesServicioClient({
           if (!pending.agenteId) throw new Error("Seleccioná un agente");
           body.agente_id = pending.agenteId;
         } else {
-          if (!pending.propietarioId) throw new Error("Seleccioná un propietario");
-          body.propietario_id = pending.propietarioId;
+          if (pending.propietarioId) {
+            body.propietario_id = pending.propietarioId;
+          } else if (pending.crearPropietario) {
+            body.crear_propietario = true;
+          } else {
+            throw new Error("Seleccioná un propietario o tildá \"Crear propietario con los datos de la solicitud\".");
+          }
         }
       } else if (row.kind === "impulsos") {
         // Los impulsos se acreditan al propietario O al agente segun quien hizo
@@ -185,8 +190,10 @@ export default function SolicitudesServicioClient({
           body.propietario_id = pending.propietarioId;
         } else if (pending.agenteId) {
           body.agente_id = pending.agenteId;
+        } else if (pending.crearPropietario) {
+          body.crear_propietario = true;
         } else {
-          throw new Error("Seleccioná un propietario o un agente para acreditar los impulsos");
+          throw new Error("Seleccioná un propietario o agente, o tildá \"Crear propietario con los datos de la solicitud\".");
         }
       } else if (row.kind === "verificacion") {
         if (!pending.propiedadId) throw new Error("Pegá el UUID de la propiedad a verificar");
@@ -301,7 +308,7 @@ export default function SolicitudesServicioClient({
                     {r.estado === "pendiente" ? (
                       <div className="inline-flex items-center gap-1">
                         <button type="button" disabled={busyId === r.id}
-                          onClick={() => setPending({ kind: "aprobar", row: r, propietarioId: suggestPropietario(r), agenteId: suggestAgente(r), propiedadId: r.propiedad_id ?? "" })}
+                          onClick={() => setPending({ kind: "aprobar", row: r, propietarioId: suggestPropietario(r), agenteId: suggestAgente(r), propiedadId: r.propiedad_id ?? "", crearPropietario: false })}
                           className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">Aprobar</button>
                         <button type="button" disabled={busyId === r.id}
                           onClick={() => setPending({ kind: "rechazar", row: r, motivo: "" })}
@@ -383,6 +390,21 @@ export default function SolicitudesServicioClient({
                           </option>
                         ))}
                       </select>
+                      {!isAgenteTarget ? (
+                        <label className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 cursor-pointer hover:bg-slate-50">
+                          <input type="checkbox" className="mt-0.5" checked={pending.crearPropietario} onChange={(e) => setPending((p) => p?.kind === "aprobar" ? { ...p, crearPropietario: e.target.checked } : p)} />
+                          <span>
+                            <strong>Crear propietario nuevo</strong> con los datos de la solicitud
+                            {pending.row.email || pending.row.telefono ? (
+                              <span className="block mt-0.5 text-[11px] text-slate-500">
+                                {pending.row.nombre}
+                                {pending.row.email ? ` · ${pending.row.email}` : ""}
+                                {pending.row.telefono ? ` · ${pending.row.telefono}` : ""}
+                              </span>
+                            ) : null}
+                          </span>
+                        </label>
+                      ) : null}
                     </>
                   )}
                 </div>
@@ -446,8 +468,23 @@ export default function SolicitudesServicioClient({
                     </div>
                   ) : null}
                   {!propSel && !ageSel ? (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                      Tenés que elegir un propietario o un agente para acreditar los impulsos.
+                    <div className="space-y-2">
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                        Si el solicitante no esta registrado, tildá la opcion de abajo para crear un propietario nuevo con los datos de la solicitud.
+                      </div>
+                      <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 cursor-pointer hover:bg-slate-50">
+                        <input type="checkbox" className="mt-0.5" checked={pending.crearPropietario} onChange={(e) => setPending((p) => p?.kind === "aprobar" ? { ...p, crearPropietario: e.target.checked } : p)} />
+                        <span>
+                          <strong>Crear propietario nuevo</strong> con los datos de la solicitud
+                          {pending.row.email || pending.row.telefono ? (
+                            <span className="block mt-0.5 text-[11px] text-slate-500">
+                              {pending.row.nombre}
+                              {pending.row.email ? ` · ` : ""}
+                              {pending.row.telefono ? ` · ` : ""}
+                            </span>
+                          ) : null}
+                        </span>
+                      </label>
                     </div>
                   ) : null}
                 </div>
