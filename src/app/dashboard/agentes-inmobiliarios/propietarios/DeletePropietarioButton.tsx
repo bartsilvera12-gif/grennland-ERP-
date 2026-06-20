@@ -20,17 +20,22 @@ export default function DeletePropietarioButton({
     setErr(null);
     setBusy(true);
     try {
-      const res = await fetchWithSupabaseSession(
+      // Paso 1: soft delete (marca activo=false). Idempotente.
+      const r1 = await fetchWithSupabaseSession(
         `/api/dashboard/alquiloya-propietarios/${id}`,
         { method: "DELETE" }
       );
-      const data = (await res.json().catch(() => ({}))) as {
-        success?: boolean;
-        error?: string;
-      };
-      if (!res.ok || !data.success) {
-        throw new Error(data.error ?? `HTTP ${res.status}`);
-      }
+      const d1 = (await r1.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      if (!r1.ok || !d1.success) throw new Error(d1.error ?? `HTTP ${r1.status}`);
+
+      // Paso 2: hard delete (elimina la fila + cuenta de portal).
+      const r2 = await fetchWithSupabaseSession(
+        `/api/dashboard/alquiloya-propietarios/${id}?hard=true`,
+        { method: "DELETE" }
+      );
+      const d2 = (await r2.json().catch(() => ({}))) as { success?: boolean; error?: string };
+      if (!r2.ok || !d2.success) throw new Error(d2.error ?? `HTTP ${r2.status}`);
+
       setOpen(false);
       router.refresh();
     } catch (e) {
