@@ -923,6 +923,44 @@
     .admin-main [style*="repeat(4,1fr)"] {
       grid-template-columns: repeat(2, 1fr) !important;
     }
+    /* Panel admin (agente / propietario): colapsar grids inline en mobile. */
+    .admin-main [style*="grid-template-columns: 1.4fr 1fr"],
+    .admin-main [style*="grid-template-columns:1.4fr 1fr"],
+    .admin-main [style*="grid-template-columns: 1.6fr 1fr"],
+    .admin-main [style*="grid-template-columns:1.6fr 1fr"],
+    .admin-main [style*="grid-template-columns: 1fr 1fr 1fr"],
+    .admin-main [style*="grid-template-columns:1fr 1fr 1fr"],
+    .admin-main [style*="grid-template-columns: 1fr 1fr"]:not([style*="1fr 1fr 1fr"]),
+    .admin-main [style*="grid-template-columns:1fr 1fr"]:not([style*="1fr 1fr 1fr"]),
+    .admin-main [style*="repeat(3, 1fr)"],
+    .admin-main [style*="repeat(3,1fr)"] {
+      grid-template-columns: 1fr !important;
+    }
+    /* KPI strips de 5 columnas → 2 en mobile. */
+    .admin-main [style*="repeat(5, 1fr)"],
+    .admin-main [style*="repeat(5,1fr)"] {
+      grid-template-columns: repeat(2, 1fr) !important;
+    }
+    /* Evita overflow horizontal por imagenes/cards anchas. */
+    .admin-main { min-width: 0; overflow-x: hidden; }
+    .admin-main .card { max-width: 100%; }
+    .admin-main img { max-width: 100%; height: auto; }
+    /* Botones que estiran fila completa cuando hay poco espacio. */
+    .admin-main .row { flex-wrap: wrap; }
+  }
+
+  /* Breakpoint phone: incluso los KPI de 4 columnas se vuelven 1. */
+  @media (max-width: 480px) {
+    .admin-main [style*="repeat(4, 1fr)"],
+    .admin-main [style*="repeat(4,1fr)"],
+    .admin-main [style*="repeat(5, 1fr)"],
+    .admin-main [style*="repeat(5,1fr)"],
+    .admin-main [style*="repeat(2, 1fr)"],
+    .admin-main [style*="repeat(2,1fr)"] {
+      grid-template-columns: 1fr !important;
+    }
+    .admin-main h1 { font-size: 22px !important; }
+    .admin-main h2 { font-size: 18px !important; }
   }
 </style>
 </head>
@@ -942,23 +980,23 @@
 <script defer src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
 <script defer src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
 <!-- Chatbot (define SENDPULSE_CONFIG/vivioSendpulse usado por shared) -->
-<script defer src="build/vivio-sendpulse.js?v=skip-plan-propietario-1"></script>
+<script defer src="build/vivio-sendpulse.js?v=panel-mobile-1"></script>
 
 <!-- Núcleo + páginas, orden estricto de dependencias -->
-<script defer src="build/brand.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/data.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/api-data.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/shared.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/home.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/catalog.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/detail.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/temporal.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/plans.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/publish.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/posters.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/admin.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/agent.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/help.js?v=skip-plan-propietario-1"></script>
-<script defer src="build/app.js?v=skip-plan-propietario-1"></script>
+<script defer src="build/brand.js?v=panel-mobile-1"></script>
+<script defer src="build/data.js?v=panel-mobile-1"></script>
+<script defer src="build/api-data.js?v=panel-mobile-1"></script>
+<script defer src="build/shared.js?v=panel-mobile-1"></script>
+<script defer src="build/home.js?v=panel-mobile-1"></script>
+<script defer src="build/catalog.js?v=panel-mobile-1"></script>
+<script defer src="build/detail.js?v=panel-mobile-1"></script>
+<script defer src="build/temporal.js?v=panel-mobile-1"></script>
+<script defer src="build/plans.js?v=panel-mobile-1"></script>
+<script defer src="build/publish.js?v=panel-mobile-1"></script>
+<script defer src="build/posters.js?v=panel-mobile-1"></script>
+<script defer src="build/admin.js?v=panel-mobile-1"></script>
+<script defer src="build/agent.js?v=panel-mobile-1"></script>
+<script defer src="build/help.js?v=panel-mobile-1"></script>
+<script defer src="build/app.js?v=panel-mobile-1"></script>
 </body>
 </html>
