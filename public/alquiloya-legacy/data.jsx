@@ -12,10 +12,10 @@
  * shared.jsx y help.jsx — no cambia nada visible al usuario en esta tanda.
  */
 const CONTACTO_ALQUILOYA = {
-  whatsapp: '595983000292',       // E.164 sin "+" — usado en wa.me/{}
-  whatsappLabel: '0983 000 292',  // visible al usuario
-  telefono: '0983 000 292',       // telefono visible en footer
-  telefonoWa: '595983000292',     // E.164 del telefono de footer para wa.me
+  whatsapp: '595981227400',       // E.164 sin "+" — usado en wa.me/{}
+  whatsappLabel: '0981 227 400',  // visible al usuario
+  telefono: '0981 227 400',       // telefono visible en footer
+  telefonoWa: '595981227400',     // E.164 del telefono de footer para wa.me
   email: 'Info@alquiloya.com.py',
   emailAyuda: 'ayuda@alquiloya.com.py', // email especifico del help center
   direccion: 'Asunción, Paraguay',
