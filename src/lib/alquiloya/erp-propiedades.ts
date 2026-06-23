@@ -15,6 +15,25 @@ function q(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
 }
 
+// Bootstrap idempotente: si la migration no corrio, agregamos la columna
+// aprobada_at al primer uso. Cachea para no martillar el ALTER.
+let aprobadaAtColumnReady = false;
+async function ensureAprobadaAtColumn(): Promise<void> {
+  if (aprobadaAtColumnReady) return;
+  const pool = getChatPostgresPool();
+  if (!pool) return;
+  try {
+    await queryWithRetry(
+      pool,
+      `ALTER TABLE ${q("propiedades")} ADD COLUMN IF NOT EXISTS aprobada_at timestamptz`,
+      []
+    );
+    aprobadaAtColumnReady = true;
+  } catch (err) {
+    console.warn("[erp-propiedades] ensureAprobadaAtColumn:", err instanceof Error ? err.message : err);
+  }
+}
+
 // Cache de existencia de columnas opcionales (la app vive hasta que reinicia).
 let hasDestacadaHasta: boolean | null = null;
 async function destacadaHastaExists(): Promise<boolean> {
@@ -140,6 +159,7 @@ export type ErpPropiedadPendienteRow = ErpPropiedadListRow & {
 };
 
 export async function listErpPropiedadesPendientes(): Promise<ErpPropiedadPendienteRow[]> {
+  await ensureAprobadaAtColumn();
   const pool = getChatPostgresPool();
   if (!pool) return [];
   // Pendientes = cargadas desde el wizard publico u otro origen y aun no aprobadas.

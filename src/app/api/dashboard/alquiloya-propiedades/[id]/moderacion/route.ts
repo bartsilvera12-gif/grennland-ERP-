@@ -49,6 +49,7 @@ export async function POST(
     if (!pool) return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
 
     if (action === "aprobar") {
+      try { await queryWithRetry(pool, `ALTER TABLE ${t("propiedades")} ADD COLUMN IF NOT EXISTS aprobada_at timestamptz`, []); } catch {}
       const r = await queryWithRetry<{ id: string }>(
         pool,
         `UPDATE ${t("propiedades")} SET
