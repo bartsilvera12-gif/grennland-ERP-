@@ -992,6 +992,19 @@
       padding-right: 16px !important;
     }
   }
+
+  /* Selector de estado en "Mis propiedades" del panel publicador: el <select>
+     inline no muestra la flechita en algunos browsers (Edge/Chromium con
+     ciertos estilos custom). Forzamos chevron SVG via background. */
+  select.ay-state-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'><path d='M1 1l4 4 4-4' stroke='%23475569' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px !important;
+  }
 </style>
 </head>
 <body>
@@ -1010,23 +1023,23 @@
 <script defer src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
 <script defer src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
 <!-- Chatbot (define SENDPULSE_CONFIG/vivioSendpulse usado por shared) -->
-<script defer src="build/vivio-sendpulse.js?v=new-phone-1"></script>
+<script defer src="build/vivio-sendpulse.js?v=state-chevron-1"></script>
 
 <!-- Núcleo + páginas, orden estricto de dependencias -->
-<script defer src="build/brand.js?v=new-phone-1"></script>
-<script defer src="build/data.js?v=new-phone-1"></script>
-<script defer src="build/api-data.js?v=new-phone-1"></script>
-<script defer src="build/shared.js?v=new-phone-1"></script>
-<script defer src="build/home.js?v=new-phone-1"></script>
-<script defer src="build/catalog.js?v=new-phone-1"></script>
-<script defer src="build/detail.js?v=new-phone-1"></script>
-<script defer src="build/temporal.js?v=new-phone-1"></script>
-<script defer src="build/plans.js?v=new-phone-1"></script>
-<script defer src="build/publish.js?v=new-phone-1"></script>
-<script defer src="build/posters.js?v=new-phone-1"></script>
-<script defer src="build/admin.js?v=new-phone-1"></script>
-<script defer src="build/agent.js?v=new-phone-1"></script>
-<script defer src="build/help.js?v=new-phone-1"></script>
-<script defer src="build/app.js?v=new-phone-1"></script>
+<script defer src="build/brand.js?v=state-chevron-1"></script>
+<script defer src="build/data.js?v=state-chevron-1"></script>
+<script defer src="build/api-data.js?v=state-chevron-1"></script>
+<script defer src="build/shared.js?v=state-chevron-1"></script>
+<script defer src="build/home.js?v=state-chevron-1"></script>
+<script defer src="build/catalog.js?v=state-chevron-1"></script>
+<script defer src="build/detail.js?v=state-chevron-1"></script>
+<script defer src="build/temporal.js?v=state-chevron-1"></script>
+<script defer src="build/plans.js?v=state-chevron-1"></script>
+<script defer src="build/publish.js?v=state-chevron-1"></script>
+<script defer src="build/posters.js?v=state-chevron-1"></script>
+<script defer src="build/admin.js?v=state-chevron-1"></script>
+<script defer src="build/agent.js?v=state-chevron-1"></script>
+<script defer src="build/help.js?v=state-chevron-1"></script>
+<script defer src="build/app.js?v=state-chevron-1"></script>
 </body>
 </html>

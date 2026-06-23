@@ -901,7 +901,8 @@ function AdminAgentPage({ route, onNav }) {
                           border: '1px solid var(--line)', background: '#fff',
                           color: 'var(--ink-2)', fontSize: 12, fontWeight: 600,
                           fontFamily: 'inherit', cursor: 'pointer',
-                        }}>
+                        }}
+                        className="ay-state-select">
                         <option value="activa">Activa</option>
                         <option value="pausada">Pausada</option>
                         <option value="alquilada">Alquilada</option>
