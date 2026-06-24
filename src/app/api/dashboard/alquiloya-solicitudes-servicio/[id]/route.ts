@@ -68,7 +68,7 @@ type Sol = {
   estado: "pendiente" | "aprobada" | "rechazada";
   referral_link_id: string | null;
   referral_partner_id: string | null;
-  monto: number | null;| "aprobada" | "rechazada";
+  monto: number | null;
 };
 
 type Ctx = { params: Promise<{ id: string }> };
