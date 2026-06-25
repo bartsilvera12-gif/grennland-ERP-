@@ -212,13 +212,6 @@ export default function EditPropiedadClient({
                 {estados.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
-            <div className={fieldCls}>
-              <label className={labelCls}>Agente</label>
-              <select className={inputCls} value={form.agente_id} onChange={(e) => set("agente_id", e.target.value)}>
-                <option value="">— Sin asignar —</option>
-                {agentes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
-              </select>
-            </div>
             <div className={`${fieldCls} sm:col-span-2`}>
               <label className={labelCls}>Descripción</label>
               <textarea className={`${inputCls} min-h-[100px]`} value={form.descripcion} onChange={(e) => set("descripcion", e.target.value)} />
@@ -339,39 +332,9 @@ export default function EditPropiedadClient({
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-slate-600">Datos del propietario</h2>
           <p className="mb-4 text-xs text-slate-500">
-            Si el propietario ya cargó esta propiedad desde la web o tiene cuenta, elegilo del selector. Si no, completá los datos abajo y el sistema lo crea o lo vincula automáticamente por email/teléfono.
+            Completá los datos del propietario. El sistema lo crea o lo vincula automáticamente por email/teléfono.
           </p>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className={`${fieldCls} sm:col-span-2`}>
-              <label className={labelCls}>Propietario existente</label>
-              <select
-                className={inputCls}
-                value={form.propietario_id}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  const pr = propietarios.find((p) => p.id === id);
-                  setForm((f) => ({
-                    ...f,
-                    propietario_id: id,
-                    propietario_nombre: pr?.nombre ?? f.propietario_nombre,
-                    propietario_email: pr?.email ?? f.propietario_email,
-                    propietario_telefono: pr?.telefono ?? f.propietario_telefono,
-                    propietario_telefono_contacto: pr?.telefono_contacto ?? f.propietario_telefono_contacto,
-                    propietario_documento: pr?.documento ?? f.propietario_documento,
-                    propietario_observaciones: pr?.observaciones ?? f.propietario_observaciones,
-                  }));
-                }}
-              >
-                <option value="">— Cargar propietario nuevo / mantener actual —</option>
-                {propietarios.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre}
-                    {p.email ? ` · ${p.email}` : ""}
-                    {p.telefono ? ` · ${p.telefono}` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div className={fieldCls}>
               <label className={labelCls}>Nombre</label>
               <input className={inputCls} value={form.propietario_nombre} onChange={(e) => set("propietario_nombre", e.target.value)} placeholder="Nombre y apellido" />
@@ -391,10 +354,6 @@ export default function EditPropiedadClient({
             <div className={fieldCls}>
               <label className={labelCls}>Teléfono de contacto (WhatsApp público)</label>
               <input className={inputCls} value={form.propietario_telefono_contacto} onChange={(e) => set("propietario_telefono_contacto", e.target.value)} placeholder="opcional, si difiere del de arriba" />
-            </div>
-            <div className={`${fieldCls} sm:col-span-2`}>
-              <label className={labelCls}>Observaciones</label>
-              <textarea rows={2} className={inputCls} value={form.propietario_observaciones} onChange={(e) => set("propietario_observaciones", e.target.value)} placeholder="Notas internas sobre el propietario (no se muestran en la web)" />
             </div>
           </div>
         </section>
