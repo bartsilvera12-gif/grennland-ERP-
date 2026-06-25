@@ -18,8 +18,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AlquiloYa",
-  description: "AlquiloYa — gestión inmobiliaria",
+  title: "GreenLand",
+  description: "GreenLand — gestión inmobiliaria",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
