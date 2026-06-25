@@ -101,17 +101,14 @@ const ALLOWED_MENU_KEYS = new Set<string>([
   "dashboard",
   "clientes",
   "ventas",
-  "pagos",
-  "pagos_proveedores",
   "gastos",
   "reportes",
   "configuracion",
   "compras",
-  "buscador",
   "usuarios",
   "propiedades",
-  // inventario removido a pedido del cliente: no aparece en el sidebar
-  // (la ruta /inventario sigue activa si se reactiva).
+  // Ocultos del sidebar a pedido del cliente (rutas siguen activas):
+  // inventario, buscador (Consulta), pagos, pagos_proveedores.
 ]);
 
 /**
