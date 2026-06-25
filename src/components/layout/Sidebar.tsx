@@ -105,12 +105,27 @@ const ALLOWED_MENU_KEYS = new Set<string>([
   "gastos",
   "reportes",
   "configuracion",
-  "inventario",
   "compras",
   "buscador",
   "usuarios",
   "propiedades",
+  // inventario removido a pedido del cliente: no aparece en el sidebar
+  // (la ruta /inventario sigue activa si se reactiva).
 ]);
+
+/**
+ * Agrupamiento VISUAL del menú por familias (estilo autorepuestos). Solo
+ * reordena/agrupa lo que ya existe en MENU_STRUCTURE; no cambia slugs, rutas
+ * ni permisos. Cada `keys` referencia `MenuItem.key`. Los ítems sin familia
+ * caen en "Otros" (no se ocultan).
+ */
+const MENU_FAMILIES: { id: string; titulo: string; keys: string[] }[] = [
+  { id: "inicio", titulo: "Inicio", keys: ["dashboard"] },
+  { id: "comercial", titulo: "Comercial", keys: ["clientes", "ventas", "buscador"] },
+  { id: "finanzas", titulo: "Finanzas", keys: ["pagos_proveedores", "gastos", "reportes"] },
+  { id: "operaciones", titulo: "Operaciones", keys: ["compras", "propiedades"] },
+  { id: "administracion", titulo: "Administración", keys: ["usuarios", "configuracion"] },
+];
 
 const MENU_STRUCTURE: MenuItem[] = [
   { key: "dashboard", slug: "dashboard", label: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -226,17 +241,12 @@ const MENU_STRUCTURE: MenuItem[] = [
     href: "/dashboard/proyectos",
     icon: FolderKanban,
   },
-  // Propiedades incluye "Pendientes de aprobación" como sub-item.
   {
     key: "propiedades",
     slug: "propiedades",
     label: "Propiedades",
     href: "/dashboard/propiedades",
     icon: Building,
-    children: [
-      { label: "Listado de propiedades", href: "/dashboard/propiedades", exactMatch: true },
-      { label: "Pendientes de aprobación", href: "/dashboard/propiedades-pendientes" },
-    ],
   },
   // Pendientes de aprobación movido como sub-item de Propiedades (arriba).
   // Mantenemos el item original comentado por si se reactiva:
@@ -559,6 +569,8 @@ export default function Sidebar() {
     sorteos: true,
     compras: true,
   });
+  // Familias del menú colapsables (agrupamiento visual). Cerradas por defecto.
+  const [expandedFamilies, setExpandedFamilies] = useState<Record<string, boolean>>({});
   const [cargando, setCargando] = useState(true);
   const [esSuperAdmin, setEsSuperAdmin] = useState(false);
   /** Cantidad de propiedades pendientes de aprobacion — alimenta el badge
@@ -729,6 +741,28 @@ export default function Sidebar() {
     );
   }, [favoritos, menuSearchQuery, modulos, esSuperAdmin]);
 
+  // Agrupar los items visibles del menu principal por familias (solo visual).
+  const seccionesMenu = useMemo(() => {
+    const byKey = new Map(mainItemsFiltered.map((it) => [it.key, it]));
+    const usados = new Set<string>();
+    const secciones: { id: string; titulo: string; items: MenuItem[] }[] = [];
+    for (const fam of MENU_FAMILIES) {
+      const items = fam.keys
+        .map((k) => byKey.get(k))
+        .filter((it): it is MenuItem => it !== undefined);
+      items.forEach((it) => usados.add(it.key));
+      if (items.length > 0) secciones.push({ id: fam.id, titulo: fam.titulo, items });
+    }
+    const otros = mainItemsFiltered.filter((it) => !usados.has(it.key));
+    if (otros.length > 0) secciones.push({ id: "otros", titulo: "Otros", items: otros });
+    return secciones;
+  }, [mainItemsFiltered]);
+
+  const familiaExpandida = (id: string) => expandedFamilies[id] ?? false;
+  const toggleFamilia = (id: string) =>
+    setExpandedFamilies((prev) => ({ ...prev, [id]: !(prev[id] ?? false) }));
+  const forzarExpandirFamilias = normalizeMenuSearch(menuSearchQuery).length > 0;
+
   const anyMenuVisible =
     favoritosItemsFiltered.length > 0 ||
     mainItemsFiltered.length > 0 ||
@@ -880,25 +914,17 @@ export default function Sidebar() {
           </div>
         )}
 
-        {/* Menú principal */}
-        <div className="space-y-0.5">
-          {!collapsed && mainItemsFiltered.length > 0 && (
-            <div className="mb-2 flex items-center gap-2 px-3">
-              <span className="h-1 w-1 rounded-full bg-[#7DCFD2]" />
-              <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                General
-              </p>
-              <span className="h-px flex-1 bg-gradient-to-r from-white/[0.08] to-transparent" />
-            </div>
-          )}
-          {cargando ? (
-            <div className="space-y-1 px-3 py-2">
-              <div className="h-8 animate-pulse rounded-lg bg-white/[0.04]" />
-              <div className="h-8 animate-pulse rounded-lg bg-white/[0.04]" />
-              <div className="h-8 animate-pulse rounded-lg bg-white/[0.04]" />
-            </div>
-          ) : (
-            mainItemsFiltered.map((item) => (
+        {/* Menu principal agrupado por familias (solo visual) */}
+        {cargando ? (
+          <div className="space-y-1 px-3 py-2">
+            <div className="h-8 animate-pulse rounded-lg bg-white/[0.04]" />
+            <div className="h-8 animate-pulse rounded-lg bg-white/[0.04]" />
+            <div className="h-8 animate-pulse rounded-lg bg-white/[0.04]" />
+          </div>
+        ) : collapsed ? (
+          // Colapsado (solo iconos): lista plana, sin titulos de familia.
+          <div className="space-y-0.5">
+            {mainItemsFiltered.map((item) => (
               <NavItem
                 key={item.key}
                 item={item}
@@ -912,9 +938,57 @@ export default function Sidebar() {
                 onToggleExpand={() => toggleExpand(item.key)}
                 badgeCount={item.key === "propiedades-pendientes" ? propiedadesPendientesCount : undefined}
               />
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        ) : (
+          seccionesMenu.map((seccion) => {
+            const abierta = familiaExpandida(seccion.id) || forzarExpandirFamilias;
+            const seccionActiva = seccion.items.some((it) => isActive(it.slug, it.href));
+            return (
+              <div key={seccion.id} className="mb-3">
+                <button
+                  type="button"
+                  onClick={() => toggleFamilia(seccion.id)}
+                  className="group mb-1.5 flex w-full items-center justify-between rounded px-3 py-1.5 text-sm font-bold uppercase tracking-wide text-slate-100 transition-colors hover:text-white"
+                >
+                  <span className="flex items-center gap-2">
+                    <span
+                      aria-hidden
+                      className={`h-2 w-2 rounded-full transition-colors ${
+                        seccionActiva ? "bg-[#7DCFD2]" : "bg-slate-500/60"
+                      }`}
+                    />
+                    <span>{seccion.titulo}</span>
+                  </span>
+                  {abierta ? (
+                    <ChevronDown className="h-4 w-4 text-slate-300" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4 text-slate-300" />
+                  )}
+                </button>
+                {abierta && (
+                  <div className="space-y-0.5">
+                    {seccion.items.map((item) => (
+                      <NavItem
+                        key={item.key}
+                        item={item}
+                        itemId={slugToId(item.slug)}
+                        isActive={isActive(item.slug, item.href)}
+                        isFavorito={favoritos.includes(slugToId(item.slug))}
+                        onToggleFavorito={handleToggleFavorito}
+                        hasAccess={hasAccess(item.slug)}
+                        collapsed={collapsed}
+                        expanded={expandedItems[item.key] ?? false}
+                        onToggleExpand={() => toggleExpand(item.key)}
+                        badgeCount={item.key === "propiedades-pendientes" ? propiedadesPendientesCount : undefined}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
 
         {/* Admin */}
         {esSuperAdmin && adminEmpresasMatchesQuery(menuSearchQuery) && (
