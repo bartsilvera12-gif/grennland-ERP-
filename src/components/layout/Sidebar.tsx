@@ -22,6 +22,7 @@ import {
   Sparkles,
   Search,
   Receipt,
+  BarChart3,
   Banknote,
   Megaphone,
   Ticket,
@@ -91,8 +92,34 @@ function adminEmpresasMatchesQuery(queryRaw: string): boolean {
   return label.includes(q) || normalizeMenuSearch("empresas").includes(q);
 }
 
+/**
+ * Allowlist del menú para GreenLand.
+ * Solo estos keys se muestran en el sidebar; cualquier otro queda oculto.
+ * Mantener sincronizado si se piden nuevos módulos visibles para esta instancia.
+ */
+const ALLOWED_MENU_KEYS = new Set<string>([
+  "dashboard",
+  "clientes",
+  "ventas",
+  "pagos_proveedores",
+  "gastos",
+  "reportes",
+  "configuracion",
+  "inventario",
+  "compras",
+  "buscador",
+  "usuarios",
+  "propiedades",
+]);
+
 const MENU_STRUCTURE: MenuItem[] = [
   { key: "dashboard", slug: "dashboard", label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { key: "buscador", slug: "buscador", label: "Consulta", href: "/buscador", icon: Search },
+  { key: "clientes", slug: "clientes", label: "Clientes", href: "/clientes", icon: Users },
+  { key: "pagos_proveedores", slug: "pagos_proveedores", label: "Pagos a proveedores", href: "/pagos-proveedores", icon: Banknote },
+  { key: "gastos", slug: "gastos", label: "Gastos", href: "/gastos", icon: Receipt },
+  { key: "reportes", slug: "reportes", label: "Reportes", href: "/reportes", icon: BarChart3 },
+  { key: "usuarios", slug: "usuarios", label: "Usuarios", href: "/usuarios", icon: UserCog },
   {
     key: "conversaciones",
     slug: "conversaciones",
@@ -682,6 +709,7 @@ export default function Sidebar() {
     const access = (slug: string) => canAccessSidebarSlug(slug, slugs, esSuperAdmin);
     return MENU_STRUCTURE.filter(
       (item) =>
+        ALLOWED_MENU_KEYS.has(item.key) &&
         favoritos.includes(idForSlug(item.slug)) &&
         access(item.slug) &&
         menuItemMatchesQuery(item, menuSearchQuery)
@@ -694,6 +722,7 @@ export default function Sidebar() {
     const access = (slug: string) => canAccessSidebarSlug(slug, slugs, esSuperAdmin);
     return MENU_STRUCTURE.filter(
       (item) =>
+        ALLOWED_MENU_KEYS.has(item.key) &&
         !favoritos.includes(idForSlug(item.slug)) &&
         access(item.slug) &&
         menuItemMatchesQuery(item, menuSearchQuery)
