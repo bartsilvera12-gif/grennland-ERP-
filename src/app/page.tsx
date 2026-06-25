@@ -35,11 +35,6 @@ import { fetchWithSupabaseSession } from "@/lib/api/fetch-with-supabase-session"
 import { cachedSessionFetch } from "@/lib/api/cached-session-fetch";
 import GerencialOverview from "@/components/dashboard/GerencialOverview";
 import {
-  ListChecks,
-  Inbox as InboxIcon,
-  Wrench as WrenchIcon,
-  MessageSquareQuote,
-  Target as TargetIcon,
   Activity as ActivityIcon,
   PhoneCall as PhoneCallIcon,
   Handshake as HandshakeIcon,
@@ -2658,7 +2653,7 @@ const PERIODO_OPTS: { id: Periodo; label: string }[] = [
   { id: "anio", label: "Año"       },
 ];
 
-const TAB_VALID: TabDash[] = ["comercial", "financiero", "inventario", "ventas", "propiedades", "captaciones"];
+const TAB_VALID: TabDash[] = ["comercial", "financiero", "inventario", "ventas", "propiedades"];
 
 type DashScope =
   | { kind: "pending" }
@@ -2836,7 +2831,9 @@ export default function DashboardPage() {
   const mapNombreTipoServicio = useMapNombreTipoServicioCatalogo(clientes);
   const nivel = usuarioActivo?.nivel ?? "administrador";
 
-  const effectiveTabs: TabDash[] = dashScope.kind === "scoped" ? dashScope.tabs : TAB_VALID;
+  const effectiveTabs: TabDash[] = (
+    dashScope.kind === "scoped" ? dashScope.tabs : TAB_VALID
+  ).filter((t) => t !== "captaciones");
   const showTabNav = !(dashScope.kind === "scoped" && effectiveTabs.length === 1);
 
   const TAB_META: Record<TabDash, { label: string; Icon: (props: IconProps) => React.ReactElement }> = {
@@ -3278,7 +3275,7 @@ function DashPropiedades() {
   return (
     <div className="space-y-8">
       {/* KPIs compactos: 4 cards con sub-stats inline */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <DensoKpi
           accent="teal"
           icon={<Icon.Propiedades className="h-5 w-5" />}
@@ -3288,39 +3285,6 @@ function DashPropiedades() {
             { label: "activas", value: data.propiedades.activas, tone: "ok" },
             { label: "publicadas", value: data.propiedades.publicadas, tone: "info" },
             { label: "destacadas", value: data.propiedades.destacadas, tone: "warn" },
-          ]}
-        />
-        <DensoKpi
-          accent="indigo"
-          icon={<Icon.Target className="h-5 w-5" />}
-          label="Agentes"
-          value={data.agentes.activos}
-          valueSuffix={` / ${data.agentes.total}`}
-          stats={[
-            { label: "activos", value: data.agentes.activos, tone: "ok" },
-            {
-              label: "inactivos",
-              value: Math.max(0, data.agentes.total - data.agentes.activos),
-              tone: "muted",
-            },
-          ]}
-        />
-        <DensoKpi
-          accent="sky"
-          icon={<Icon.Chat className="h-5 w-5" />}
-          label="Consultas"
-          value={data.consultas.total}
-          stats={[
-            {
-              label: "últimos 30d",
-              value: data.consultas.ultimas_30,
-              tone: data.consultas.ultimas_30 > 0 ? "ok" : "muted",
-            },
-            {
-              label: "pendientes",
-              value: data.consultas.pendientes,
-              tone: data.consultas.pendientes > 0 ? "warn" : "muted",
-            },
           ]}
         />
         <DensoKpi
@@ -3356,142 +3320,8 @@ function DashPropiedades() {
         />
       </div>
 
-      {/* P2B.C: card prominente "Propiedades pendientes de aprobacion".
-          Solo se muestra si hay >0; reusa data.propiedades.pendientes del
-          mismo summary, sin endpoint extra. CTA lleva a la pantalla del
-          listado de pendientes para que el admin las apruebe/rechace. */}
-      {typeof data.propiedades.pendientes === "number" && data.propiedades.pendientes > 0 ? (
-        <motion.a
-          href="/dashboard/propiedades-pendientes"
-          whileHover={{ y: -2 }}
-          className="relative block overflow-hidden rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 via-amber-50 to-orange-50 p-5 shadow-sm transition-shadow hover:shadow-md"
-        >
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700 ring-1 ring-amber-200">
-              <ListChecks className="h-6 w-6" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-700">
-                Propiedades pendientes de aprobación
-              </div>
-              <div className="mt-0.5 text-sm font-medium text-slate-800">
-                {data.propiedades.pendientes === 1
-                  ? "1 propiedad esperando que la revises."
-                  : `${data.propiedades.pendientes} propiedades esperando que las revises.`}
-              </div>
-            </div>
-            <div className="hidden shrink-0 items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200 sm:inline-flex">
-              Revisar pendientes
-              <span aria-hidden="true">→</span>
-            </div>
-            <div className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-200 sm:hidden">
-              Revisar <span aria-hidden="true">→</span>
-            </div>
-          </div>
-        </motion.a>
-      ) : null}
-
-      {/* Acciones pendientes — cards con icono + gradient suave (mismo
-          estilo que los KPIs de arriba, a pedido del cliente). Suma una
-          5ta card "Pendientes de publicación" con el count de
-          data.propiedades.pendientes. */}
-      {data.acciones_pendientes ? (
-        <motion.div whileHover={{ y: -2 }} className={panelClass}>
-          <div className="flex items-center gap-2">
-            {panelBar}
-            <h3 className={titleClass}>
-              {panelDot}
-              Acciones pendientes
-            </h3>
-          </div>
-          <p className="mt-1 pl-3 text-[11px] text-slate-500">
-            Items que esperan tu aprobación o seguimiento.
-          </p>
-          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-            <ActionPendiente
-              href="/dashboard/propiedades-pendientes"
-              accent="rose"
-              icon={<ListChecks className="h-5 w-5" />}
-              label="Pendientes de publicación"
-              value={data.propiedades.pendientes ?? 0}
-              hint="propiedades →"
-            />
-            <ActionPendiente
-              href="/dashboard/solicitudes-acceso"
-              accent="amber"
-              icon={<InboxIcon className="h-5 w-5" />}
-              label="Solicitudes de acceso"
-              value={data.acciones_pendientes.solicitudes_acceso}
-              hint="pendientes →"
-            />
-            <ActionPendiente
-              href="/dashboard/solicitudes-servicio"
-              accent="sky"
-              icon={<WrenchIcon className="h-5 w-5" />}
-              label="Solicitudes de servicio"
-              value={data.acciones_pendientes.solicitudes_servicio}
-              hint="cambio plan / impulsos →"
-            />
-            <ActionPendiente
-              href="/dashboard/agente-resenas"
-              accent="violet"
-              icon={<MessageSquareQuote className="h-5 w-5" />}
-              label="Reseñas a moderar"
-              value={data.acciones_pendientes.agente_resenas}
-              hint="pendientes →"
-            />
-            <ActionPendiente
-              href="/dashboard/agentes-inmobiliarios/captaciones"
-              accent="emerald"
-              icon={<TargetIcon className="h-5 w-5" />}
-              label="Captaciones abiertas"
-              value={data.acciones_pendientes.captaciones}
-              hint="en seguimiento →"
-            />
-          </div>
-        </motion.div>
-      ) : null}
-
-      {/* Suscripciones / vencimientos de plan */}
-      {data.planes ? (
-        <motion.div whileHover={{ y: -2 }} className={panelClass}>
-          <div className="flex items-center gap-2">
-            {panelBar}
-            <h3 className={titleClass}>
-              {panelDot}
-              Suscripciones a planes
-            </h3>
-          </div>
-          <p className="mt-1 pl-3 text-[11px] text-slate-500">
-            Vencimientos próximos de propietarios y agentes con plan pago.
-          </p>
-          <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className={`rounded-xl border p-4 ${data.planes.vencidos > 0 ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-white"}`}>
-              <div className={`text-[10px] font-semibold uppercase tracking-wider ${data.planes.vencidos > 0 ? "text-rose-700" : "text-slate-500"}`}>Vencidos</div>
-              <div className={`mt-1 text-2xl font-bold tabular-nums ${data.planes.vencidos > 0 ? "text-rose-900" : "text-slate-700"}`}>{data.planes.vencidos}</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">requieren acción</div>
-            </div>
-            <div className={`rounded-xl border p-4 ${data.planes.por_vencer_7d > 0 ? "border-amber-200 bg-amber-50" : "border-slate-200 bg-white"}`}>
-              <div className={`text-[10px] font-semibold uppercase tracking-wider ${data.planes.por_vencer_7d > 0 ? "text-amber-700" : "text-slate-500"}`}>Vencen en 7 días</div>
-              <div className={`mt-1 text-2xl font-bold tabular-nums ${data.planes.por_vencer_7d > 0 ? "text-amber-900" : "text-slate-700"}`}>{data.planes.por_vencer_7d}</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">contactar pronto</div>
-            </div>
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Vencen en 30 días</div>
-              <div className="mt-1 text-2xl font-bold tabular-nums text-slate-700">{data.planes.por_vencer_30d}</div>
-              <div className="mt-0.5 text-[11px] text-slate-500">ventana de renovación</div>
-            </div>
-          </div>
-          {data.por_plan && data.por_plan.length > 0 ? (
-            <div className="mt-5 border-t border-slate-100 pt-4">
-              <div className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                Propietarios por plan
-              </div>
-              <HBarChart data={data.por_plan} color="bg-[#4FAEB2]" tone="zentra" />
-            </div>
-          ) : null}
-        </motion.div>
-      ) : null}
+      {/* Pendientes de aprobación, Acciones pendientes y Suscripciones a
+          planes removidos del dashboard a pedido del cliente. */}
 
       {/* Distribución por tipo y ciudad */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -3567,11 +3397,6 @@ function DashPropiedades() {
                     <span className="font-semibold tabular-nums text-[#4FAEB2]">
                       {fmtPrecio(p.precio, p.moneda)}
                     </span>
-                    {p.agente_nombre ? (
-                      <span className="truncate text-slate-500" title={p.agente_nombre}>
-                        {p.agente_nombre}
-                      </span>
-                    ) : null}
                   </div>
                 </div>
               </a>

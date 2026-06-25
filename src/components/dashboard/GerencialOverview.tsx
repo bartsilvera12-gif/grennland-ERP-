@@ -144,8 +144,8 @@ export default function GerencialOverview() {
         </h2>
       </header>
 
-      {/* Stripe de alertas (solo si hay alertas con count > 0) */}
-      {data.alertas.length > 0 ? <AlertasStrip alertas={data.alertas} /> : null}
+      {/* Stripe de alertas removido a pedido del cliente — no se muestra
+          "Atención requerida / Pendientes de aprobación" en este dashboard. */}
 
       {/* KPIs pulso del día */}
       {data.kpis.length > 0 ? <PulsoDelDia kpis={data.kpis} /> : null}
