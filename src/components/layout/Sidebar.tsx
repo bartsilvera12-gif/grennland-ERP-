@@ -101,6 +101,7 @@ const ALLOWED_MENU_KEYS = new Set<string>([
   "dashboard",
   "clientes",
   "ventas",
+  "pagos",
   "pagos_proveedores",
   "gastos",
   "reportes",
@@ -122,7 +123,7 @@ const ALLOWED_MENU_KEYS = new Set<string>([
 const MENU_FAMILIES: { id: string; titulo: string; keys: string[] }[] = [
   { id: "inicio", titulo: "Inicio", keys: ["dashboard"] },
   { id: "comercial", titulo: "Comercial", keys: ["clientes", "ventas", "buscador"] },
-  { id: "finanzas", titulo: "Finanzas", keys: ["pagos_proveedores", "gastos", "reportes"] },
+  { id: "finanzas", titulo: "Finanzas", keys: ["pagos", "pagos_proveedores", "gastos", "reportes"] },
   { id: "operaciones", titulo: "Operaciones", keys: ["compras", "propiedades"] },
   { id: "administracion", titulo: "Administración", keys: ["usuarios", "configuracion"] },
 ];
@@ -716,27 +717,21 @@ export default function Sidebar() {
   const slugToId = (slug: string) => modulos.find((m) => m.slug === slug)?.id ?? slug;
 
   const favoritosItemsFiltered = useMemo(() => {
-    const slugs = new Set(modulos.map((m) => m.slug));
     const idForSlug = (slug: string) => modulos.find((m) => m.slug === slug)?.id ?? slug;
-    const access = (slug: string) => canAccessSidebarSlug(slug, slugs, esSuperAdmin);
     return MENU_STRUCTURE.filter(
       (item) =>
         ALLOWED_MENU_KEYS.has(item.key) &&
         favoritos.includes(idForSlug(item.slug)) &&
-        access(item.slug) &&
         menuItemMatchesQuery(item, menuSearchQuery)
     );
   }, [favoritos, menuSearchQuery, modulos, esSuperAdmin]);
 
   const mainItemsFiltered = useMemo(() => {
-    const slugs = new Set(modulos.map((m) => m.slug));
     const idForSlug = (slug: string) => modulos.find((m) => m.slug === slug)?.id ?? slug;
-    const access = (slug: string) => canAccessSidebarSlug(slug, slugs, esSuperAdmin);
     return MENU_STRUCTURE.filter(
       (item) =>
         ALLOWED_MENU_KEYS.has(item.key) &&
         !favoritos.includes(idForSlug(item.slug)) &&
-        access(item.slug) &&
         menuItemMatchesQuery(item, menuSearchQuery)
     );
   }, [favoritos, menuSearchQuery, modulos, esSuperAdmin]);
@@ -903,7 +898,7 @@ export default function Sidebar() {
                   isActive={isActive(item.slug, item.href)}
                   isFavorito={true}
                   onToggleFavorito={handleToggleFavorito}
-                  hasAccess={hasAccess(item.slug)}
+                  hasAccess={ALLOWED_MENU_KEYS.has(item.key) || hasAccess(item.slug)}
                   collapsed={collapsed}
                   expanded={expandedItems[item.key] ?? false}
                   onToggleExpand={() => toggleExpand(item.key)}
@@ -932,7 +927,7 @@ export default function Sidebar() {
                 isActive={isActive(item.slug, item.href)}
                 isFavorito={favoritos.includes(slugToId(item.slug))}
                 onToggleFavorito={handleToggleFavorito}
-                hasAccess={hasAccess(item.slug)}
+                hasAccess={ALLOWED_MENU_KEYS.has(item.key) || hasAccess(item.slug)}
                 collapsed={collapsed}
                 expanded={expandedItems[item.key] ?? false}
                 onToggleExpand={() => toggleExpand(item.key)}
@@ -976,7 +971,7 @@ export default function Sidebar() {
                         isActive={isActive(item.slug, item.href)}
                         isFavorito={favoritos.includes(slugToId(item.slug))}
                         onToggleFavorito={handleToggleFavorito}
-                        hasAccess={hasAccess(item.slug)}
+                        hasAccess={ALLOWED_MENU_KEYS.has(item.key) || hasAccess(item.slug)}
                         collapsed={collapsed}
                         expanded={expandedItems[item.key] ?? false}
                         onToggleExpand={() => toggleExpand(item.key)}
