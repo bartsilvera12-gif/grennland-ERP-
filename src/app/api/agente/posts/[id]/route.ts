@@ -10,7 +10,7 @@ import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 // Mismo slugify que en la coleccion. Si el PATCH manda slug vacio y titulo
 // cambio, regeneramos a partir del nuevo titulo.
 function slugify(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/[Ì€-Í¯]/g, "")
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
 }
 
