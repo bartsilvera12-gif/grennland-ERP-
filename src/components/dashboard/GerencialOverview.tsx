@@ -7,8 +7,8 @@ import { cachedSessionFetch } from "@/lib/api/cached-session-fetch";
 // Solicitudes / Captaciones / Resenias". Mantengo el archivo y el componente
 // definido por si se quiere reactivar mas adelante.
 // import AccesosRapidos from "./AccesosRapidos";
-import AlertasStrip from "./AlertasStrip";
-import PulsoDelDia from "./PulsoDelDia";
+// AlertasStrip y PulsoDelDia ocultos a pedido del cliente. Mantengo los
+// componentes en la repo por si se reactivan más adelante.
 // ActividadReciente: a pedido del cliente se renderiza al FINAL del
 // dashboard (en page.tsx via <GerencialActividadReciente />), no aca.
 
@@ -147,8 +147,7 @@ export default function GerencialOverview() {
       {/* Stripe de alertas removido a pedido del cliente — no se muestra
           "Atención requerida / Pendientes de aprobación" en este dashboard. */}
 
-      {/* KPIs pulso del día */}
-      {data.kpis.length > 0 ? <PulsoDelDia kpis={data.kpis} /> : null}
+      {/* Pulso del día removido a pedido del cliente. */}
 
       {/* Actividad reciente movida al final del dashboard
           (ver <GerencialActividadReciente /> en page.tsx). */}

@@ -2934,7 +2934,7 @@ export default function DashboardPage() {
               Dashboard
             </h1>
             <p className="mt-1.5 max-w-md text-sm leading-relaxed text-slate-500">
-              Neura ERP · Vista {nivel === "supervisor" ? "de tu área" : "global"} · período alineado al filtro
+              GreenLand · Vista {nivel === "supervisor" ? "de tu área" : "global"} · período alineado al filtro
             </p>
           </div>
         </div>
