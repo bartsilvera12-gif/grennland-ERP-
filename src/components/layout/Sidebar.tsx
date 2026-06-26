@@ -107,6 +107,7 @@ const ALLOWED_MENU_KEYS = new Set<string>([
   "compras",
   "usuarios",
   "propiedades",
+  "planes",
   // Ocultos del sidebar a pedido del cliente (rutas siguen activas):
   // inventario, buscador (Consulta), pagos, pagos_proveedores.
 ]);
@@ -119,7 +120,7 @@ const ALLOWED_MENU_KEYS = new Set<string>([
  */
 const MENU_FAMILIES: { id: string; titulo: string; keys: string[] }[] = [
   { id: "inicio", titulo: "Inicio", keys: ["dashboard"] },
-  { id: "comercial", titulo: "Comercial", keys: ["clientes", "ventas", "buscador"] },
+  { id: "comercial", titulo: "Comercial", keys: ["clientes", "ventas", "planes", "buscador"] },
   { id: "finanzas", titulo: "Finanzas", keys: ["pagos", "pagos_proveedores", "gastos", "reportes"] },
   { id: "operaciones", titulo: "Operaciones", keys: ["compras", "propiedades"] },
   { id: "administracion", titulo: "Administración", keys: ["usuarios", "configuracion"] },
@@ -212,13 +213,9 @@ const MENU_STRUCTURE: MenuItem[] = [
   {
     key: "planes",
     slug: "planes",
-    label: "Planes",
+    label: "Promociones",
     href: "/planes",
     icon: FileText,
-    children: [
-      { label: "Planes de publicación", href: "/planes", exactMatch: true },
-      { label: "Solicitudes de servicio", href: "/dashboard/solicitudes-servicio" },
-    ],
   },
   // Oculto a pedido del cliente (ruta /gestion-clientes sigue activa por si se reactiva):
   // { key: "gestion-clientes", slug: "gestion-clientes", label: "Gestión Clientes", href: "/gestion-clientes", icon: Users },

@@ -1,6 +1,18 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Alias publico para la web de GreenLand: las rutas /api/public/greenland/*
+  // sirven exactamente lo mismo que /api/public/alquiloya/* (mismas handlers,
+  // mismo payload). Asi la web externa apunta a una URL coherente con el
+  // branding sin tener que renombrar 12 archivos de rutas.
+  async rewrites() {
+    return [
+      {
+        source: "/api/public/greenland/:path*",
+        destination: "/api/public/alquiloya/:path*",
+      },
+    ];
+  },
   async redirects() {
     return [
       // Web pública legacy de AlquiloYa servida desde /public/alquiloya-legacy/
@@ -21,6 +33,19 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
+      // CORS abierto para los endpoints publicos del ERP. Permite que la
+      // web estatica (cualquier origen, p. ej. greenlandpy.com) consuma
+      // /api/public/* desde el browser sin ser bloqueada por la policy
+      // del mismo origen.
+      {
+        source: "/api/public/:path*",
+        headers: [
+          { key: "Access-Control-Allow-Origin", value: "*" },
+          { key: "Access-Control-Allow-Methods", value: "GET, POST, OPTIONS" },
+          { key: "Access-Control-Allow-Headers", value: "Content-Type" },
+          { key: "Access-Control-Max-Age", value: "86400" },
+        ],
+      },
       // .jsx / .js / .css del sitio legacy: cache largo. Cada archivo lleva ?v=... en index.html,
       // así que cuando cambia el contenido cambia la URL y se invalida automáticamente.
       {

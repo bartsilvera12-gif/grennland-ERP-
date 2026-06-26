@@ -11,7 +11,12 @@ export const dynamic = "force-dynamic";
  * clientes sigue funcionando el editor legado de planes ERP.
  */
 export default function PlanesPage() {
-  if (isSingleClientMode() && getClientSchema() === "alquiloya") {
+  // Instancias inmobiliarias (alquiloya, greenland) usan el shell con cards
+  // estilo "promociones". El resto sigue con el editor legacy de planes ERP.
+  if (
+    isSingleClientMode() &&
+    (getClientSchema() === "alquiloya" || getClientSchema() === "greenland")
+  ) {
     return <PlanesAlquiloyaShell />;
   }
   return <PlanesLegacyClient />;
