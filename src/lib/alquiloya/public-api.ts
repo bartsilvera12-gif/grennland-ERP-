@@ -3,9 +3,10 @@ import type { QueryResultRow } from "pg";
 import { successResponse, errorResponse } from "@/lib/api/response";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const ALQUILOYA_EMPRESA_ID = getClientEmpresaId();
 
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -27,7 +28,7 @@ function getPoolOrError(): ReturnType<typeof getChatPostgresPool> {
 }
 
 // Cache module-level: bootstrap idempotente de alquiloya.propiedades.publicacion_dias.
-// La migration 20260703120000 puede no estar aplicada — si la columna falta,
+// La migration 20260703120000 puede no estar aplicada Ã¢â‚¬â€ si la columna falta,
 // el filtro de "plan gratis vencido" usaria un identificador inexistente y
 // la query revienta. Se corre una vez por cold start.
 let publicacionDiasReady = false;
@@ -106,7 +107,7 @@ export async function listPublicPropiedades(request: NextRequest) {
       // propiedades.publicacion_dias (NULL = 30 por defecto). El admin puede
       // editar ese plazo por propiedad desde el ERP. Si la propiedad esta
       // ligada a un propietario con plan gratis y ya pasaron N dias, no la
-      // mostramos al publico — sigue en el ERP para que el cliente pague el
+      // mostramos al publico Ã¢â‚¬â€ sigue en el ERP para que el cliente pague el
       // plan y la reactive.
       `NOT (
          p.created_at < now() - (COALESCE(p.publicacion_dias, 30) || ' days')::interval
@@ -244,7 +245,7 @@ export async function getPublicPropiedad(id: string, opts?: { includeAnyState?: 
             'tipo', CASE WHEN a.id IS NOT NULL THEN 'agente' ELSE 'propietario' END,
             'nombre', COALESCE(a.nombre, pr.nombre),
             -- Para el contacto publico de la ficha preferimos el telefono_contacto
-            -- del propietario (numero PUBLICO que el dueño puso en el form de
+            -- del propietario (numero PUBLICO que el dueÃƒÂ±o puso en el form de
             -- publicar), y si no esta seteado caemos al telefono personal.
             'telefono', COALESCE(a.telefono, pr.telefono_contacto, pr.telefono),
             'whatsapp', COALESCE(a.whatsapp, a.telefono, pr.telefono_contacto, pr.telefono)
@@ -373,7 +374,7 @@ export async function getPublicAgente(id: string) {
           a.cargo, a.bio, a.orden, a.activo, a.created_at, a.updated_at,
           COALESCE(a.verificado, false) AS verificado,
           a.nivel, a.idiomas, a.tiempo_respuesta, a.tasa_respuesta,
-          (SELECT count(*)::int FROM "alquiloya"."propiedades" pc
+          (SELECT count(*)::int FROM "${ALQUILOYA_SCHEMA}"."propiedades" pc
              WHERE pc.empresa_id = a.empresa_id AND pc.agente_id = a.id
                AND pc.estado IN ('alquilado','vendido','cerrado','cerrada','finalizado')
           ) AS cierres_count,
@@ -381,14 +382,14 @@ export async function getPublicAgente(id: string) {
             SELECT json_agg(json_build_object(
               'id', z.id, 'ciudad', z.ciudad, 'barrio', z.barrio, 'orden', z.orden
             ) ORDER BY z.orden ASC, z.created_at ASC)
-            FROM "alquiloya"."agente_zonas" z
+            FROM "${ALQUILOYA_SCHEMA}"."agente_zonas" z
             WHERE z.empresa_id = a.empresa_id AND z.agente_id = a.id
           ), '[]'::json) AS zonas,
           COALESCE((
             SELECT json_agg(json_build_object(
               'id', tp.id, 'zona', tp.zona, 'titulo', tp.titulo, 'body', tp.body, 'orden', tp.orden
             ) ORDER BY tp.orden ASC, tp.created_at ASC)
-            FROM "alquiloya"."agente_tips" tp
+            FROM "${ALQUILOYA_SCHEMA}"."agente_tips" tp
             WHERE tp.empresa_id = a.empresa_id AND tp.agente_id = a.id AND tp.activo = true
           ), '[]'::json) AS tips,
           COALESCE((
@@ -396,14 +397,14 @@ export async function getPublicAgente(id: string) {
               'id', r.id, 'autor_nombre', r.autor_nombre, 'rol', r.rol,
               'stars', r.stars, 'body', r.body, 'created_at', r.created_at
             ) ORDER BY r.created_at DESC)
-            FROM "alquiloya"."agente_resenas" r
+            FROM "${ALQUILOYA_SCHEMA}"."agente_resenas" r
             WHERE r.empresa_id = a.empresa_id AND r.agente_id = a.id AND r.estado = 'aprobada'
           ), '[]'::json) AS resenas,
-          (SELECT count(*)::int FROM "alquiloya"."agente_resenas" rc
+          (SELECT count(*)::int FROM "${ALQUILOYA_SCHEMA}"."agente_resenas" rc
              WHERE rc.empresa_id = a.empresa_id AND rc.agente_id = a.id AND rc.estado='aprobada'
           ) AS resenas_count,
           (SELECT COALESCE(round(avg(stars)::numeric, 1), 0)::float8
-             FROM "alquiloya"."agente_resenas" ra
+             FROM "${ALQUILOYA_SCHEMA}"."agente_resenas" ra
              WHERE ra.empresa_id = a.empresa_id AND ra.agente_id = a.id AND ra.estado='aprobada'
           ) AS rating,
           COALESCE((

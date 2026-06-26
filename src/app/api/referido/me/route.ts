@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 
 function t(table: string): string {
   return `"${SCHEMA}"."${table}"`;
@@ -16,13 +17,13 @@ function t(table: string): string {
 /**
  * GET /api/referido/me
  *
- * Resuelve la sesión Supabase a un referral_partner via:
- *   auth.users → alquiloya.usuarios (auth_user_id) → referral_partners (usuario_id)
+ * Resuelve la sesiÃ³n Supabase a un referral_partner via:
+ *   auth.users â†’ alquiloya.usuarios (auth_user_id) â†’ referral_partners (usuario_id)
  *
  * Responses:
  *   200 { partner, links[], stats, commissions[] }
- *   401 si no hay sesión
- *   403 si la cuenta no está vinculada a ningún partner
+ *   401 si no hay sesiÃ³n
+ *   403 si la cuenta no estÃ¡ vinculada a ningÃºn partner
  */
 export async function GET(request: Request) {
   try {
@@ -42,7 +43,7 @@ export async function GET(request: Request) {
       `SELECT id, rol FROM ${t("usuarios")}
         WHERE auth_user_id = $1::uuid AND empresa_id = $2::uuid
         LIMIT 1`,
-      [user.id, ALQUILOYA_EMPRESA_ID]
+      [user.id, EMPRESA_ID]
     );
     if (!u.rows || u.rows.length === 0) {
       return NextResponse.json(
@@ -66,11 +67,11 @@ export async function GET(request: Request) {
          FROM ${t("referral_partners")}
         WHERE empresa_id = $1::uuid AND usuario_id = $2::uuid AND activo = true
         LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, usuarioErpId]
+      [EMPRESA_ID, usuarioErpId]
     );
     if (!p.rows || p.rows.length === 0) {
       return NextResponse.json(
-        { error: "Esta cuenta no está vinculada a un referido." },
+        { error: "Esta cuenta no estÃ¡ vinculada a un referido." },
         { status: 403 }
       );
     }
@@ -83,7 +84,7 @@ export async function GET(request: Request) {
          FROM ${t("referral_links")}
         WHERE empresa_id = $1::uuid AND partner_id = $2::uuid
         ORDER BY activo DESC, created_at ASC`,
-      [ALQUILOYA_EMPRESA_ID, partner.id]
+      [EMPRESA_ID, partner.id]
     );
     const rule = await queryWithRetry(
       pool,
@@ -91,7 +92,7 @@ export async function GET(request: Request) {
          FROM ${t("referral_commission_rules")}
         WHERE empresa_id = $1::uuid AND partner_id = $2::uuid AND vigente_hasta IS NULL
         ORDER BY vigente_desde DESC LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, partner.id]
+      [EMPRESA_ID, partner.id]
     );
 
     // 4. stats agregados
@@ -113,11 +114,11 @@ export async function GET(request: Request) {
            WHERE empresa_id=$1::uuid AND partner_id=$2::uuid AND estado='pendiente') AS pendiente,
          (SELECT COALESCE(sum(monto_comision),0)::text FROM ${t("referral_commissions")}
            WHERE empresa_id=$1::uuid AND partner_id=$2::uuid AND estado='pagada') AS pagada`,
-      [ALQUILOYA_EMPRESA_ID, partner.id]
+      [EMPRESA_ID, partner.id]
     );
     const st = stats.rows[0];
 
-    // 5. últimas comisiones
+    // 5. Ãºltimas comisiones
     const comm = await queryWithRetry(
       pool,
       `SELECT c.id, c.periodo, c.monto_comision::float8 AS monto, c.moneda,
@@ -126,7 +127,7 @@ export async function GET(request: Request) {
          FROM ${t("referral_commissions")} c
         WHERE c.empresa_id = $1::uuid AND c.partner_id = $2::uuid
         ORDER BY c.generada_at DESC LIMIT 50`,
-      [ALQUILOYA_EMPRESA_ID, partner.id]
+      [EMPRESA_ID, partner.id]
     );
 
     return NextResponse.json({

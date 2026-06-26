@@ -5,19 +5,20 @@ import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { sanitizeBlogHtml } from "@/lib/alquiloya/sanitize-blog-html";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 // Mismo slugify que en la coleccion. Si el PATCH manda slug vacio y titulo
 // cambio, regeneramos a partir del nuevo titulo.
 function slugify(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+  return s.toLowerCase().normalize("NFD").replace(/[Ì€-Í¯]/g, "")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
 }
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function t(table: string): string {
@@ -45,7 +46,7 @@ async function resolveAgenteId(request: Request): Promise<string | NextResponse>
   if (!user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   const supabase = createServiceRoleClient();
   const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
-  if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+  if (!usuario || usuario.empresa_id !== EMPRESA_ID) {
     return NextResponse.json({ error: "Usuario no resuelto" }, { status: 404 });
   }
   const { data: uExt } = await supabase
@@ -56,7 +57,7 @@ async function resolveAgenteId(request: Request): Promise<string | NextResponse>
     .maybeSingle();
   const agenteId = (uExt as { agente_id?: string | null } | null)?.agente_id ?? null;
   if (!agenteId || !uuidRe.test(agenteId)) {
-    return NextResponse.json({ error: "Tu cuenta no está vinculada a un agente" }, { status: 403 });
+    return NextResponse.json({ error: "Tu cuenta no estÃ¡ vinculada a un agente" }, { status: 403 });
   }
   return agenteId;
 }
@@ -121,7 +122,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
     }
     if (sets.length === 0) return NextResponse.json({ error: "sin cambios" }, { status: 400 });
 
-    vals.push(ALQUILOYA_EMPRESA_ID);
+    vals.push(EMPRESA_ID);
     vals.push(id);
     vals.push(agenteId);
     const sql = `UPDATE ${t("agente_posts")} SET ${sets.join(", ")}
@@ -159,7 +160,7 @@ export async function DELETE(request: Request, ctx: Ctx) {
       `DELETE FROM ${t("agente_posts")}
         WHERE empresa_id=$1::uuid AND id=$2::uuid AND agente_id=$3::uuid
         RETURNING id`,
-      [ALQUILOYA_EMPRESA_ID, id, agenteId]
+      [EMPRESA_ID, id, agenteId]
     );
     if (!r.rows || r.rows.length === 0) return NextResponse.json({ error: "no encontrado o no es tuyo" }, { status: 404 });
     return NextResponse.json({ success: true, id: r.rows[0].id });

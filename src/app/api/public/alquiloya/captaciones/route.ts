@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function s(v: unknown): string | null {
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
     const telefono = s(body.propietario_telefono);
     if (!email && !telefono) {
       return NextResponse.json(
-        { error: "Necesitamos email o teléfono para que el agente te contacte." },
+        { error: "Necesitamos email o telÃ©fono para que el agente te contacte." },
         { status: 400 }
       );
     }
@@ -63,7 +64,7 @@ export async function POST(request: Request) {
       pool,
       `SELECT id, activo FROM alquiloya.agentes
         WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, agenteId]
+      [EMPRESA_ID, agenteId]
     );
     if (!ag.rows || ag.rows.length === 0) {
       return NextResponse.json({ error: "Agente no encontrado" }, { status: 404 });
@@ -78,7 +79,7 @@ export async function POST(request: Request) {
     // INSERT. La migracion 20260620120000 ya define ambos como DEFAULT, pero
     // si en alguna instancia ese default se perdio (rollback parcial, ALTER
     // accidental), el INSERT seguia fallando silencioso y el lead quedaba
-    // con NULL — invisible en el dashboard porque los queries filtran por
+    // con NULL â€” invisible en el dashboard porque los queries filtran por
     // etapa IN (...). Mejor explicito que dependiente del DEFAULT.
     const ins = await queryWithRetry<{ id: string }>(
       pool,
@@ -90,7 +91,7 @@ export async function POST(request: Request) {
        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'nuevo', 'abierto')
        RETURNING id`,
       [
-        ALQUILOYA_EMPRESA_ID,
+        EMPRESA_ID,
         agenteId,
         nombre,
         email,

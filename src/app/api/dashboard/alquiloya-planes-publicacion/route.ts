@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 
 function s(v: unknown): string | null {
   if (typeof v !== "string") return null;
@@ -49,11 +52,11 @@ export async function GET(request: Request) {
               precio::float8 AS precio, moneda, billing, badge,
               COALESCE(bullets, '[]'::jsonb)  AS bullets,
               COALESCE(excluded, '[]'::jsonb) AS excluded,
-              cta, highlighted, free_boosts, orden, activo
-         FROM "alquiloya"."planes_publicacion"
+              cta, highlighted, free_boosts, orden, activo, image_url
+         FROM "${SCHEMA}"."planes_publicacion"
          WHERE empresa_id = $1::uuid
          ORDER BY orden ASC, nombre ASC`,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
     return NextResponse.json({ success: true, data: { planes: rows } });
   } catch (err) {
@@ -77,6 +80,7 @@ type PostBody = {
   free_boosts?: number | string | null;
   orden?: number | string;
   activo?: boolean;
+  image_url?: string | null;
 };
 
 export async function POST(request: Request) {
@@ -95,20 +99,20 @@ export async function POST(request: Request) {
 
     const ins = await queryWithRetry(
       pool,
-      `INSERT INTO "alquiloya"."planes_publicacion"
+      `INSERT INTO "${SCHEMA}"."planes_publicacion"
          (empresa_id, tier, target, nombre, precio, moneda, billing, badge,
-          bullets, excluded, cta, highlighted, free_boosts, orden, activo)
+          bullets, excluded, cta, highlighted, free_boosts, orden, activo, image_url)
        VALUES
          ($1::uuid, $2, $3, $4, COALESCE($5, 0), COALESCE($6, 'PYG'), COALESCE($7, 'unico'),
           $8, COALESCE($9::jsonb, '[]'::jsonb), COALESCE($10::jsonb, '[]'::jsonb),
-          $11, $12, $13, COALESCE($14, 0), $15)
+          $11, $12, $13, COALESCE($14, 0), $15, $16)
        RETURNING id, tier, target, nombre,
                  precio::float8 AS precio, moneda, billing, badge,
                  COALESCE(bullets, '[]'::jsonb)  AS bullets,
                  COALESCE(excluded, '[]'::jsonb) AS excluded,
-                 cta, highlighted, free_boosts, orden, activo`,
+                 cta, highlighted, free_boosts, orden, activo, image_url`,
       [
-        ALQUILOYA_EMPRESA_ID,
+        EMPRESA_ID,
         tier,
         s(body.target),
         nombre,
@@ -123,6 +127,7 @@ export async function POST(request: Request) {
         i(body.free_boosts),
         i(body.orden),
         bo(body.activo, true),
+        s(body.image_url),
       ]
     );
 

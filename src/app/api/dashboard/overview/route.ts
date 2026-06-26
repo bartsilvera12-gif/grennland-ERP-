@@ -2,12 +2,10 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
-import { getClientSchema } from "@/lib/env/instance-mode";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const DEFAULT_ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
 
 // Cache module-level: una vez que sabemos que una tabla existe en este schema,
 // no preguntamos más. Se invalida con cada deploy (cold start del proceso).
@@ -79,8 +77,7 @@ export async function GET(request: Request) {
     }
 
     const schema = getClientSchema();
-    const empresaId =
-      process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || DEFAULT_ALQUILOYA_EMPRESA_ID;
+    const empresaId = getClientEmpresaId();
 
     // ── Cache compartido por tenant (stale-while-revalidate) ────────────────
     // La respuesta es la misma para todos los usuarios del mismo empresa_id,

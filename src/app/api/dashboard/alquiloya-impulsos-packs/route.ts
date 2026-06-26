@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 
 function s(v: unknown, max = 80): string | null {
   if (typeof v !== "string") return null;
@@ -44,17 +47,17 @@ export async function GET(request: Request) {
       return NextResponse.json({
         success: true,
         data: { packs: [] },
-        warning: "La tabla alquiloya.impulsos_packs todavía no existe. Corré la migration 20260628120000_alquiloya_impulsos_packs.sql en Supabase.",
+        warning: "La tabla alquiloya.impulsos_packs todavÃ­a no existe. CorrÃ© la migration 20260628120000_alquiloya_impulsos_packs.sql en Supabase.",
       });
     }
 
     const { rows } = await queryWithRetry(
       pool,
       `SELECT id, codigo, qty, precio::float8 AS precio, moneda, badge, orden, activo
-         FROM "alquiloya"."impulsos_packs"
+         FROM "${SCHEMA}"."impulsos_packs"
         WHERE empresa_id = $1::uuid
         ORDER BY orden ASC, qty ASC`,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
     return NextResponse.json({ success: true, data: { packs: rows ?? [] } });
   } catch (err) {
@@ -84,17 +87,17 @@ export async function POST(request: Request) {
 
     const { rows } = await queryWithRetry<{ id: string }>(
       pool,
-      `INSERT INTO "alquiloya"."impulsos_packs"
+      `INSERT INTO "${SCHEMA}"."impulsos_packs"
          (empresa_id, codigo, qty, precio, moneda, badge, orden, activo)
        VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, true)
        RETURNING id`,
-      [ALQUILOYA_EMPRESA_ID, codigo, qty, precio, moneda, badgeFinal, orden]
+      [EMPRESA_ID, codigo, qty, precio, moneda, badgeFinal, orden]
     );
     return NextResponse.json({ success: true, id: rows[0].id });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error";
     if (/duplicate key|unique/i.test(msg)) {
-      return NextResponse.json({ error: "Ya existe un pack con ese código" }, { status: 409 });
+      return NextResponse.json({ error: "Ya existe un pack con ese cÃ³digo" }, { status: 409 });
     }
     console.error("[api/dashboard/alquiloya-impulsos-packs POST]", err);
     return NextResponse.json({ error: msg }, { status: 500 });

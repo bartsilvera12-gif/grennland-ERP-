@@ -1,9 +1,10 @@
 import "server-only";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-export const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+export const EMPRESA_ID = getClientEmpresaId();
 
 function q(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
@@ -62,7 +63,7 @@ export async function listErpSolicitudesAcceso(): Promise<SolicitudAccesoRow[]> 
       WHERE s.empresa_id = $1::uuid
       ORDER BY (s.estado = 'pendiente') DESC, s.created_at DESC NULLS LAST
       LIMIT 500`,
-    [ALQUILOYA_EMPRESA_ID]
+    [EMPRESA_ID]
   );
   return rows ?? [];
 }

@@ -3,12 +3,13 @@ import type { PoolClient } from "pg";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { upsertPropietarioErp } from "@/lib/alquiloya/upsert-propietario-erp";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 
 function t(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
@@ -138,7 +139,7 @@ export async function PATCH(
       const existing = await client.query<{ id: string; agente_id: string | null; titulo: string | null; ciudad: string | null; barrio: string | null; direccion: string | null; precio: string | null; tipo: string | null; propietario_id: string | null }>(
         `SELECT id, agente_id::text AS agente_id, titulo, ciudad, barrio, direccion, precio::text AS precio, tipo, propietario_id::text AS propietario_id
            FROM ${t("propiedades")} WHERE id = $1::uuid AND empresa_id = $2::uuid FOR UPDATE`,
-        [id, ALQUILOYA_EMPRESA_ID]
+        [id, EMPRESA_ID]
       );
       if (existing.rowCount === 0) {
         await client.query("ROLLBACK");
@@ -165,7 +166,7 @@ export async function PATCH(
       let nuevoPropietarioId: string | null = existing.rows[0]?.propietario_id ?? null;
       if (algunPropietarioField) {
         nuevoPropietarioId = await upsertPropietarioErp(client, {
-          empresaId: ALQUILOYA_EMPRESA_ID,
+          empresaId: EMPRESA_ID,
           propietario_id: propietarioIdBody ?? nuevoPropietarioId,
           nombre: propietarioInputNombre,
           email: propietarioInputEmail,
@@ -226,7 +227,7 @@ export async function PATCH(
           b(body.visible_web, true),
           b(body.activo, true),
           id,
-          ALQUILOYA_EMPRESA_ID,
+          EMPRESA_ID,
           n(body.lat),
           n(body.lng),
           pubDias,
@@ -248,16 +249,16 @@ export async function PATCH(
           let propTelefono: string | null = null;
           if (prev.propietario_id) {
             const pr = await client.query<{ nombre: string | null; email: string | null; telefono: string | null }>(
-              `SELECT nombre, email, telefono FROM "alquiloya"."propietarios"
+              `SELECT nombre, email, telefono FROM "${ALQUILOYA_SCHEMA}"."propietarios"
                 WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-              [ALQUILOYA_EMPRESA_ID, prev.propietario_id]
+              [EMPRESA_ID, prev.propietario_id]
             );
             propNombre = pr.rows[0]?.nombre ?? null;
             propEmail = pr.rows[0]?.email ?? null;
             propTelefono = pr.rows[0]?.telefono ?? null;
           }
           await client.query(
-            `INSERT INTO "alquiloya"."agente_captaciones" (
+            `INSERT INTO "${ALQUILOYA_SCHEMA}"."agente_captaciones" (
                empresa_id, agente_id, propietario_nombre, propietario_email, propietario_telefono,
                propiedad_titulo, tipo_propiedad, ciudad, barrio, direccion,
                precio_estimado, origen, etapa, estado, mensaje
@@ -266,7 +267,7 @@ export async function PATCH(
                      $11, 'admin_asignacion', 'nuevo', 'abierto',
                      'Captacion generada automaticamente al asignarte esta propiedad desde el panel admin.')`,
             [
-              ALQUILOYA_EMPRESA_ID,
+              EMPRESA_ID,
               agenteId,
               propNombre ?? "Propietario",
               propEmail,
@@ -292,7 +293,7 @@ export async function PATCH(
       if (Array.isArray(body.fotos)) {
         await client.query(
           `DELETE FROM ${t("propiedad_fotos")} WHERE empresa_id = $1::uuid AND propiedad_id = $2::uuid`,
-          [ALQUILOYA_EMPRESA_ID, id]
+          [EMPRESA_ID, id]
         );
         let orden = 0;
         const anyPortada = body.fotos.some((f) => !!f?.es_portada);
@@ -304,7 +305,7 @@ export async function PATCH(
             `INSERT INTO ${t("propiedad_fotos")}
                (empresa_id, propiedad_id, url, alt, orden, es_portada, activo)
              VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, true)`,
-            [ALQUILOYA_EMPRESA_ID, id, url, s(f?.alt), orden, portada]
+            [EMPRESA_ID, id, url, s(f?.alt), orden, portada]
           );
           orden++;
         }
@@ -314,7 +315,7 @@ export async function PATCH(
       if (Array.isArray(body.caracteristicas)) {
         await client.query(
           `DELETE FROM ${t("propiedad_caracteristicas")} WHERE empresa_id = $1::uuid AND propiedad_id = $2::uuid`,
-          [ALQUILOYA_EMPRESA_ID, id]
+          [EMPRESA_ID, id]
         );
         let cOrden = 0;
         for (const c of body.caracteristicas) {
@@ -324,7 +325,7 @@ export async function PATCH(
             `INSERT INTO ${t("propiedad_caracteristicas")}
                (empresa_id, propiedad_id, nombre, valor, icono, orden, activo)
              VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, true)`,
-            [ALQUILOYA_EMPRESA_ID, id, nombre, s(c?.valor), s(c?.icono), cOrden]
+            [EMPRESA_ID, id, nombre, s(c?.valor), s(c?.icono), cOrden]
           );
           cOrden++;
         }
@@ -367,25 +368,25 @@ export async function DELETE(
 
       const existing = await client.query(
         `SELECT id FROM ${t("propiedades")} WHERE id = $1::uuid AND empresa_id = $2::uuid FOR UPDATE`,
-        [id, ALQUILOYA_EMPRESA_ID]
+        [id, EMPRESA_ID]
       );
       if (existing.rowCount === 0) {
         await client.query("ROLLBACK");
         return NextResponse.json({ error: "Propiedad no encontrada" }, { status: 404 });
       }
 
-      // Borrado en cascada: fotos + características + propiedad. El propietario queda intacto.
+      // Borrado en cascada: fotos + caracterÃ­sticas + propiedad. El propietario queda intacto.
       await client.query(
         `DELETE FROM ${t("propiedad_fotos")} WHERE empresa_id = $1::uuid AND propiedad_id = $2::uuid`,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
       await client.query(
         `DELETE FROM ${t("propiedad_caracteristicas")} WHERE empresa_id = $1::uuid AND propiedad_id = $2::uuid`,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
       await client.query(
         `DELETE FROM ${t("propiedades")} WHERE id = $1::uuid AND empresa_id = $2::uuid`,
-        [id, ALQUILOYA_EMPRESA_ID]
+        [id, EMPRESA_ID]
       );
 
       await client.query("COMMIT");

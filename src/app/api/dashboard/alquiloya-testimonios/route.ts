@@ -3,11 +3,14 @@ import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { listErpTestimonios } from "@/lib/alquiloya/erp-testimonios";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 
 function s(v: unknown, max = 2000): string | null {
   if (typeof v !== "string") return null;
@@ -55,12 +58,12 @@ export async function POST(request: Request) {
 
     const { rows } = await queryWithRetry<{ id: string }>(
       pool,
-      `INSERT INTO "alquiloya"."testimonios"
+      `INSERT INTO "${SCHEMA}"."testimonios"
          (empresa_id, autor, rol, ciudad, contenido, foto_url, calificacion, orden, activo, destacado)
        VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id`,
       [
-        ALQUILOYA_EMPRESA_ID,
+        EMPRESA_ID,
         autor,
         s(body.rol, 80),
         s(body.ciudad, 80),

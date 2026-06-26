@@ -4,20 +4,21 @@ import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 
 /**
  * GET /api/agente/captaciones
  * Devuelve las captaciones del agente logueado.
- * Resuelve auth.users → alquiloya.usuarios → agente_id, y filtra por ese agente_id.
+ * Resuelve auth.users â†’ alquiloya.usuarios â†’ agente_id, y filtra por ese agente_id.
  *
  * 200 { success, captaciones: [...] }
- * 401 sin sesión
- * 403 si la cuenta no está vinculada a un agente AlquiloYa
+ * 401 sin sesiÃ³n
+ * 403 si la cuenta no estÃ¡ vinculada a un agente AlquiloYa
  */
 export async function GET(request: Request) {
   try {
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
 
     const supabase = createServiceRoleClient();
     const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
-    if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuario || usuario.empresa_id !== EMPRESA_ID) {
       return NextResponse.json({ error: "Usuario no AlquiloYa" }, { status: 403 });
     }
 
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
         WHERE empresa_id=$1::uuid AND agente_id=$2::uuid
         ORDER BY created_at DESC
         LIMIT 200`,
-      [ALQUILOYA_EMPRESA_ID, agenteId]
+      [EMPRESA_ID, agenteId]
     );
 
     return NextResponse.json({ success: true, captaciones: r.rows ?? [] });
@@ -106,7 +107,7 @@ export async function POST(request: Request) {
 
     const supabase = createServiceRoleClient();
     const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
-    if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuario || usuario.empresa_id !== EMPRESA_ID) {
       return NextResponse.json({ error: "Usuario no AlquiloYa" }, { status: 403 });
     }
 
@@ -147,7 +148,7 @@ export async function POST(request: Request) {
        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING id`,
       [
-        ALQUILOYA_EMPRESA_ID,
+        EMPRESA_ID,
         agenteId,
         nombre,
         email,

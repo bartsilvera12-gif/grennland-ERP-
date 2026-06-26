@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
-import { getClientSchema } from "@/lib/env/instance-mode";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 import { bustOverviewCache } from "@/lib/cache/dashboard-overview-cache";
 import { sendMail } from "@/lib/email/send-mail";
 import { renderPlanAprobadoEmail } from "@/lib/email/templates/plan-aprobado";
@@ -12,8 +12,8 @@ import { renderPlanAprobadoEmail } from "@/lib/email/templates/plan-aprobado";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function t(table: string): string {
@@ -25,7 +25,7 @@ async function ensureAgentesImpulsosColumn(pool: import("pg").Pool): Promise<voi
   if (agentesImpulsosColumnReady) return;
   try {
     await pool.query(
-      `ALTER TABLE "alquiloya"."agentes"
+      `ALTER TABLE "${ALQUILOYA_SCHEMA}"."agentes"
          ADD COLUMN IF NOT EXISTS impulsos_saldo int NOT NULL DEFAULT 0`
     );
     agentesImpulsosColumnReady = true;
@@ -91,7 +91,7 @@ async function resolveOrCreatePropietario(
     const m = await client.query<{ id: string }>(
       `SELECT id FROM ${t("propietarios")}
         WHERE empresa_id=$1::uuid AND lower(email)=lower($2) LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, sol.email]
+      [EMPRESA_ID, sol.email]
     );
     if (m.rows[0]?.id) return { id: m.rows[0].id, created: false };
   }
@@ -99,7 +99,7 @@ async function resolveOrCreatePropietario(
     const m = await client.query<{ id: string }>(
       `SELECT id FROM ${t("propietarios")}
         WHERE empresa_id=$1::uuid AND telefono=$2 LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, sol.telefono]
+      [EMPRESA_ID, sol.telefono]
     );
     if (m.rows[0]?.id) return { id: m.rows[0].id, created: false };
   }
@@ -109,7 +109,7 @@ async function resolveOrCreatePropietario(
        (empresa_id, nombre, email, telefono, activo)
      VALUES ($1::uuid, $2, $3, $4, true)
      RETURNING id`,
-    [ALQUILOYA_EMPRESA_ID, sol.nombre, sol.email, sol.telefono]
+    [EMPRESA_ID, sol.nombre, sol.email, sol.telefono]
   );
   return { id: ins.rows[0].id, created: true };
 }
@@ -193,34 +193,34 @@ async function provisionPortalAccountForPropietario(params: {
   // flujo, ej. solicitudes-acceso), no la duplicamos.
   try {
     const { rows: existing } = await params.pool.query<{ id: string }>(
-      `SELECT id FROM "alquiloya"."usuarios"
+      `SELECT id FROM "${ALQUILOYA_SCHEMA}"."usuarios"
         WHERE empresa_id=$1::uuid AND auth_user_id=$2::uuid LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, authUserId]
+      [EMPRESA_ID, authUserId]
     );
     if (existing.length === 0) {
       await params.pool.query(
-        `INSERT INTO "alquiloya"."usuarios"
+        `INSERT INTO "${ALQUILOYA_SCHEMA}"."usuarios"
            (empresa_id, auth_user_id, email, nombre, rol, propietario_id)
          VALUES ($1::uuid, $2::uuid, $3, $4, 'publicador-propietario', $5::uuid)`,
-        [ALQUILOYA_EMPRESA_ID, authUserId, params.email, params.nombre, params.propietarioId]
+        [EMPRESA_ID, authUserId, params.email, params.nombre, params.propietarioId]
       );
     } else {
       // Si ya existia, nos aseguramos que apunte al propietario nuevo.
       await params.pool.query(
-        `UPDATE "alquiloya"."usuarios" SET propietario_id=$2::uuid, updated_at=now()
+        `UPDATE "${ALQUILOYA_SCHEMA}"."usuarios" SET propietario_id=$2::uuid, updated_at=now()
           WHERE empresa_id=$1::uuid AND id=$3::uuid`,
-        [ALQUILOYA_EMPRESA_ID, params.propietarioId, existing[0].id]
+        [EMPRESA_ID, params.propietarioId, existing[0].id]
       );
     }
     await params.pool.query(
-      `UPDATE "alquiloya"."propietarios"
+      `UPDATE "${ALQUILOYA_SCHEMA}"."propietarios"
           SET usuario_id = (
-                SELECT id FROM "alquiloya"."usuarios"
+                SELECT id FROM "${ALQUILOYA_SCHEMA}"."usuarios"
                  WHERE auth_user_id = $1::uuid LIMIT 1
               ),
               updated_at = now()
         WHERE empresa_id = $2::uuid AND id = $3::uuid`,
-      [authUserId, ALQUILOYA_EMPRESA_ID, params.propietarioId]
+      [authUserId, EMPRESA_ID, params.propietarioId]
     );
   } catch (e) {
     console.warn(
@@ -267,7 +267,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
               monto::float8 AS monto
          FROM ${t("solicitudes_servicio")}
         WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
     const sol = srows?.[0];
     if (!sol) return NextResponse.json({ error: "no encontrada" }, { status: 404 });
@@ -283,11 +283,11 @@ export async function PATCH(request: Request, ctx: Ctx) {
             SET estado='rechazada', motivo_rechazo=$3, revisado_por=$4::uuid, revisado_at=now()
           WHERE empresa_id=$1::uuid AND id=$2::uuid
           RETURNING id`,
-        [ALQUILOYA_EMPRESA_ID, id, motivo, user.id]
+        [EMPRESA_ID, id, motivo, user.id]
       );
       bustOverviewCache(
         getClientSchema(),
-        process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || ALQUILOYA_EMPRESA_ID
+        process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || EMPRESA_ID
       );
       return NextResponse.json({ success: true, id: r.rows[0].id, estado: "rechazada" });
     }
@@ -319,7 +319,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
         const pr = await client.query<{ id: string; billing: string | null; nombre: string | null }>(
           `SELECT id, billing, nombre FROM ${t("planes_publicacion")}
             WHERE empresa_id=$1::uuid AND tier=$2 AND activo=true LIMIT 1`,
-          [ALQUILOYA_EMPRESA_ID, sol.plan_tier]
+          [EMPRESA_ID, sol.plan_tier]
         );
         const planRow = pr.rows[0];
         if (!planRow?.id) throw new Error(`plan "${sol.plan_tier}" no existe`);
@@ -345,7 +345,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
                     plan_vencimiento_at=${vencSql},
                     updated_at=now()
               WHERE empresa_id=$1::uuid AND id=$2::uuid`,
-            [ALQUILOYA_EMPRESA_ID, effectivePropietarioId, planId]
+            [EMPRESA_ID, effectivePropietarioId, planId]
           );
           resultadoId = effectivePropietarioId;
         } else if (overrideAgente) {
@@ -355,20 +355,20 @@ export async function PATCH(request: Request, ctx: Ctx) {
                     plan_vencimiento_at=${vencSql},
                     updated_at=now()
               WHERE empresa_id=$1::uuid AND id=$2::uuid`,
-            [ALQUILOYA_EMPRESA_ID, overrideAgente, planId]
+            [EMPRESA_ID, overrideAgente, planId]
           );
           resultadoId = overrideAgente;
         } else {
           throw new Error(
-            "Necesitás indicar propietario_id (o agente_id) al aprobar el cambio de plan. " +
-              "Tildá 'Crear propietario con los datos de la solicitud' si el solicitante no está registrado."
+            "NecesitÃ¡s indicar propietario_id (o agente_id) al aprobar el cambio de plan. " +
+              "TildÃ¡ 'Crear propietario con los datos de la solicitud' si el solicitante no estÃ¡ registrado."
           );
         }
       }
 
       if (sol.kind === "impulsos") {
         const qty = sol.pack_qty ?? 0;
-        if (qty <= 0) throw new Error("pack_qty inválido");
+        if (qty <= 0) throw new Error("pack_qty invÃ¡lido");
         appliedImpulsos = qty;
 
         if (effectivePropietarioId) {
@@ -376,7 +376,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
             `UPDATE ${t("propietarios")}
                 SET impulsos_saldo = COALESCE(impulsos_saldo, 0) + $3, updated_at=now()
               WHERE empresa_id=$1::uuid AND id=$2::uuid`,
-            [ALQUILOYA_EMPRESA_ID, effectivePropietarioId, qty]
+            [EMPRESA_ID, effectivePropietarioId, qty]
           );
           resultadoId = effectivePropietarioId;
         } else if (overrideAgente) {
@@ -385,26 +385,26 @@ export async function PATCH(request: Request, ctx: Ctx) {
             `UPDATE ${t("agentes")}
                 SET impulsos_saldo = COALESCE(impulsos_saldo, 0) + $3, updated_at=now()
               WHERE empresa_id=$1::uuid AND id=$2::uuid`,
-            [ALQUILOYA_EMPRESA_ID, overrideAgente, qty]
+            [EMPRESA_ID, overrideAgente, qty]
           );
           resultadoId = overrideAgente;
         } else {
           throw new Error(
-            "Necesitás indicar propietario_id o agente_id al aprobar la compra de impulsos. " +
-              "Tildá 'Crear propietario con los datos de la solicitud' si el solicitante no está registrado."
+            "NecesitÃ¡s indicar propietario_id o agente_id al aprobar la compra de impulsos. " +
+              "TildÃ¡ 'Crear propietario con los datos de la solicitud' si el solicitante no estÃ¡ registrado."
           );
         }
       }
 
       if (sol.kind === "verificacion") {
         if (!overridePropiedad) {
-          throw new Error("Necesitás indicar propiedad_id al aprobar la verificación");
+          throw new Error("NecesitÃ¡s indicar propiedad_id al aprobar la verificaciÃ³n");
         }
         await client.query(
           `UPDATE ${t("propiedades")}
               SET verificada = true, updated_at=now()
             WHERE empresa_id=$1::uuid AND id=$2::uuid`,
-          [ALQUILOYA_EMPRESA_ID, overridePropiedad]
+          [EMPRESA_ID, overridePropiedad]
         );
         resultadoId = overridePropiedad;
       }
@@ -419,7 +419,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
                 revisado_por = $7::uuid, revisado_at = now()
           WHERE empresa_id=$1::uuid AND id=$2::uuid`,
         [
-          ALQUILOYA_EMPRESA_ID, id, resultadoId,
+          EMPRESA_ID, id, resultadoId,
           effectivePropietarioId, overridePropiedad, overrideAgente,
           user.id,
         ]
@@ -427,20 +427,20 @@ export async function PATCH(request: Request, ctx: Ctx) {
       // Atribucion de referido: si la solicitud trae referral_link_id
       // (capturado al recibir el POST publico desde la cookie aly_ref),
       // registramos la conversion. Idempotente por (empresa, target_tipo,
-      // target_id) — si el admin re-aprueba una solicitud rechazada y reabierta
+      // target_id) â€” si el admin re-aprueba una solicitud rechazada y reabierta
       // (caso raro), no se duplica.
       if (sol.referral_link_id && sol.referral_partner_id && resultadoId) {
         const targetTipo = sol.kind === "cambio_plan" ? "plan_publicacion" : "otro";
         try {
           await client.query(
-            `INSERT INTO "alquiloya"."referral_conversions"
+            `INSERT INTO "${ALQUILOYA_SCHEMA}"."referral_conversions"
                (empresa_id, link_id, partner_id, target_tipo, target_id,
                 plan_publicacion_id, monto_base, moneda, converted_at)
              VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5::uuid,
                      NULLIF($6, '')::uuid, $7, $8, now())
              ON CONFLICT (empresa_id, target_tipo, target_id) DO NOTHING`,
             [
-              ALQUILOYA_EMPRESA_ID,
+              EMPRESA_ID,
               sol.referral_link_id,
               sol.referral_partner_id,
               targetTipo,
@@ -466,7 +466,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
       client.release();
     }
 
-    // ───── post-commit: cuenta de portal + correo de aprobacion ─────
+    // â”€â”€â”€â”€â”€ post-commit: cuenta de portal + correo de aprobacion â”€â”€â”€â”€â”€
     // Solo si creamos un propietario nuevo Y tenemos email valido. Si fallan
     // estos pasos, ya esta aplicado el cambio en BD; el admin puede reenviar
     // el correo manualmente desde el panel de Solicitudes de acceso.
@@ -533,7 +533,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
 
     bustOverviewCache(
       getClientSchema(),
-      process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || ALQUILOYA_EMPRESA_ID
+      process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || EMPRESA_ID
     );
 
     return NextResponse.json({

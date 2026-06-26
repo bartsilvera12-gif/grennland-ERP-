@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function s(v: unknown, max = 80): string | null {
@@ -56,8 +59,8 @@ export async function PATCH(request: Request, ctx: Ctx) {
 
     if (sets.length === 0) return NextResponse.json({ error: "sin cambios" }, { status: 400 });
 
-    vals.push(ALQUILOYA_EMPRESA_ID, id);
-    const sql = `UPDATE "alquiloya"."impulsos_packs" SET ${sets.join(", ")}, updated_at = now()
+    vals.push(EMPRESA_ID, id);
+    const sql = `UPDATE "${SCHEMA}"."impulsos_packs" SET ${sets.join(", ")}, updated_at = now()
                   WHERE empresa_id = $${vals.length - 1}::uuid AND id = $${vals.length}::uuid
                   RETURNING id`;
     const r = await queryWithRetry<{ id: string }>(pool, sql, vals);
@@ -79,9 +82,9 @@ export async function DELETE(request: Request, ctx: Ctx) {
     if (!pool) return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
     const r = await queryWithRetry<{ id: string }>(
       pool,
-      `DELETE FROM "alquiloya"."impulsos_packs"
+      `DELETE FROM "${SCHEMA}"."impulsos_packs"
         WHERE empresa_id = $1::uuid AND id = $2::uuid RETURNING id`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
     if (!r.rows[0]) return NextResponse.json({ error: "no encontrado" }, { status: 404 });
     return NextResponse.json({ success: true, id: r.rows[0].id });

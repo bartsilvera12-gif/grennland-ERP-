@@ -3,12 +3,13 @@ import type { PoolClient } from "pg";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 
 function t(table: string): string {
   return `"${SCHEMA}"."${table}"`;
@@ -36,7 +37,7 @@ function b(v: unknown, def: boolean): boolean {
 function slugify(raw: string): string {
   return raw
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[Ì€-Í¯]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
@@ -126,7 +127,7 @@ export async function GET() {
         WHERE p.empresa_id = $1::uuid
         ORDER BY p.created_at DESC NULLS LAST, lower(p.nombre) ASC
       `,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
     return NextResponse.json({ success: true, data: rows ?? [] });
   } catch (err) {
@@ -173,25 +174,25 @@ export async function POST(request: Request) {
 
     const tipo = s(body.tipo);
     if (tipo && !TIPOS_PARTNER.has(tipo)) {
-      return NextResponse.json({ error: "tipo inválido" }, { status: 400 });
+      return NextResponse.json({ error: "tipo invÃ¡lido" }, { status: 400 });
     }
 
     const slugRawProvided = s(body.slug);
     const slug = slugify(slugRawProvided ?? nombre);
-    if (!slug) return NextResponse.json({ error: "slug inválido" }, { status: 400 });
+    if (!slug) return NextResponse.json({ error: "slug invÃ¡lido" }, { status: 400 });
 
     const cookieDias = i(body.cookie_dias) ?? 60;
     if (cookieDias < 1 || cookieDias > 365) {
-      return NextResponse.json({ error: "cookie_dias fuera de rango (1–365)" }, { status: 400 });
+      return NextResponse.json({ error: "cookie_dias fuera de rango (1â€“365)" }, { status: 400 });
     }
 
     const ruleTipo = s(body.rule_tipo);
     if (!ruleTipo || !TIPOS_RULE.has(ruleTipo)) {
-      return NextResponse.json({ error: "rule_tipo inválido" }, { status: 400 });
+      return NextResponse.json({ error: "rule_tipo invÃ¡lido" }, { status: 400 });
     }
     const ruleValor = n(body.rule_valor);
     if (ruleValor == null || ruleValor < 0) {
-      return NextResponse.json({ error: "rule_valor inválido" }, { status: 400 });
+      return NextResponse.json({ error: "rule_valor invÃ¡lido" }, { status: 400 });
     }
     if (ruleTipo === "porcentaje" && ruleValor > 100) {
       return NextResponse.json({ error: "porcentaje > 100" }, { status: 400 });
@@ -204,7 +205,7 @@ export async function POST(request: Request) {
     let meses: number | null = i(body.rule_meses_recurrencia);
     if (recurrente) {
       if (!meses || meses < 1 || meses > 60) {
-        return NextResponse.json({ error: "meses_recurrencia fuera de rango (1–60)" }, { status: 400 });
+        return NextResponse.json({ error: "meses_recurrencia fuera de rango (1â€“60)" }, { status: 400 });
       }
     } else {
       meses = null;
@@ -214,16 +215,16 @@ export async function POST(request: Request) {
     try {
       await client.query("BEGIN");
 
-      // Validar slug único antes de inserts (mejor mensaje que UNIQUE violation)
+      // Validar slug Ãºnico antes de inserts (mejor mensaje que UNIQUE violation)
       const slugCheck = await client.query(
         `SELECT 1 FROM ${t("referral_links")}
           WHERE empresa_id = $1::uuid AND lower(slug) = lower($2) LIMIT 1`,
-        [ALQUILOYA_EMPRESA_ID, slug]
+        [EMPRESA_ID, slug]
       );
       if (slugCheck.rowCount && slugCheck.rowCount > 0) {
         await client.query("ROLLBACK");
         return NextResponse.json(
-          { error: `El slug "${slug}" ya está en uso.` },
+          { error: `El slug "${slug}" ya estÃ¡ en uso.` },
           { status: 409 }
         );
       }
@@ -234,7 +235,7 @@ export async function POST(request: Request) {
          ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)
          RETURNING id`,
         [
-          ALQUILOYA_EMPRESA_ID,
+          EMPRESA_ID,
           nombre,
           s(body.email),
           s(body.telefono),
@@ -251,7 +252,7 @@ export async function POST(request: Request) {
          ) VALUES ($1::uuid, $2::uuid, $3, $4, $5, true)
          RETURNING id`,
         [
-          ALQUILOYA_EMPRESA_ID,
+          EMPRESA_ID,
           partnerId,
           slug,
           s(body.campania),
@@ -267,7 +268,7 @@ export async function POST(request: Request) {
          ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7, $8, now())
          RETURNING id`,
         [
-          ALQUILOYA_EMPRESA_ID,
+          EMPRESA_ID,
           partnerId,
           linkId,
           ruleTipo,

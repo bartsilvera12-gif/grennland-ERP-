@@ -3,12 +3,13 @@ import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function t(table: string): string {
@@ -19,12 +20,12 @@ function t(table: string): string {
  * POST /api/propietario/propiedades/[id]/usar-impulso
  *
  * Consume 1 impulso del saldo del propietario logueado y destaca su propiedad
- * por 7 días. Solo funciona si:
- *  - el usuario está autenticado y vinculado a un propietario
+ * por 7 dÃ­as. Solo funciona si:
+ *  - el usuario estÃ¡ autenticado y vinculado a un propietario
  *  - la propiedad pertenece a ese propietario
  *  - el saldo > 0
  *
- * Atomico (transaccion) — no resta saldo si no logro destacar.
+ * Atomico (transaccion) â€” no resta saldo si no logro destacar.
  */
 export async function POST(
   request: Request,
@@ -41,7 +42,7 @@ export async function POST(
 
     const supabase = createServiceRoleClient();
     const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
-    if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuario || usuario.empresa_id !== EMPRESA_ID) {
       return NextResponse.json({ error: "Usuario no autorizado" }, { status: 403 });
     }
 
@@ -55,7 +56,7 @@ export async function POST(
     const propietarioId = (uExt as { propietario_id?: string | null } | null)?.propietario_id ?? null;
     if (!propietarioId) {
       return NextResponse.json(
-        { error: "Tu cuenta no está vinculada a un propietario" },
+        { error: "Tu cuenta no estÃ¡ vinculada a un propietario" },
         { status: 403 }
       );
     }
@@ -72,7 +73,7 @@ export async function POST(
         `SELECT impulsos_saldo FROM ${t("propietarios")}
           WHERE empresa_id = $1::uuid AND id = $2::uuid AND activo = true
           FOR UPDATE`,
-        [ALQUILOYA_EMPRESA_ID, propietarioId]
+        [EMPRESA_ID, propietarioId]
       );
       const saldo = sal.rows[0]?.impulsos_saldo ?? 0;
       if (!sal.rows[0]) {
@@ -82,7 +83,7 @@ export async function POST(
       if (saldo <= 0) {
         await client.query("ROLLBACK");
         return NextResponse.json(
-          { error: "No tenés impulsos disponibles. Comprá un pack para destacar." },
+          { error: "No tenÃ©s impulsos disponibles. ComprÃ¡ un pack para destacar." },
           { status: 409 }
         );
       }
@@ -91,7 +92,7 @@ export async function POST(
       const prop = await client.query<{ id: string }>(
         `SELECT id FROM ${t("propiedades")}
           WHERE empresa_id = $1::uuid AND id = $2::uuid AND propietario_id = $3::uuid`,
-        [ALQUILOYA_EMPRESA_ID, propiedadId, propietarioId]
+        [EMPRESA_ID, propiedadId, propietarioId]
       );
       if (prop.rowCount === 0) {
         await client.query("ROLLBACK");
@@ -106,7 +107,7 @@ export async function POST(
         `UPDATE ${t("propietarios")}
             SET impulsos_saldo = impulsos_saldo - 1, updated_at = now()
           WHERE empresa_id = $1::uuid AND id = $2::uuid`,
-        [ALQUILOYA_EMPRESA_ID, propietarioId]
+        [EMPRESA_ID, propietarioId]
       );
 
       // 4) Setear destacada + extender vencimiento.
@@ -121,7 +122,7 @@ export async function POST(
             updated_at = now()
           WHERE empresa_id = $1::uuid AND id = $2::uuid
           RETURNING destacada_hasta::text AS destacada_hasta`,
-        [ALQUILOYA_EMPRESA_ID, propiedadId]
+        [EMPRESA_ID, propiedadId]
       );
 
       await client.query("COMMIT");

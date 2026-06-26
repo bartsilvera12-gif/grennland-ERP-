@@ -2,19 +2,20 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 
 function t(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
 }
 
 // Cache de existencia de tablas/columnas a nivel de modulo. Persiste mientras el
-// proceso Next.js esté vivo. Una migration nueva requiere restart (cold start),
+// proceso Next.js estÃ© vivo. Una migration nueva requiere restart (cold start),
 // que ya ocurre tras cada deploy de Coolify. Esto evita 6+ queries por request.
 const tableExistsCache = new Map<string, boolean>();
 const colExistsCache = new Map<string, boolean>();
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
     }
 
-    // Helper: chequea si una tabla existe. Cacheado en módulo (1 query/proceso/tabla).
+    // Helper: chequea si una tabla existe. Cacheado en mÃ³dulo (1 query/proceso/tabla).
     const tableExists = async (name: string): Promise<boolean> => {
       const cached = tableExistsCache.get(name);
       if (cached !== undefined) return cached;
@@ -66,7 +67,7 @@ export async function GET(request: Request) {
     };
     const safeCount = async (sql: string): Promise<number> => {
       try {
-        const { rows } = await queryWithRetry<{ n: number }>(pool, sql, [ALQUILOYA_EMPRESA_ID]);
+        const { rows } = await queryWithRetry<{ n: number }>(pool, sql, [EMPRESA_ID]);
         return rows[0]?.n ?? 0;
       } catch {
         return 0;
@@ -101,21 +102,21 @@ export async function GET(request: Request) {
                AND (estado IS NULL OR estado IN ('inactiva'))
            )::int AS pendientes
          FROM ${t("propiedades")} WHERE empresa_id = $1::uuid`,
-        [ALQUILOYA_EMPRESA_ID]
+        [EMPRESA_ID]
       ),
       queryWithRetry<{ label: string; value: number }>(
         pool,
         `SELECT COALESCE(NULLIF(trim(tipo), ''), 'Sin tipo') AS label, count(*)::int AS value
          FROM ${t("propiedades")} WHERE empresa_id = $1::uuid
          GROUP BY 1 ORDER BY value DESC, label ASC LIMIT 12`,
-        [ALQUILOYA_EMPRESA_ID]
+        [EMPRESA_ID]
       ),
       queryWithRetry<{ label: string; value: number }>(
         pool,
         `SELECT COALESCE(NULLIF(trim(ciudad), ''), 'Sin ciudad') AS label, count(*)::int AS value
          FROM ${t("propiedades")} WHERE empresa_id = $1::uuid
          GROUP BY 1 ORDER BY value DESC, label ASC LIMIT 12`,
-        [ALQUILOYA_EMPRESA_ID]
+        [EMPRESA_ID]
       ),
       queryWithRetry<{ activos: number; total: number }>(
         pool,
@@ -123,7 +124,7 @@ export async function GET(request: Request) {
            count(*) FILTER (WHERE activo = true)::int AS activos,
            count(*)::int AS total
          FROM ${t("agentes")} WHERE empresa_id = $1::uuid`,
-        [ALQUILOYA_EMPRESA_ID]
+        [EMPRESA_ID]
       ),
       queryWithRetry<{
         id: string;
@@ -152,7 +153,7 @@ export async function GET(request: Request) {
          WHERE p.empresa_id = $1::uuid
          ORDER BY p.created_at DESC NULLS LAST
          LIMIT 6`,
-        [ALQUILOYA_EMPRESA_ID]
+        [EMPRESA_ID]
       ),
       queryWithRetry<{
         total: number;
@@ -165,7 +166,7 @@ export async function GET(request: Request) {
            count(*) FILTER (WHERE created_at >= now() - interval '30 days')::int AS ultimas_30,
            count(*) FILTER (WHERE COALESCE(estado, '') NOT IN ('cerrada','atendida','descartada'))::int AS pendientes
          FROM ${t("consultas_propiedad")} WHERE empresa_id = $1::uuid AND activo = true`,
-        [ALQUILOYA_EMPRESA_ID]
+        [EMPRESA_ID]
       ),
       tableExists("solicitudes_acceso"),
       tableExists("solicitudes_servicio"),
@@ -187,7 +188,7 @@ export async function GET(request: Request) {
                ON pp.empresa_id=p.empresa_id AND pp.id=p.plan_publicacion_id
             WHERE p.empresa_id=$1::uuid AND p.activo=true
             GROUP BY 1 ORDER BY value DESC, label ASC`,
-          [ALQUILOYA_EMPRESA_ID]
+          [EMPRESA_ID]
         ).then((r) => r.rows).catch(() => [])
       : Promise.resolve([]);
 

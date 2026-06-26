@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function s(v: unknown, max = 500): string | null {
@@ -37,12 +40,12 @@ export async function PATCH(request: Request, ctx: Ctx) {
 
   const { rows } = await queryWithRetry<{ id: string }>(
     pool,
-    `UPDATE "alquiloya"."agente_resenas"
+    `UPDATE "${SCHEMA}"."agente_resenas"
         SET estado=$3, motivo_rechazo=$4,
             revisado_por=$5::uuid, revisado_at=now()
       WHERE empresa_id=$1::uuid AND id=$2::uuid AND estado='pendiente'
       RETURNING id`,
-    [ALQUILOYA_EMPRESA_ID, id, nextEstado, action === "rechazar" ? motivo : null, user.id]
+    [EMPRESA_ID, id, nextEstado, action === "rechazar" ? motivo : null, user.id]
   );
   if (rows.length === 0) {
     return NextResponse.json({ error: "no encontrada o ya revisada" }, { status: 404 });

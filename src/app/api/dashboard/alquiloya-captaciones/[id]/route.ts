@@ -4,11 +4,14 @@ import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const ETAPAS_PERMITIDAS = new Set([
@@ -32,7 +35,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
     // cualquier empresa (no se chequeaba empresa_id contra el usuario).
     const supabase = createServiceRoleClient();
     const usuarioErp = await resolveUsuarioErpFromAuthUser(supabase, user);
-    if (!usuarioErp || usuarioErp.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuarioErp || usuarioErp.empresa_id !== EMPRESA_ID) {
       return NextResponse.json(
         { error: "No autorizado para esta empresa" },
         { status: 403 }
@@ -58,11 +61,11 @@ export async function PATCH(request: Request, ctx: Ctx) {
 
     const r = await queryWithRetry<{ id: string; etapa: string; updated_at: string }>(
       pool,
-      `UPDATE "alquiloya"."agente_captaciones"
+      `UPDATE "${SCHEMA}"."agente_captaciones"
           SET etapa = $1, updated_at = now()
         WHERE empresa_id = $2::uuid AND id = $3::uuid
         RETURNING id, etapa, updated_at::text AS updated_at`,
-      [etapa, ALQUILOYA_EMPRESA_ID, id]
+      [etapa, EMPRESA_ID, id]
     );
     if (!r.rows || r.rows.length === 0) {
       return NextResponse.json({ error: "no encontrado" }, { status: 404 });

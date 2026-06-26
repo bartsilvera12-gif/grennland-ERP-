@@ -19,6 +19,7 @@ type Plan = {
   free_boosts: number | null;
   orden: number;
   activo?: boolean;
+  image_url: string | null;
 };
 
 const BILLINGS = ["gratis", "unico", "mensual", "anual"];
@@ -259,6 +260,23 @@ function EditModal({
             <div className="space-y-1">
               <label className={labelCls}>Free boosts (opcional)</label>
               <input className={inputCls} type="number" min="0" value={form.free_boosts ?? ""} onChange={(e) => set("free_boosts", e.target.value === "" ? null : Number(e.target.value))} />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <label className={labelCls}>Imagen (URL)</label>
+              <input
+                className={inputCls}
+                value={form.image_url ?? ""}
+                onChange={(e) => set("image_url", e.target.value || null)}
+                placeholder="https://… (URL pública de la imagen que se muestra en la web)"
+              />
+              {form.image_url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={form.image_url}
+                  alt="Vista previa"
+                  className="mt-2 h-32 w-full rounded-lg border border-slate-200 object-cover"
+                />
+              ) : null}
             </div>
           </div>
 

@@ -1,15 +1,16 @@
 import "server-only";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 /**
- * Server-side helpers para el módulo ERP read-only de Propiedades (AlquiloYa).
- * No filtran por `visible_web/activo` — la vista ERP muestra todas las filas y
+ * Server-side helpers para el mÃ³dulo ERP read-only de Propiedades (AlquiloYa).
+ * No filtran por `visible_web/activo` â€” la vista ERP muestra todas las filas y
  * el operador decide en base a los flags.
  */
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 
 function q(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
@@ -214,7 +215,7 @@ export async function listErpPropiedadesPendientes(): Promise<ErpPropiedadPendie
         AND (p.estado IS NULL OR p.estado IN ('inactiva'))
       ORDER BY p.created_at DESC NULLS LAST
     `,
-    [ALQUILOYA_EMPRESA_ID]
+    [EMPRESA_ID]
   );
   return rows ?? [];
 }
@@ -229,7 +230,7 @@ export async function countErpPropiedadesPendientes(): Promise<number> {
         WHERE empresa_id = $1::uuid
           AND activo = false AND visible_web = false
           AND (estado IS NULL OR estado IN ('inactiva'))`,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
     return rows[0]?.n ?? 0;
   } catch {
@@ -313,7 +314,7 @@ export async function listErpPropiedades(): Promise<ErpPropiedadListRow[]> {
       ORDER BY ${dhOrder} DESC NULLS LAST,
                p.created_at DESC NULLS LAST, p.titulo ASC
     `,
-    [ALQUILOYA_EMPRESA_ID]
+    [EMPRESA_ID]
   );
   return rows ?? [];
 }
@@ -413,7 +414,7 @@ export async function getErpPropiedad(id: string): Promise<ErpPropiedadDetail | 
       WHERE p.empresa_id = $1::uuid AND p.id = $2::uuid
       LIMIT 1
     `,
-    [ALQUILOYA_EMPRESA_ID, id]
+    [EMPRESA_ID, id]
   );
   return rows[0] ?? null;
 }

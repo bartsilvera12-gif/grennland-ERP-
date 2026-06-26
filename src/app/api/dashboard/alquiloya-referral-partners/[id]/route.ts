@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function t(table: string): string {
@@ -42,7 +43,7 @@ export async function GET(_req: Request, ctx: Ctx) {
               created_at::text AS created_at
          FROM ${t("referral_partners")}
         WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
     if (!partner.rows || partner.rows.length === 0) {
       return NextResponse.json({ error: "no encontrado" }, { status: 404 });
@@ -54,7 +55,7 @@ export async function GET(_req: Request, ctx: Ctx) {
          FROM ${t("referral_links")}
         WHERE empresa_id=$1::uuid AND partner_id=$2::uuid
         ORDER BY activo DESC, created_at ASC`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
 
     const rule = await queryWithRetry(
@@ -64,7 +65,7 @@ export async function GET(_req: Request, ctx: Ctx) {
          FROM ${t("referral_commission_rules")}
         WHERE empresa_id=$1::uuid AND partner_id=$2::uuid AND vigente_hasta IS NULL
         ORDER BY vigente_desde DESC LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
 
     return NextResponse.json({
@@ -106,27 +107,27 @@ export async function DELETE(request: Request, ctx: Ctx) {
         pool,
         `DELETE FROM ${t("referral_commissions")}
           WHERE empresa_id=$1::uuid AND partner_id=$2::uuid`,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
       await queryWithRetry(
         pool,
         `DELETE FROM ${t("referral_conversions")}
           WHERE empresa_id=$1::uuid AND partner_id=$2::uuid`,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
       await queryWithRetry(
         pool,
         `DELETE FROM ${t("referral_clicks")}
           WHERE empresa_id=$1::uuid
             AND link_id IN (SELECT id FROM ${t("referral_links")} WHERE partner_id=$2::uuid)`,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
       const r = await queryWithRetry<{ id: string }>(
         pool,
         `DELETE FROM ${t("referral_partners")}
           WHERE empresa_id=$1::uuid AND id=$2::uuid
           RETURNING id`,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
       if (!r.rows || r.rows.length === 0) {
         return NextResponse.json({ error: "no encontrado" }, { status: 404 });
@@ -134,7 +135,7 @@ export async function DELETE(request: Request, ctx: Ctx) {
       return NextResponse.json({ success: true, mode: "force" });
     }
 
-    // Verificar actividad. Si hay clicks/conversiones/comisiones → soft delete (activo=false).
+    // Verificar actividad. Si hay clicks/conversiones/comisiones â†’ soft delete (activo=false).
     const activity = await queryWithRetry<{
       clicks: number;
       conversiones: number;
@@ -149,7 +150,7 @@ export async function DELETE(request: Request, ctx: Ctx) {
          (SELECT count(*)::int FROM ${t("referral_commissions")} WHERE partner_id=$2::uuid) AS comisiones
        FROM ${t("referral_partners")} p
         WHERE p.empresa_id=$1::uuid AND p.id=$2::uuid`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
     if (!activity.rows || activity.rows.length === 0) {
       return NextResponse.json({ error: "no encontrado" }, { status: 404 });
@@ -162,13 +163,13 @@ export async function DELETE(request: Request, ctx: Ctx) {
         pool,
         `UPDATE ${t("referral_partners")} SET activo=false
           WHERE empresa_id=$1::uuid AND id=$2::uuid`,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
       await queryWithRetry(
         pool,
         `UPDATE ${t("referral_links")} SET activo=false
           WHERE empresa_id=$1::uuid AND partner_id=$2::uuid AND activo=true`,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
       return NextResponse.json({
         success: true,
@@ -184,7 +185,7 @@ export async function DELETE(request: Request, ctx: Ctx) {
       `DELETE FROM ${t("referral_partners")}
         WHERE empresa_id=$1::uuid AND id=$2::uuid
         RETURNING id`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
     if (!r.rows || r.rows.length === 0) {
       return NextResponse.json({ error: "no encontrado" }, { status: 404 });
@@ -237,7 +238,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
     }
     if (sets.length === 0) return NextResponse.json({ error: "sin cambios" }, { status: 400 });
 
-    vals.push(ALQUILOYA_EMPRESA_ID);
+    vals.push(EMPRESA_ID);
     vals.push(id);
     const sql = `UPDATE ${t("referral_partners")} SET ${sets.join(", ")}
                   WHERE empresa_id=$${vals.length - 1}::uuid AND id=$${vals.length}::uuid
@@ -255,7 +256,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
         pool,
         `UPDATE ${t("referral_links")} SET activo=true
           WHERE empresa_id=$1::uuid AND partner_id=$2::uuid AND activo=false`,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
     }
 

@@ -4,12 +4,13 @@ import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { sendMail } from "@/lib/email/send-mail";
 import { renderAccesoAprobadoEmail } from "@/lib/email/templates/acceso-aprobado";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 
 /** Misma politica de password temporal que el flujo de aprobacion. */
 function generateTempPassword(): string {
@@ -47,7 +48,7 @@ async function findAuthUserByEmail(admin: any, email: string): Promise<{ id: str
  * POST /api/public/alquiloya/portal-agentes/recuperar-password
  * Body: { email }
  *
- * Si existe un usuario de portal con ese email, le regenera la contraseña y
+ * Si existe un usuario de portal con ese email, le regenera la contraseÃ±a y
  * se la manda por correo. Devuelve 200 SIEMPRE (aunque no exista) para no
  * filtrar emails registrados (anti-enumeracion).
  */
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
   const successResponse = NextResponse.json({
     success: true,
     message:
-      "Si el email esta registrado, te enviamos una nueva contraseña temporal. Revisa tu bandeja de entrada (y spam).",
+      "Si el email esta registrado, te enviamos una nueva contraseÃ±a temporal. Revisa tu bandeja de entrada (y spam).",
   });
 
   if (!emailRaw || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailRaw)) {
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
         AND lower(email) = $2
         AND rol IN ('publicador-agente', 'publicador-propietario')
       LIMIT 1`,
-    [ALQUILOYA_EMPRESA_ID, emailRaw]
+    [EMPRESA_ID, emailRaw]
   );
   if (rows.length === 0) {
     // Email no registrado o no es de portal: devolvemos OK igual.
@@ -104,7 +105,7 @@ export async function POST(request: Request) {
     authUserId = found.id;
   }
 
-  // 3) Regenerar contraseña y aplicar en Supabase Auth.
+  // 3) Regenerar contraseÃ±a y aplicar en Supabase Auth.
   const nuevaPassword = generateTempPassword();
   const { error: updErr } = await supabaseAdmin.auth.admin.updateUserById(authUserId, {
     password: nuevaPassword,
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
     return successResponse;
   }
 
-  // 4) Mandar el correo con la nueva contraseña. Reutiliza el template de
+  // 4) Mandar el correo con la nueva contraseÃ±a. Reutiliza el template de
   //    aprobacion pero adapta el subject para que se entienda que es reset.
   try {
     const origin = new URL(request.url).origin;
@@ -127,7 +128,7 @@ export async function POST(request: Request) {
     });
     await sendMail({
       to: emailRaw,
-      subject: "Recuperación de contraseña — AlquiloYa",
+      subject: "RecuperaciÃ³n de contraseÃ±a â€” AlquiloYa",
       html: tpl.html,
       text: tpl.text,
     });

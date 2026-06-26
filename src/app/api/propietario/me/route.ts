@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
+import { getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 
 /**
  * GET /api/propietario/me
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
     if (!usuario) return NextResponse.json({ error: "Usuario no resuelto" }, { status: 404 });
 
     let propietario: Record<string, unknown> | null = null;
-    if (usuario.empresa_id === ALQUILOYA_EMPRESA_ID) {
+    if (usuario.empresa_id === EMPRESA_ID) {
       // 1) Path normal: usuarios.propietario_id linkeado a propietarios.id
       const { data: uExt } = await supabase
         .from("usuarios")
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
           .from("propietarios")
           .select("id, nombre, email, telefono, tipo_persona, estado, activo, plan_publicacion_id, plan_vencimiento_at, impulsos_saldo")
           .eq("id", propietarioId)
-          .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+          .eq("empresa_id", EMPRESA_ID)
           .limit(1)
           .maybeSingle();
         if (pr) propietario = pr as Record<string, unknown>;
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
             .from("propietarios")
             .select("id, nombre, email, telefono, tipo_persona, estado, activo, plan_publicacion_id, plan_vencimiento_at, impulsos_saldo")
             .ilike("email", em.trim())
-            .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+            .eq("empresa_id", EMPRESA_ID)
             .limit(1)
             .maybeSingle();
           if (pr) {
@@ -87,7 +88,7 @@ export async function GET(request: Request) {
           .from("planes_publicacion")
           .select("id, nombre, tier, billing")
           .eq("id", propietario.plan_publicacion_id as string)
-          .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+          .eq("empresa_id", EMPRESA_ID)
           .limit(1)
           .maybeSingle();
         if (planRow) {
@@ -121,7 +122,7 @@ export async function PATCH(request: Request) {
 
     const supabase = createServiceRoleClient();
     const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
-    if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuario || usuario.empresa_id !== EMPRESA_ID) {
       return NextResponse.json({ error: "Usuario no autorizado" }, { status: 403 });
     }
     const { data: uExt } = await supabase
@@ -159,7 +160,7 @@ export async function PATCH(request: Request) {
       .from("propietarios")
       .update(patch)
       .eq("id", propietarioId)
-      .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+      .eq("empresa_id", EMPRESA_ID)
       .select("id, nombre, email, telefono")
       .limit(1)
       .maybeSingle();

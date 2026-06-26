@@ -3,11 +3,13 @@ import Link from "next/link";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { EtapaSelect, EtapaBadge, ETAPA_LABELS } from "./_components/EtapaSelect";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 
 type Cards = {
   total: number; nuevo: number; contacto: number; negocio_activo: number;
@@ -41,9 +43,9 @@ async function load(): Promise<{ cards: Cards; byAgent: ByAgent[]; byDate: ByDat
          count(*) FILTER (WHERE etapa='rechazado')::int                      AS rechazado,
          count(*) FILTER (WHERE created_at >= now() - interval '7 days')::int  AS ult_7,
          count(*) FILTER (WHERE created_at >= now() - interval '30 days')::int AS ult_30
-       FROM "alquiloya"."agente_captaciones"
+       FROM "${SCHEMA}"."agente_captaciones"
        WHERE empresa_id = $1::uuid`,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
     const c0 = cards.rows[0] ?? empty;
     const denom = c0.cerrado + c0.rechazado;
@@ -59,13 +61,13 @@ async function load(): Promise<{ cards: Cards; byAgent: ByAgent[]; byDate: ByDat
               count(*) FILTER (WHERE c.etapa='negocio_activo')::int AS negocio_activo,
               count(*) FILTER (WHERE c.etapa='cerrado')::int        AS cerrado,
               count(*) FILTER (WHERE c.etapa='rechazado')::int      AS rechazado
-         FROM "alquiloya"."agente_captaciones" c
-         LEFT JOIN "alquiloya"."agentes" a
+         FROM "${SCHEMA}"."agente_captaciones" c
+         LEFT JOIN "${SCHEMA}"."agentes" a
            ON a.id = c.agente_id AND a.empresa_id = c.empresa_id
         WHERE c.empresa_id = $1::uuid
         GROUP BY c.agente_id, a.nombre
         ORDER BY total DESC, a.nombre ASC NULLS LAST`,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
 
     const byDate = await queryWithRetry<ByDate>(
@@ -78,12 +80,12 @@ async function load(): Promise<{ cards: Cards; byAgent: ByAgent[]; byDate: ByDat
          FROM dias d
          LEFT JOIN (
            SELECT date_trunc('day', created_at)::date AS dia, count(*)::int AS n
-             FROM "alquiloya"."agente_captaciones"
+             FROM "${SCHEMA}"."agente_captaciones"
             WHERE empresa_id = $1::uuid AND created_at >= now() - interval '30 days'
             GROUP BY 1
          ) x ON x.dia = d.dia
         ORDER BY d.dia ASC`,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
 
     const recent = await queryWithRetry<Recent>(
@@ -92,13 +94,13 @@ async function load(): Promise<{ cards: Cards; byAgent: ByAgent[]; byDate: ByDat
               c.propiedad_titulo, c.ciudad, c.barrio, c.etapa, c.estado,
               c.created_at::text AS created_at,
               c.agente_id, a.nombre AS agente_nombre
-         FROM "alquiloya"."agente_captaciones" c
-         LEFT JOIN "alquiloya"."agentes" a
+         FROM "${SCHEMA}"."agente_captaciones" c
+         LEFT JOIN "${SCHEMA}"."agentes" a
            ON a.id = c.agente_id AND a.empresa_id = c.empresa_id
         WHERE c.empresa_id = $1::uuid
         ORDER BY c.created_at DESC
         LIMIT 20`,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
 
     return { cards: c, byAgent: byAgent.rows ?? [], byDate: byDate.rows ?? [], recent: recent.rows ?? [] };

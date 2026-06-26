@@ -5,12 +5,13 @@ import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { sanitizeBlogHtml } from "@/lib/alquiloya/sanitize-blog-html";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function t(table: string): string {
@@ -33,7 +34,7 @@ function i(v: unknown, def: number): number {
   return Number.isFinite(x) ? Math.trunc(x) : def;
 }
 function slugify(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+  return s.toLowerCase().normalize("NFD").replace(/[Ì€-Í¯]/g, "")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
 }
 
@@ -42,7 +43,7 @@ async function resolveAgenteId(request: Request): Promise<{ ok: false; res: Next
   if (!user?.id) return { ok: false, res: NextResponse.json({ error: "No autenticado" }, { status: 401 }) };
   const supabase = createServiceRoleClient();
   const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
-  if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+  if (!usuario || usuario.empresa_id !== EMPRESA_ID) {
     return { ok: false, res: NextResponse.json({ error: "Usuario no resuelto" }, { status: 404 }) };
   }
   const { data: uExt } = await supabase
@@ -53,7 +54,7 @@ async function resolveAgenteId(request: Request): Promise<{ ok: false; res: Next
     .maybeSingle();
   const agenteId = (uExt as { agente_id?: string | null } | null)?.agente_id ?? null;
   if (!agenteId || !uuidRe.test(agenteId)) {
-    return { ok: false, res: NextResponse.json({ error: "Tu cuenta no está vinculada a un agente" }, { status: 403 }) };
+    return { ok: false, res: NextResponse.json({ error: "Tu cuenta no estÃ¡ vinculada a un agente" }, { status: 403 }) };
   }
   return { ok: true, agenteId };
 }
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
            FROM ${t("agente_posts")}
           WHERE empresa_id = $1::uuid AND agente_id = $2::uuid
           ORDER BY updated_at DESC NULLS LAST`,
-        [ALQUILOYA_EMPRESA_ID, auth.agenteId]
+        [EMPRESA_ID, auth.agenteId]
       );
       return NextResponse.json({ success: true, posts: rows ?? [] });
     } catch (e) {
@@ -85,7 +86,7 @@ export async function GET(request: Request) {
         return NextResponse.json({
           success: true,
           posts: [],
-          notice: "El blog aún no está activo. Pedile al admin que corra la migración de agente_posts.",
+          notice: "El blog aÃºn no estÃ¡ activo. Pedile al admin que corra la migraciÃ³n de agente_posts.",
         });
       }
       throw e;
@@ -122,14 +123,14 @@ export async function POST(request: Request) {
        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10,
                CASE WHEN $8::boolean THEN now() ELSE NULL END)
        RETURNING id`,
-      [ALQUILOYA_EMPRESA_ID, auth.agenteId, slug, titulo, resumen, contenido, coverUrl,
+      [EMPRESA_ID, auth.agenteId, slug, titulo, resumen, contenido, coverUrl,
        publicado, destacado, orden]
     );
     return NextResponse.json({ success: true, id: rows[0].id });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Error";
     if (/unique|duplicate/i.test(msg)) {
-      return NextResponse.json({ error: "Ya tenés un post con ese slug" }, { status: 409 });
+      return NextResponse.json({ error: "Ya tenÃ©s un post con ese slug" }, { status: 409 });
     }
     console.error("[api/agente/posts POST]", err);
     return NextResponse.json({ error: msg }, { status: 500 });

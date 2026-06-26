@@ -4,11 +4,14 @@ import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { listErpAgentePosts } from "@/lib/alquiloya/erp-agente-posts";
 import { sanitizeBlogHtml } from "@/lib/alquiloya/sanitize-blog-html";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function s(v: unknown, max = 5000): string | null {
@@ -28,7 +31,7 @@ function i(v: unknown, def: number): number {
   return Number.isFinite(x) ? Math.trunc(x) : def;
 }
 function slugify(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+  return s.toLowerCase().normalize("NFD").replace(/[Ì€-Í¯]/g, "")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
 }
 
@@ -68,13 +71,13 @@ export async function POST(request: Request) {
 
     const { rows } = await queryWithRetry<{ id: string }>(
       pool,
-      `INSERT INTO "alquiloya"."agente_posts"
+      `INSERT INTO "${SCHEMA}"."agente_posts"
          (empresa_id, agente_id, slug, titulo, resumen, contenido, cover_url,
           publicado, destacado, orden, publicado_at)
        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10,
                CASE WHEN $8::boolean THEN now() ELSE NULL END)
        RETURNING id`,
-      [ALQUILOYA_EMPRESA_ID, agenteId, slug, titulo, resumen, contenido, coverUrl,
+      [EMPRESA_ID, agenteId, slug, titulo, resumen, contenido, coverUrl,
        publicado, destacado, orden]
     );
     return NextResponse.json({ success: true, id: rows[0].id });

@@ -4,19 +4,20 @@ import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 
 function t(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
 }
 
 // Debe coincidir con el CHECK de alquiloya.agente_captaciones.etapa
-// (migración 20260620120000) y con el selector de etapa del panel del agente.
+// (migraciÃ³n 20260620120000) y con el selector de etapa del panel del agente.
 const ETAPAS_ORDER = [
   "nuevo",
   "contacto",
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
     if (!user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     const supabase = createServiceRoleClient();
     const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
-    if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuario || usuario.empresa_id !== EMPRESA_ID) {
       return NextResponse.json({ error: "Usuario no resuelto" }, { status: 404 });
     }
     const { data: uExt } = await supabase
@@ -56,12 +57,12 @@ export async function GET(request: Request) {
            FROM ${t("agente_captaciones")}
           WHERE empresa_id = $1::uuid AND agente_id = $2::uuid
           GROUP BY etapa`,
-        [ALQUILOYA_EMPRESA_ID, agenteId]
+        [EMPRESA_ID, agenteId]
       );
       const map = new Map(rows.map((r) => [r.etapa, r.n]));
       out.forEach((e) => { e.count = map.get(e.etapa) ?? 0; });
     } catch {
-      // tabla puede no existir o ser otra structure — no abortar
+      // tabla puede no existir o ser otra structure â€” no abortar
     }
 
     return NextResponse.json({ success: true, embudo: out });

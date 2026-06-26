@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
-import { getClientSchema } from "@/lib/env/instance-mode";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 import { bustOverviewCache } from "@/lib/cache/dashboard-overview-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function t(table: string): string {
@@ -63,14 +63,14 @@ export async function POST(
             updated_at = now()
           WHERE empresa_id = $1::uuid AND id = $2::uuid
           RETURNING id`,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
       if (!r.rows || r.rows.length === 0) {
         return NextResponse.json({ error: "no encontrada" }, { status: 404 });
       }
       bustOverviewCache(
         getClientSchema(),
-        process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || ALQUILOYA_EMPRESA_ID
+        process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || EMPRESA_ID
       );
       return NextResponse.json({ success: true, id: r.rows[0].id, estado: "aprobada" });
     }
@@ -88,12 +88,12 @@ export async function POST(
             visible_web = false,
             descripcion = CASE
               WHEN $3::text IS NULL THEN descripcion
-              ELSE COALESCE(descripcion,'') || E'\n\n[Moderación] Rechazada: ' || $3::text
+              ELSE COALESCE(descripcion,'') || E'\n\n[ModeraciÃ³n] Rechazada: ' || $3::text
             END,
             updated_at = now()
           WHERE empresa_id = $1::uuid AND id = $2::uuid
           RETURNING id`,
-        [ALQUILOYA_EMPRESA_ID, id, motivo, estado]
+        [EMPRESA_ID, id, motivo, estado]
       );
     }
     let r;
@@ -113,7 +113,7 @@ export async function POST(
     }
     bustOverviewCache(
       getClientSchema(),
-      process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || ALQUILOYA_EMPRESA_ID
+      process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || EMPRESA_ID
     );
     return NextResponse.json({ success: true, id: r.rows[0].id, estado: "rechazada" });
   } catch (err) {

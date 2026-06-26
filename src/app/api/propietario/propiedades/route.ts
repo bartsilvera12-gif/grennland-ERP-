@@ -4,12 +4,13 @@ import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 
 function t(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
 
     const supabase = createServiceRoleClient();
     const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
-    if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuario || usuario.empresa_id !== EMPRESA_ID) {
       return NextResponse.json({ error: "Usuario no autorizado" }, { status: 403 });
     }
     const { data: uExt } = await supabase
@@ -82,7 +83,7 @@ export async function GET(request: Request) {
        WHERE p.empresa_id = $1::uuid AND p.propietario_id = $2::uuid
        ORDER BY (p.destacada AND (p.destacada_hasta IS NULL OR p.destacada_hasta > now())) DESC,
                 p.created_at DESC NULLS LAST`,
-      [ALQUILOYA_EMPRESA_ID, propietarioId]
+      [EMPRESA_ID, propietarioId]
     );
     return NextResponse.json({ success: true, propiedades: rows ?? [] });
   } catch (err) {

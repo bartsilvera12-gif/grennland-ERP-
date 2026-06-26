@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 
 function t(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
                       "cargo", "bio", "foto_url", "orden", "activo"];
     const allCols = [...baseCols, ...extras.map((e) => e.col)];
     const baseVals: unknown[] = [
-      ALQUILOYA_EMPRESA_ID,
+      EMPRESA_ID,
       nombre,
       s(body.email),
       s(body.telefono),

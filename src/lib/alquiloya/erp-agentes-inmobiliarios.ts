@@ -1,20 +1,21 @@
 import "server-only";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 /**
- * Server-side helpers para el módulo ERP "Agentes inmobiliarios" (AlquiloYa).
- * Dos pestañas:
- *   - Agentes inmobiliarios → alquiloya.agentes (cuentas externas verificadas)
- *   - Propietarios          → alquiloya.propietarios (creada en Fase 10A)
+ * Server-side helpers para el mÃ³dulo ERP "Agentes inmobiliarios" (AlquiloYa).
+ * Dos pestaÃ±as:
+ *   - Agentes inmobiliarios â†’ alquiloya.agentes (cuentas externas verificadas)
+ *   - Propietarios          â†’ alquiloya.propietarios (creada en Fase 10A)
  *
- * Tolerante a `alquiloya.propietarios` inexistente: si la migración aún no
- * corrió, el listado devuelve []. NO crea la tabla desde acá (se crea vía
+ * Tolerante a `alquiloya.propietarios` inexistente: si la migraciÃ³n aÃºn no
+ * corriÃ³, el listado devuelve []. NO crea la tabla desde acÃ¡ (se crea vÃ­a
  * supabase/migrations/20260616120000_alquiloya_propietarios.sql).
  */
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-export const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+export const EMPRESA_ID = getClientEmpresaId();
 
 function q(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
@@ -83,7 +84,7 @@ export async function listErpAgentesInmobiliarios(): Promise<ErpAgenteInmobiliar
       WHERE a.empresa_id = $1::uuid
       ORDER BY a.orden ASC NULLS LAST, a.nombre ASC
     `,
-    [ALQUILOYA_EMPRESA_ID]
+    [EMPRESA_ID]
   );
   return rows ?? [];
 }
@@ -194,7 +195,7 @@ export async function listErpAgenteCaptaciones(agenteId: string): Promise<ErpAge
         WHERE empresa_id = $1::uuid AND agente_id = $2::uuid
         ORDER BY created_at DESC
         LIMIT 50`,
-      [ALQUILOYA_EMPRESA_ID, agenteId]
+      [EMPRESA_ID, agenteId]
     );
     return rows ?? [];
   } catch (e) {
@@ -236,7 +237,7 @@ export async function getErpAgenteInmobiliario(
       WHERE a.empresa_id = $1::uuid AND a.id = $2::uuid
       LIMIT 1
     `,
-    [ALQUILOYA_EMPRESA_ID, id]
+    [EMPRESA_ID, id]
   );
   if (!rows || rows.length === 0) return null;
   const base = rows[0];
@@ -253,7 +254,7 @@ export async function getErpAgenteInmobiliario(
           ORDER BY created_at DESC NULLS LAST
           LIMIT 1
         `,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
       if (ur && ur.length > 0) acceso = ur[0];
     }
@@ -302,7 +303,7 @@ export async function getErpPropietario(id: string): Promise<ErpPropietarioDetai
       WHERE pr.empresa_id = $1::uuid AND pr.id = $2::uuid
       LIMIT 1
     `,
-    [ALQUILOYA_EMPRESA_ID, id]
+    [EMPRESA_ID, id]
   );
   if (!rows || rows.length === 0) return null;
   const base = rows[0];
@@ -318,7 +319,7 @@ export async function getErpPropietario(id: string): Promise<ErpPropietarioDetai
              FROM ${q("usuarios")}
              WHERE empresa_id = $1::uuid AND id = $2::uuid
              LIMIT 1`,
-          [ALQUILOYA_EMPRESA_ID, base.usuario_id]
+          [EMPRESA_ID, base.usuario_id]
         );
         if (ur && ur.length > 0) acceso = ur[0];
       }
@@ -358,7 +359,7 @@ export async function listErpPropietarios(): Promise<ErpPropietarioRow[]> {
       WHERE pr.empresa_id = $1::uuid
       ORDER BY pr.created_at DESC NULLS LAST, lower(pr.nombre) ASC
     `,
-    [ALQUILOYA_EMPRESA_ID]
+    [EMPRESA_ID]
   );
   return rows ?? [];
 }

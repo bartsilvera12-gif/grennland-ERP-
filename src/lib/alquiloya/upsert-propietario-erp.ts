@@ -1,5 +1,8 @@
 import "server-only";
 import type { PoolClient } from "pg";
+import { getClientSchema } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 /**
  * Resuelve / actualiza / crea la fila de alquiloya.propietarios que se va a
@@ -7,7 +10,7 @@ import type { PoolClient } from "pg";
  *
  * Reglas (matchean el flujo publico /api/public/alquiloya/propiedades):
  *  - Si `propietario_id` viene set, usa esa fila (y opcionalmente actualiza
- *    los campos que llegaron — UPDATE COALESCE).
+ *    los campos que llegaron â€” UPDATE COALESCE).
  *  - Si no, busca por email; despues por telefono.
  *  - Si no encuentra nada y hay nombre, crea una fila nueva con estado
  *    'pendiente'.
@@ -43,9 +46,9 @@ export async function upsertPropietarioErp(
     observaciones,
   } = input;
 
-  // Bootstrap idempotente — la migration 20260704 puede no estar en prod.
+  // Bootstrap idempotente â€” la migration 20260704 puede no estar en prod.
   await client.query(
-    `ALTER TABLE "alquiloya"."propietarios"
+    `ALTER TABLE "${SCHEMA}"."propietarios"
        ADD COLUMN IF NOT EXISTS telefono_contacto text`
   );
 
@@ -53,7 +56,7 @@ export async function upsertPropietarioErp(
   if (propietario_id) {
     // UPDATE COALESCE: solo pisamos columnas con valores no nulos del payload.
     await client.query(
-      `UPDATE "alquiloya"."propietarios"
+      `UPDATE "${SCHEMA}"."propietarios"
           SET nombre            = COALESCE($2, nombre),
               email             = COALESCE($3, email),
               telefono          = COALESCE($4, telefono),
@@ -79,14 +82,14 @@ export async function upsertPropietarioErp(
   // 2) Lookup por email.
   if (email) {
     const r = await client.query<{ id: string }>(
-      `SELECT id FROM "alquiloya"."propietarios"
+      `SELECT id FROM "${SCHEMA}"."propietarios"
         WHERE empresa_id = $1::uuid AND lower(email) = lower($2) LIMIT 1`,
       [empresaId, email]
     );
     if (r.rows[0]) {
       const id = r.rows[0].id;
       await client.query(
-        `UPDATE "alquiloya"."propietarios"
+        `UPDATE "${SCHEMA}"."propietarios"
             SET nombre            = COALESCE($2, nombre),
                 telefono          = COALESCE($3, telefono),
                 telefono_contacto = COALESCE($4, telefono_contacto),
@@ -103,14 +106,14 @@ export async function upsertPropietarioErp(
   // 3) Lookup por telefono.
   if (telefono) {
     const r = await client.query<{ id: string }>(
-      `SELECT id FROM "alquiloya"."propietarios"
+      `SELECT id FROM "${SCHEMA}"."propietarios"
         WHERE empresa_id = $1::uuid AND telefono = $2 LIMIT 1`,
       [empresaId, telefono]
     );
     if (r.rows[0]) {
       const id = r.rows[0].id;
       await client.query(
-        `UPDATE "alquiloya"."propietarios"
+        `UPDATE "${SCHEMA}"."propietarios"
             SET nombre            = COALESCE($2, nombre),
                 email             = COALESCE($3, email),
                 telefono_contacto = COALESCE($4, telefono_contacto),
@@ -127,7 +130,7 @@ export async function upsertPropietarioErp(
   // 4) Crear nuevo si hay nombre.
   if (nombre) {
     const r = await client.query<{ id: string }>(
-      `INSERT INTO "alquiloya"."propietarios" (
+      `INSERT INTO "${SCHEMA}"."propietarios" (
          empresa_id, nombre, email, telefono, telefono_contacto,
          documento, estado, activo, observaciones
        )

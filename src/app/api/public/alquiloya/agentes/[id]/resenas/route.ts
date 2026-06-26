@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { successResponse, errorResponse } from "@/lib/api/response";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function s(v: unknown, max = 500): string | null {
@@ -36,7 +39,7 @@ export async function POST(request: Request, ctx: Ctx) {
 
     const reviewBody = s(body.body, 2000);
     if (!reviewBody || reviewBody.length < 15) {
-      return NextResponse.json(errorResponse("escribí al menos 15 caracteres en tu reseña"), { status: 400 });
+      return NextResponse.json(errorResponse("escribÃ­ al menos 15 caracteres en tu reseÃ±a"), { status: 400 });
     }
 
     const rol = s(body.rol, 40);
@@ -48,9 +51,9 @@ export async function POST(request: Request, ctx: Ctx) {
 
     const { rows: agenteRows } = await queryWithRetry<{ id: string }>(
       pool,
-      `SELECT id FROM "alquiloya"."agentes"
+      `SELECT id FROM "${SCHEMA}"."agentes"
         WHERE empresa_id=$1::uuid AND id=$2::uuid AND activo=true LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
     if (agenteRows.length === 0) {
       return NextResponse.json(errorResponse("agente no encontrado"), { status: 404 });
@@ -58,11 +61,11 @@ export async function POST(request: Request, ctx: Ctx) {
 
     const { rows } = await queryWithRetry<{ id: string }>(
       pool,
-      `INSERT INTO "alquiloya"."agente_resenas"
+      `INSERT INTO "${SCHEMA}"."agente_resenas"
          (empresa_id, agente_id, autor_nombre, autor_email, autor_telefono, rol, stars, body, estado)
        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, 'pendiente')
        RETURNING id`,
-      [ALQUILOYA_EMPRESA_ID, id, autorNombre, autorEmail, autorTelefono, rol, stars, reviewBody]
+      [EMPRESA_ID, id, autorNombre, autorEmail, autorTelefono, rol, stars, reviewBody]
     );
 
     return NextResponse.json(successResponse({ id: rows[0].id, estado: "pendiente" }));
@@ -71,6 +74,6 @@ export async function POST(request: Request, ctx: Ctx) {
       "[api/public/alquiloya/agentes/[id]/resenas POST]",
       err instanceof Error ? err.message : err
     );
-    return NextResponse.json(errorResponse("No se pudo registrar la reseña"), { status: 500 });
+    return NextResponse.json(errorResponse("No se pudo registrar la reseÃ±a"), { status: 500 });
   }
 }

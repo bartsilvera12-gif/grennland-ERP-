@@ -3,12 +3,13 @@ import type { PoolClient } from "pg";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { upsertPropietarioErp } from "@/lib/alquiloya/upsert-propietario-erp";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 
 function t(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
       await client.query("BEGIN");
 
       const propietarioId = await upsertPropietarioErp(client, {
-        empresaId: ALQUILOYA_EMPRESA_ID,
+        empresaId: EMPRESA_ID,
         propietario_id: s(body.propietario_id),
         nombre: s(body.propietario_nombre),
         email: s(body.propietario_email),
@@ -138,7 +139,7 @@ export async function POST(request: Request) {
          )
          RETURNING id`,
         [
-          ALQUILOYA_EMPRESA_ID,
+          EMPRESA_ID,
           agenteId,
           s(body.codigo),
           titulo,
@@ -175,12 +176,12 @@ export async function POST(request: Request) {
         await client.query(
           `INSERT INTO ${t("propiedad_fotos")} (empresa_id, propiedad_id, url, alt, orden, es_portada, activo)
            VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, true)`,
-          [ALQUILOYA_EMPRESA_ID, propId, url, s(f?.alt), orden, !!f?.es_portada || orden === 0]
+          [EMPRESA_ID, propId, url, s(f?.alt), orden, !!f?.es_portada || orden === 0]
         );
         orden++;
       }
 
-      // Características
+      // CaracterÃ­sticas
       const cars = Array.isArray(body.caracteristicas) ? body.caracteristicas : [];
       let cOrden = 0;
       for (const c of cars) {
@@ -189,7 +190,7 @@ export async function POST(request: Request) {
         await client.query(
           `INSERT INTO ${t("propiedad_caracteristicas")} (empresa_id, propiedad_id, nombre, valor, icono, orden, activo)
            VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, true)`,
-          [ALQUILOYA_EMPRESA_ID, propId, nombre, s(c?.valor), s(c?.icono), cOrden]
+          [EMPRESA_ID, propId, nombre, s(c?.valor), s(c?.icono), cOrden]
         );
         cOrden++;
       }

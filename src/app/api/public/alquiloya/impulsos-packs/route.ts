@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { successResponse, errorResponse } from "@/lib/api/response";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
-// Cache 60s — los packs cambian con baja frecuencia, no necesitan tiempo real.
+// Cache 60s â€” los packs cambian con baja frecuencia, no necesitan tiempo real.
 export const revalidate = 60;
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 
 export async function GET() {
   try {
@@ -16,10 +19,10 @@ export async function GET() {
     const { rows } = await queryWithRetry(
       pool,
       `SELECT id, codigo, qty, precio::float8 AS precio, moneda, badge, orden
-         FROM "alquiloya"."impulsos_packs"
+         FROM "${SCHEMA}"."impulsos_packs"
         WHERE empresa_id = $1::uuid AND activo = true
         ORDER BY orden ASC, qty ASC`,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
     return NextResponse.json(successResponse({ packs: rows ?? [] }));
   } catch (err) {

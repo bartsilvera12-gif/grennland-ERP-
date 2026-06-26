@@ -4,11 +4,14 @@ import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ETAPAS_OK = new Set(["nuevo", "contacto", "negocio_activo", "cerrado", "rechazado"]);
 
@@ -37,7 +40,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
 
     const supabase = createServiceRoleClient();
     const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
-    if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuario || usuario.empresa_id !== EMPRESA_ID) {
       return NextResponse.json({ error: "Usuario no AlquiloYa" }, { status: 403 });
     }
 
@@ -68,11 +71,11 @@ export async function PATCH(request: Request, ctx: Ctx) {
 
     const r = await queryWithRetry<{ id: string; etapa: string; updated_at: string }>(
       pool,
-      `UPDATE "alquiloya"."agente_captaciones"
+      `UPDATE "${SCHEMA}"."agente_captaciones"
           SET etapa = $1, updated_at = now()
         WHERE empresa_id=$2::uuid AND id=$3::uuid AND agente_id=$4::uuid
         RETURNING id, etapa, updated_at::text AS updated_at`,
-      [etapa, ALQUILOYA_EMPRESA_ID, id, agenteId]
+      [etapa, EMPRESA_ID, id, agenteId]
     );
     if (!r.rows || r.rows.length === 0) {
       return NextResponse.json({ error: "no encontrada o no es tuya" }, { status: 404 });

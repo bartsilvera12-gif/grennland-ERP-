@@ -4,12 +4,13 @@ import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 
 function t(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
 
     const supabase = createServiceRoleClient();
     const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
-    if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuario || usuario.empresa_id !== EMPRESA_ID) {
       return NextResponse.json({ error: "Usuario no resuelto" }, { status: 404 });
     }
     // Solo agentes pueden listar propietarios para captar.
@@ -52,7 +53,7 @@ export async function GET(request: Request) {
     if (!pool) return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
 
     if (q) {
-      // Búsqueda por nombre, email o telefono. Limitamos a 30.
+      // BÃºsqueda por nombre, email o telefono. Limitamos a 30.
       const like = `%${q}%`;
       const { rows } = await queryWithRetry(
         pool,
@@ -67,12 +68,12 @@ export async function GET(request: Request) {
             )
           ORDER BY lower(nombre) ASC
           LIMIT 30`,
-        [ALQUILOYA_EMPRESA_ID, like]
+        [EMPRESA_ID, like]
       );
       return NextResponse.json({ success: true, propietarios: rows ?? [] });
     }
 
-    // Sin query, devolvemos los 30 más recientes para mostrar algo en el dropdown.
+    // Sin query, devolvemos los 30 mÃ¡s recientes para mostrar algo en el dropdown.
     const { rows } = await queryWithRetry(
       pool,
       `SELECT id, nombre, email, telefono, ciudad, tipo_persona
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
         WHERE empresa_id = $1::uuid AND activo = true
         ORDER BY created_at DESC NULLS LAST, lower(nombre) ASC
         LIMIT 30`,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
     return NextResponse.json({ success: true, propietarios: rows ?? [] });
   } catch (err) {

@@ -3,23 +3,24 @@ import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { extractPlanLimits } from "@/lib/alquiloya/plan-limits";
+import { getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 
 /**
  * GET /api/agente/me
  *
- * Resuelve la sesión Supabase del navegador a una fila de `alquiloya.usuarios`
- * y, si tiene `agente_id`, devuelve también el perfil público del agente
+ * Resuelve la sesiÃ³n Supabase del navegador a una fila de `alquiloya.usuarios`
+ * y, si tiene `agente_id`, devuelve tambiÃ©n el perfil pÃºblico del agente
  * (`alquiloya.agentes`). Pensado para reemplazar el hardcode `AG-001` del
  * panel `/publico#admin-agent`.
  *
  * Responses:
- *   200 { agente, usuario }  → usuario con agente_id vinculado
- *   200 { agente: null, usuario } → usuario válido pero sin agente_id
+ *   200 { agente, usuario }  â†’ usuario con agente_id vinculado
+ *   200 { agente: null, usuario } â†’ usuario vÃ¡lido pero sin agente_id
  *   401 { error: "No autenticado" }
  *   404 { error: "Usuario no resuelto" }
  */
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
 
     // Solo resolvemos perfil agente si el usuario pertenece a AlquiloYa.
     let agente: Record<string, unknown> | null = null;
-    if (usuario.empresa_id === ALQUILOYA_EMPRESA_ID) {
+    if (usuario.empresa_id === EMPRESA_ID) {
       // Lectura directa de `usuarios.agente_id` (resolver no la trae).
       const { data: uExt } = await supabase
         .from("usuarios")
@@ -57,7 +58,7 @@ export async function GET(request: Request) {
           .from("agentes")
           .select("id, nombre, email, telefono, whatsapp, foto_url, cargo, bio, orden, activo, plan_publicacion_id, plan_vencimiento_at, impulsos_saldo")
           .eq("id", agenteId)
-          .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+          .eq("empresa_id", EMPRESA_ID)
           .limit(1)
           .maybeSingle();
         if (withImpulsos.error) {
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
             .from("agentes")
             .select("id, nombre, email, telefono, whatsapp, foto_url, cargo, bio, orden, activo, plan_publicacion_id, plan_vencimiento_at")
             .eq("id", agenteId)
-            .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+            .eq("empresa_id", EMPRESA_ID)
             .limit(1)
             .maybeSingle();
           ag = (fallback.data ?? null) as Record<string, unknown> | null;
@@ -87,7 +88,7 @@ export async function GET(request: Request) {
               .from("planes_publicacion")
               .select("id, tier, nombre, billing, bullets, activo")
               .eq("id", planId)
-              .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+              .eq("empresa_id", EMPRESA_ID)
               .limit(1)
               .maybeSingle();
             if (pl) {
@@ -100,7 +101,7 @@ export async function GET(request: Request) {
           const { count } = await supabase
             .from("propiedades")
             .select("id", { count: "exact", head: true })
-            .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+            .eq("empresa_id", EMPRESA_ID)
             .eq("agente_id", agenteId)
             .eq("activo", true)
             .eq("visible_web", true);
@@ -145,7 +146,7 @@ export async function PATCH(request: Request) {
 
     const supabase = createServiceRoleClient();
     const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
-    if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuario || usuario.empresa_id !== EMPRESA_ID) {
       return NextResponse.json({ error: "Usuario no autorizado" }, { status: 403 });
     }
     const { data: uExt } = await supabase
@@ -189,7 +190,7 @@ export async function PATCH(request: Request) {
       .from("agentes")
       .update(patch)
       .eq("id", agenteId)
-      .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+      .eq("empresa_id", EMPRESA_ID)
       .select("id, nombre, email, telefono, whatsapp, cargo, bio")
       .limit(1)
       .maybeSingle();

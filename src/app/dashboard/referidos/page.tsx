@@ -3,11 +3,13 @@ import Link from "next/link";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { CopySlugButton } from "./_components/CopySlugButton";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 
 type Stats = {
   partners: number;
@@ -44,29 +46,29 @@ async function loadStats(): Promise<Stats> {
       queryWithRetry<{ n: number }>(
         pool,
         `SELECT count(*)::int AS n FROM alquiloya.referral_partners WHERE empresa_id=$1::uuid`,
-        [ALQUILOYA_EMPRESA_ID]
+        [EMPRESA_ID]
       ),
       queryWithRetry<{ n: number }>(
         pool,
         `SELECT count(*)::int AS n FROM alquiloya.referral_links WHERE empresa_id=$1::uuid AND activo=true`,
-        [ALQUILOYA_EMPRESA_ID]
+        [EMPRESA_ID]
       ),
       queryWithRetry<{ n: number }>(
         pool,
         `SELECT count(*)::int AS n FROM alquiloya.referral_clicks WHERE empresa_id=$1::uuid`,
-        [ALQUILOYA_EMPRESA_ID]
+        [EMPRESA_ID]
       ),
       queryWithRetry<{ n: number }>(
         pool,
         `SELECT count(*)::int AS n FROM alquiloya.referral_conversions WHERE empresa_id=$1::uuid`,
-        [ALQUILOYA_EMPRESA_ID]
+        [EMPRESA_ID]
       ),
       queryWithRetry<{ n: string | null }>(
         pool,
         `SELECT COALESCE(sum(monto_comision),0)::text AS n
            FROM alquiloya.referral_commissions
           WHERE empresa_id=$1::uuid AND estado='pendiente'`,
-        [ALQUILOYA_EMPRESA_ID]
+        [EMPRESA_ID]
       ),
     ]);
     return {
@@ -151,7 +153,7 @@ async function loadPartners(): Promise<PartnerRow[]> {
         WHERE p.empresa_id = $1::uuid
         ORDER BY p.created_at DESC NULLS LAST, lower(p.nombre) ASC
       `,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
     return rows ?? [];
   } catch { return []; }

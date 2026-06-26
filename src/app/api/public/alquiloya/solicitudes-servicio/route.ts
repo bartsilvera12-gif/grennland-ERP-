@@ -5,11 +5,14 @@ import { successResponse, errorResponse } from "@/lib/api/response";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Cache module-level: una vez que confirmamos que la tabla existe (o la
@@ -112,7 +115,7 @@ export async function POST(request: Request) {
     const telefono = s(body.telefono, 40);
     if (!nombre) return NextResponse.json(errorResponse("nombre requerido"), { status: 400 });
     if (!email && !telefono) {
-      return NextResponse.json(errorResponse("ingresá email o telefono"), { status: 400 });
+      return NextResponse.json(errorResponse("ingresÃ¡ email o telefono"), { status: 400 });
     }
 
     let planTier: string | null = null;
@@ -135,14 +138,14 @@ export async function POST(request: Request) {
     }
     if (kind === "verificacion") {
       propiedadId = uuid(body.propiedad_id);
-      // propiedad_id puede ser null si el usuario aún no la registró; el ERP la vincula al revisar.
+      // propiedad_id puede ser null si el usuario aÃºn no la registrÃ³; el ERP la vincula al revisar.
     }
 
     // Si el caller esta autenticado (panel propietario o agente), resolvemos
     // su agente_id / propietario_id desde alquiloya.usuarios. Lo guardamos en
     // la fila para que el modal de aprobacion en /dashboard/solicitudes-servicio
     // pueda preseleccionar al titular correcto sin tener que hacer fuzzy match
-    // por email/telefono. Es OPCIONAL — anonimos (publico) siguen funcionando.
+    // por email/telefono. Es OPCIONAL â€” anonimos (publico) siguen funcionando.
     let resolvedAgenteId: string | null = null;
     let resolvedPropietarioId: string | null = null;
     try {
@@ -150,7 +153,7 @@ export async function POST(request: Request) {
       if (authUser?.id) {
         const supabase = createServiceRoleClient();
         const usuarioErp = await resolveUsuarioErpFromAuthUser(supabase, authUser);
-        if (usuarioErp && usuarioErp.empresa_id === ALQUILOYA_EMPRESA_ID) {
+        if (usuarioErp && usuarioErp.empresa_id === EMPRESA_ID) {
           const { data: uExt } = await supabase
             .from("usuarios")
             .select("agente_id, propietario_id")
@@ -177,7 +180,7 @@ export async function POST(request: Request) {
     // Asi el cliente que apreta "Comprar impulsos" no se queda colgado por una
     // migracion que nadie corrio en la DB de produccion. Toda la DDL es
     // idempotente (CREATE TABLE/INDEX/TRIGGER IF NOT EXISTS), asi que llamarla
-    // varias veces no rompe nada — pero igual cacheamos el resultado en memoria
+    // varias veces no rompe nada â€” pero igual cacheamos el resultado en memoria
     // del proceso para evitar overhead en el caso comun (tabla ya existe).
     if (!solicitudesServicioReady) {
       const { rows: existsRows } = await queryWithRetry<{ exists: boolean }>(
@@ -215,8 +218,8 @@ export async function POST(request: Request) {
 
     // Bootstrap idempotente de columnas referral_link_id / referral_partner_id.
     try {
-      await queryWithRetry(pool, `ALTER TABLE "alquiloya"."solicitudes_servicio" ADD COLUMN IF NOT EXISTS referral_link_id uuid`, []);
-      await queryWithRetry(pool, `ALTER TABLE "alquiloya"."solicitudes_servicio" ADD COLUMN IF NOT EXISTS referral_partner_id uuid`, []);
+      await queryWithRetry(pool, `ALTER TABLE "${SCHEMA}"."solicitudes_servicio" ADD COLUMN IF NOT EXISTS referral_link_id uuid`, []);
+      await queryWithRetry(pool, `ALTER TABLE "${SCHEMA}"."solicitudes_servicio" ADD COLUMN IF NOT EXISTS referral_partner_id uuid`, []);
     } catch (e) {
       console.warn("[solicitudes-servicio] bootstrap referral cols:", e instanceof Error ? e.message : e);
     }
@@ -234,11 +237,11 @@ export async function POST(request: Request) {
         const { rows: clk } = await queryWithRetry<{ link_id: string; partner_id: string }>(
           pool,
           `SELECT c.link_id, l.partner_id
-             FROM "alquiloya"."referral_clicks" c
-             JOIN "alquiloya"."referral_links" l ON l.id = c.link_id
+             FROM "${SCHEMA}"."referral_clicks" c
+             JOIN "${SCHEMA}"."referral_links" l ON l.id = c.link_id
             WHERE c.empresa_id = $1::uuid AND c.visitor_cookie = $2
             ORDER BY c.created_at DESC LIMIT 1`,
-          [ALQUILOYA_EMPRESA_ID, aly[1]]
+          [EMPRESA_ID, aly[1]]
         );
         if (clk[0]) { referralLinkId = clk[0].link_id; referralPartnerId = clk[0].partner_id; }
       }
@@ -248,7 +251,7 @@ export async function POST(request: Request) {
 
     const { rows } = await queryWithRetry<{ id: string }>(
       pool,
-      `INSERT INTO "alquiloya"."solicitudes_servicio"
+      `INSERT INTO "${SCHEMA}"."solicitudes_servicio"
          (empresa_id, kind, nombre, email, telefono,
           propiedad_id, propietario_id, agente_id,
           plan_tier, pack_id, pack_qty, monto, mensaje, estado,
@@ -259,7 +262,7 @@ export async function POST(request: Request) {
                $14::uuid, $15::uuid)
        RETURNING id`,
       [
-        ALQUILOYA_EMPRESA_ID, kind, nombre, email, telefono,
+        EMPRESA_ID, kind, nombre, email, telefono,
         propiedadId, resolvedPropietarioId, resolvedAgenteId,
         planTier, packId, packQty, monto, mensaje,
         referralLinkId, referralPartnerId,

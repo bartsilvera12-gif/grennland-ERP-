@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function t(table: string): string {
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
     let sql = `SELECT id, nombre, email, telefono, telefono_contacto, documento, observaciones
                  FROM ${t("propietarios")}
                 WHERE empresa_id = $1::uuid AND activo = true`;
-    const params: unknown[] = [ALQUILOYA_EMPRESA_ID];
+    const params: unknown[] = [EMPRESA_ID];
     if (q.length >= 1) {
       params.push(`%${q}%`);
       sql += ` AND (nombre ILIKE $2 OR email ILIKE $2 OR telefono ILIKE $2)`;
@@ -104,7 +105,7 @@ export async function POST(request: Request) {
        VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9::uuid, $10)
        RETURNING id`,
       [
-        ALQUILOYA_EMPRESA_ID,
+        EMPRESA_ID,
         nombre,
         s(body.email),
         s(body.telefono),

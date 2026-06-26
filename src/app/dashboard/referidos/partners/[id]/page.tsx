@@ -7,11 +7,13 @@ import { CopySlugButton } from "../../_components/CopySlugButton";
 import { PartnerActions } from "./_components/PartnerActions";
 import { EditarPartnerButton } from "./_components/EditarPartnerButton";
 import { EditarReglaButton } from "./_components/EditarReglaButton";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Partner = {
@@ -56,7 +58,7 @@ async function load(id: string) {
     `SELECT id, nombre, email, telefono, tipo, notas, activo, usuario_id, created_at::text AS created_at
        FROM alquiloya.referral_partners
       WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-    [ALQUILOYA_EMPRESA_ID, id]
+    [EMPRESA_ID, id]
   );
   if (!p.rows || p.rows.length === 0) return null;
   const partner = p.rows[0];
@@ -68,7 +70,7 @@ async function load(id: string) {
          FROM alquiloya.referral_links
         WHERE empresa_id=$1::uuid AND partner_id=$2::uuid
         ORDER BY activo DESC, created_at ASC`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     ),
     queryWithRetry<Rule>(
       pool,
@@ -76,7 +78,7 @@ async function load(id: string) {
          FROM alquiloya.referral_commission_rules
         WHERE empresa_id=$1::uuid AND partner_id=$2::uuid AND vigente_hasta IS NULL
         ORDER BY vigente_desde DESC LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     ),
     queryWithRetry<{ clicks: number; conversiones: number; pendiente: string; pagada: string }>(
       pool,
@@ -96,7 +98,7 @@ async function load(id: string) {
            WHERE empresa_id=$1::uuid AND partner_id=$2::uuid AND estado='pendiente') AS pendiente,
          (SELECT COALESCE(sum(monto_comision),0)::text FROM alquiloya.referral_commissions
            WHERE empresa_id=$1::uuid AND partner_id=$2::uuid AND estado='pagada') AS pagada`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     ),
     queryWithRetry<Commission>(
       pool,
@@ -105,7 +107,7 @@ async function load(id: string) {
          FROM alquiloya.referral_commissions
         WHERE empresa_id=$1::uuid AND partner_id=$2::uuid
         ORDER BY generada_at DESC LIMIT 20`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     ),
     (async () => {
       if (!partner.usuario_id) return null;
@@ -113,7 +115,7 @@ async function load(id: string) {
         pool,
         `SELECT id, email, rol, activo FROM alquiloya.usuarios
           WHERE id=$1::uuid AND empresa_id=$2::uuid LIMIT 1`,
-        [partner.usuario_id, ALQUILOYA_EMPRESA_ID]
+        [partner.usuario_id, EMPRESA_ID]
       );
       return r.rows?.[0] ?? null;
     })(),
@@ -151,7 +153,7 @@ async function load(id: string) {
        WHERE c.empresa_id=$1::uuid AND c.partner_id=$2::uuid
        ORDER BY c.converted_at DESC
        LIMIT 100`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     ).catch(() => ({ rows: [] as Conversion[] })),
   ]);
 

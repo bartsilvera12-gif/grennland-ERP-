@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { successResponse, errorResponse } from "@/lib/api/response";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -23,13 +26,13 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       `SELECT id, slug, titulo, resumen, contenido, cover_url,
               destacado, orden,
               publicado_at::text AS publicado_at
-         FROM "alquiloya"."agente_posts"
+         FROM "${SCHEMA}"."agente_posts"
         WHERE empresa_id = $1::uuid
           AND agente_id = $2::uuid
           AND publicado = true
         ORDER BY destacado DESC, orden ASC, publicado_at DESC NULLS LAST
         LIMIT 24`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
     return NextResponse.json(successResponse({ posts: rows ?? [] }));
   } catch (err) {

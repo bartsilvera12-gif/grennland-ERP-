@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -92,7 +93,7 @@ export async function POST(request: Request, ctx: Ctx) {
     const exists = await client.query<{ id: string }>(
       `SELECT id FROM "${SCHEMA}"."referral_partners"
         WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, partnerId]
+      [EMPRESA_ID, partnerId]
     );
     if (exists.rows.length === 0) {
       await client.query("ROLLBACK");
@@ -104,7 +105,7 @@ export async function POST(request: Request, ctx: Ctx) {
       `UPDATE "${SCHEMA}"."referral_commission_rules"
           SET vigente_hasta = now(), updated_at = now()
         WHERE empresa_id=$1::uuid AND partner_id=$2::uuid AND vigente_hasta IS NULL`,
-      [ALQUILOYA_EMPRESA_ID, partnerId]
+      [EMPRESA_ID, partnerId]
     );
 
     // Inserta la nueva.
@@ -113,7 +114,7 @@ export async function POST(request: Request, ctx: Ctx) {
          (empresa_id, partner_id, tipo, valor, moneda, recurrente, meses_recurrencia, vigente_desde)
        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, now())
        RETURNING id`,
-      [ALQUILOYA_EMPRESA_ID, partnerId, tipo, valor, moneda, recurrente, meses]
+      [EMPRESA_ID, partnerId, tipo, valor, moneda, recurrente, meses]
     );
 
     await client.query("COMMIT");

@@ -4,12 +4,13 @@ import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { successResponse, errorResponse } from "@/lib/api/response";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
-const ALQUILOYA_SCHEMA = "alquiloya";
+const EMPRESA_ID = getClientEmpresaId();
+const ALQUILOYA_SCHEMA = getClientSchema();
 
 function t(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
@@ -35,16 +36,16 @@ export async function POST(request: Request) {
     const password = typeof body.password === "string" ? body.password : "";
 
     if (!nombre) {
-      return NextResponse.json(errorResponse("Ingresá tu nombre completo."), { status: 400 });
+      return NextResponse.json(errorResponse("IngresÃ¡ tu nombre completo."), { status: 400 });
     }
     if (!email || !EMAIL_RE.test(email)) {
-      return NextResponse.json(errorResponse("Email inválido."), { status: 400 });
+      return NextResponse.json(errorResponse("Email invÃ¡lido."), { status: 400 });
     }
     if (!telefonoRaw) {
-      return NextResponse.json(errorResponse("Teléfono requerido."), { status: 400 });
+      return NextResponse.json(errorResponse("TelÃ©fono requerido."), { status: 400 });
     }
     if (password.length < 8) {
-      return NextResponse.json(errorResponse("La contraseña debe tener al menos 8 caracteres."), { status: 400 });
+      return NextResponse.json(errorResponse("La contraseÃ±a debe tener al menos 8 caracteres."), { status: 400 });
     }
     const telefono = telefonoRaw;
     const telefonoNorm = normPhone(telefonoRaw);
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
             OR (u.agente_id IS NOT NULL AND NOT EXISTS (
                SELECT 1 FROM ${t("agentes")} a WHERE a.id = u.agente_id))
           )`,
-      [ALQUILOYA_EMPRESA_ID, email]
+      [EMPRESA_ID, email]
     );
     for (const g of ghosts) {
       try {
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 1) Email único: ni en propietarios, ni en agentes, ni en usuarios.
+    // 1) Email Ãºnico: ni en propietarios, ni en agentes, ni en usuarios.
     const { rows: emailHits } = await queryWithRetry<{ source: string }>(
       pool,
       `(SELECT 'propietarios' AS source FROM ${t("propietarios")}
@@ -112,16 +113,16 @@ export async function POST(request: Request) {
        UNION ALL
        (SELECT 'usuarios' FROM ${t("usuarios")}
           WHERE empresa_id=$1::uuid AND lower(email)=lower($2) LIMIT 1)`,
-      [ALQUILOYA_EMPRESA_ID, email]
+      [EMPRESA_ID, email]
     );
     if (emailHits.length > 0) {
       return NextResponse.json(
-        errorResponse("Ese email ya está registrado. Iniciá sesión o usá otro correo."),
+        errorResponse("Ese email ya estÃ¡ registrado. IniciÃ¡ sesiÃ³n o usÃ¡ otro correo."),
         { status: 409 }
       );
     }
 
-    // 2) Teléfono único en propietarios + agentes (comparación por dígitos).
+    // 2) TelÃ©fono Ãºnico en propietarios + agentes (comparaciÃ³n por dÃ­gitos).
     const { rows: phoneHits } = await queryWithRetry<{ source: string }>(
       pool,
       `(SELECT 'propietarios' AS source FROM ${t("propietarios")}
@@ -129,11 +130,11 @@ export async function POST(request: Request) {
        UNION ALL
        (SELECT 'agentes' FROM ${t("agentes")}
           WHERE empresa_id=$1::uuid AND regexp_replace(coalesce(telefono,''), '[^0-9+]', '', 'g') = $2 LIMIT 1)`,
-      [ALQUILOYA_EMPRESA_ID, telefonoNorm]
+      [EMPRESA_ID, telefonoNorm]
     );
     if (phoneHits.length > 0) {
       return NextResponse.json(
-        errorResponse("Ese teléfono ya está registrado."),
+        errorResponse("Ese telÃ©fono ya estÃ¡ registrado."),
         { status: 409 }
       );
     }
@@ -152,10 +153,10 @@ export async function POST(request: Request) {
     });
     if (createErr || !created.user?.id) {
       const msg = createErr?.message ?? "no se pudo crear la cuenta";
-      // Captura específica de "email ya existe" en auth.users.
+      // Captura especÃ­fica de "email ya existe" en auth.users.
       if (/already|exists|registered/i.test(msg)) {
         return NextResponse.json(
-          errorResponse("Ese email ya tiene una cuenta. Iniciá sesión."),
+          errorResponse("Ese email ya tiene una cuenta. IniciÃ¡ sesiÃ³n."),
           { status: 409 }
         );
       }
@@ -172,7 +173,7 @@ export async function POST(request: Request) {
            (empresa_id, nombre, email, telefono, tipo_persona, estado, activo)
          VALUES ($1::uuid, $2, $3, $4, 'fisica', 'verificado', true)
          RETURNING id`,
-        [ALQUILOYA_EMPRESA_ID, nombre, email, telefono]
+        [EMPRESA_ID, nombre, email, telefono]
       );
       const propietarioId = propResult.rows[0].id;
 
@@ -180,16 +181,16 @@ export async function POST(request: Request) {
         `INSERT INTO ${t("usuarios")}
            (empresa_id, auth_user_id, email, nombre, rol, propietario_id)
          VALUES ($1::uuid, $2::uuid, $3, $4, 'publicador-propietario', $5::uuid)`,
-        [ALQUILOYA_EMPRESA_ID, authUserId, email, nombre, propietarioId]
+        [EMPRESA_ID, authUserId, email, nombre, propietarioId]
       );
 
-      // Registro de auditoría en solicitudes_acceso ya como aprobada (best-effort).
+      // Registro de auditorÃ­a en solicitudes_acceso ya como aprobada (best-effort).
       try {
         await client.query(
           `INSERT INTO ${t("solicitudes_acceso")}
              (empresa_id, tipo, nombre, email, telefono, ciudad, estado, resultado_id, revisado_at)
            VALUES ($1::uuid, 'propietario', $2, $3, $4, $5, 'aprobada', $6::uuid, now())`,
-          [ALQUILOYA_EMPRESA_ID, nombre, email, telefono, ciudad, propietarioId]
+          [EMPRESA_ID, nombre, email, telefono, ciudad, propietarioId]
         );
       } catch {
         // no romper el registro si la tabla difiere
@@ -233,7 +234,7 @@ export async function POST(request: Request) {
       );
     } catch (e) {
       await client.query("ROLLBACK").catch(() => {});
-      // Compensar: borrar auth user para no dejar cuenta huérfana.
+      // Compensar: borrar auth user para no dejar cuenta huÃ©rfana.
       try {
         await supabase.auth.admin.deleteUser(authUserId);
       } catch {

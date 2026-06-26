@@ -7,18 +7,21 @@ import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { extractPlanLimits } from "@/lib/alquiloya/plan-limits";
 import { notifyAdminNuevaPropiedadPendiente } from "@/lib/alquiloya/notify-admin";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 
 export async function GET(request: NextRequest) {
   return listPublicPropiedades(request);
 }
 
-// ─── POST público — "Publicar gratis" desde la web ──────────────────────────
-// Crea propiedad + propietario + fotos + características.
+// â”€â”€â”€ POST pÃºblico â€” "Publicar gratis" desde la web â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Crea propiedad + propietario + fotos + caracterÃ­sticas.
 // La propiedad queda inactiva / no visible_web hasta que el admin la revise.
 const TIPOS_OK = new Set([
   "departamento", "casa", "duplex", "duplex_ph", "terreno",
@@ -32,7 +35,7 @@ const MAX_CARAC = 30;
 // Extrae la URL real cuando el campo viene como HTML embed (postimg, imgbb, etc.)
 // IMPORTANTE: los data: URLs (subida desde dispositivo) pueden pesar cientos de KB.
 // Si los truncamos a 1024 chars la imagen queda rota. Damos un cap muy alto para esos
-// (10 MB de base64 ≈ 7 MB de imagen, que ya es absurdamente grande) y mantenemos
+// (10 MB de base64 â‰ˆ 7 MB de imagen, que ya es absurdamente grande) y mantenemos
 // el cap chico para URLs http/https normales.
 const DATA_URL_MAX = 10 * 1024 * 1024;
 function sanitizeImageUrl(v: unknown, max = 2048): string | null {
@@ -96,7 +99,7 @@ function normalizeOperacion(raw: string | null): string {
   if (!raw) return "alquiler";
   const o = raw.trim().toLowerCase();
   if (o === "venta") return "venta";
-  // 'permanente', 'temporal', 'alquiler', cualquier otro → alquiler
+  // 'permanente', 'temporal', 'alquiler', cualquier otro â†’ alquiler
   return "alquiler";
 }
 
@@ -125,9 +128,9 @@ type Body = {
 
 export async function POST(request: Request) {
   try {
-    // ── Gate de cuenta ───────────────────────────────────────────────────────
+    // â”€â”€ Gate de cuenta â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Politica del cliente (junio 2026): los propietarios pueden publicar SIN
-    // crear cuenta — el flujo se trata como solicitud anonima, y mas abajo se
+    // crear cuenta â€” el flujo se trata como solicitud anonima, y mas abajo se
     // crea/encuentra la fila en alquiloya.propietarios por email/telefono del
     // body. La cuenta SI sigue siendo obligatoria para agentes (porque la
     // propiedad se les vincula y se valida cuota del plan), pero como no
@@ -142,7 +145,7 @@ export async function POST(request: Request) {
 
     if (authUser?.id) {
       const usuarioErp = await resolveUsuarioErpFromAuthUser(supabase, authUser);
-      if (!usuarioErp || usuarioErp.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+      if (!usuarioErp || usuarioErp.empresa_id !== EMPRESA_ID) {
         // Sesion de otra empresa -> degradamos a anonimo para no bloquear.
       } else {
         const { data: uExt } = await supabase
@@ -167,7 +170,7 @@ export async function POST(request: Request) {
               .from("propietarios")
               .select("id")
               .ilike("email", em.trim())
-              .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+              .eq("empresa_id", EMPRESA_ID)
               .limit(1)
               .maybeSingle();
             const prId = (pr as { id?: string } | null)?.id ?? null;
@@ -200,7 +203,7 @@ export async function POST(request: Request) {
         .from("agentes")
         .select("id, activo, plan_publicacion_id, plan_vencimiento_at")
         .eq("id", agenteId)
-        .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+        .eq("empresa_id", EMPRESA_ID)
         .limit(1)
         .maybeSingle();
       if (!agRow || (agRow as { activo?: boolean }).activo !== true) {
@@ -229,7 +232,7 @@ export async function POST(request: Request) {
         .from("planes_publicacion")
         .select("bullets")
         .eq("id", planId)
-        .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+        .eq("empresa_id", EMPRESA_ID)
         .limit(1)
         .maybeSingle();
       const limits = extractPlanLimits((planRow as { bullets?: unknown } | null)?.bullets);
@@ -238,7 +241,7 @@ export async function POST(request: Request) {
         const { count: activeCount } = await supabase
           .from("propiedades")
           .select("id", { count: "exact", head: true })
-          .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+          .eq("empresa_id", EMPRESA_ID)
           .eq("agente_id", agenteId)
           .eq("activo", true)
           .eq("visible_web", true);
@@ -257,16 +260,16 @@ export async function POST(request: Request) {
       }
     } else if (usuarioPropietarioId) {
       // Path propietario LOGUEADO: validar plan (vencimiento + cuota) si tiene
-      // plan_publicacion_id asignado. NO chequeamos `activo`: política del
-      // cliente — los propietarios publican sin cuenta, no se les bloquea por
-      // estado de cuenta. Si está anónimo (sin usuarioPropietarioId) salteamos
+      // plan_publicacion_id asignado. NO chequeamos `activo`: polÃ­tica del
+      // cliente â€” los propietarios publican sin cuenta, no se les bloquea por
+      // estado de cuenta. Si estÃ¡ anÃ³nimo (sin usuarioPropietarioId) salteamos
       // este bloque entero y la fila de propietario se crea/encuentra abajo
-      // por email/teléfono.
+      // por email/telÃ©fono.
       const { data: prRow } = await supabase
         .from("propietarios")
         .select("id, plan_publicacion_id, plan_vencimiento_at")
         .eq("id", usuarioPropietarioId)
-        .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+        .eq("empresa_id", EMPRESA_ID)
         .limit(1)
         .maybeSingle();
       const pPlanId = (prRow as { plan_publicacion_id?: string | null } | null)?.plan_publicacion_id ?? null;
@@ -282,7 +285,7 @@ export async function POST(request: Request) {
           .from("planes_publicacion")
           .select("bullets")
           .eq("id", pPlanId)
-          .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+          .eq("empresa_id", EMPRESA_ID)
           .limit(1)
           .maybeSingle();
         const limits = extractPlanLimits((planRow as { bullets?: unknown } | null)?.bullets);
@@ -291,7 +294,7 @@ export async function POST(request: Request) {
           const { count: activeCount } = await supabase
             .from("propiedades")
             .select("id", { count: "exact", head: true })
-            .eq("empresa_id", ALQUILOYA_EMPRESA_ID)
+            .eq("empresa_id", EMPRESA_ID)
             .eq("propietario_id", usuarioPropietarioId!)
             .eq("activo", true);
           const used = typeof activeCount === "number" ? activeCount : 0;
@@ -312,7 +315,7 @@ export async function POST(request: Request) {
 
     const body = (await request.json().catch(() => ({}))) as Body;
 
-    // Sanitización + validaciones
+    // SanitizaciÃ³n + validaciones
     const titulo = s(body.titulo, 240);
     const tipo = normalizeTipo(s(body.tipo, 60));
     const operacion = normalizeOperacion(s(body.operacion, 30));
@@ -334,14 +337,14 @@ export async function POST(request: Request) {
     }
     if (!propNombre) return NextResponse.json({ error: "Nombre del propietario requerido" }, { status: 400 });
     if (!propEmail && !propTelefono) {
-      return NextResponse.json({ error: "Necesitamos email o teléfono del propietario" }, { status: 400 });
+      return NextResponse.json({ error: "Necesitamos email o telÃ©fono del propietario" }, { status: 400 });
     }
     if (propEmail && !isEmail(propEmail)) {
       return NextResponse.json({ error: "email invalido" }, { status: 400 });
     }
 
     // Cap de fotos = min(hard MAX_FOTOS, limite del plan). Si el cliente
-    // mando mas, devolvemos 402 con el limite — preferimos error explicito
+    // mando mas, devolvemos 402 con el limite â€” preferimos error explicito
     // a silenciosamente truncar, asi el frontend muestra "tu plan permite N".
     const fotosLimitFromPlan = actorPlanLimits.fotosPorInmueble;
     const effectiveFotosCap =
@@ -350,7 +353,7 @@ export async function POST(request: Request) {
     if (rawFotos.length > effectiveFotosCap) {
       return NextResponse.json(
         {
-          error: `Tu plan permite hasta ${effectiveFotosCap} fotos por inmueble. Estas subiendo ${rawFotos.length}. Quitá fotos o pasá a un plan superior.`,
+          error: `Tu plan permite hasta ${effectiveFotosCap} fotos por inmueble. Estas subiendo ${rawFotos.length}. QuitÃ¡ fotos o pasÃ¡ a un plan superior.`,
           code: "limite_fotos",
           fotos: rawFotos.length,
           limite: effectiveFotosCap,
@@ -373,29 +376,29 @@ export async function POST(request: Request) {
       // 20260704120000. Sin esto, si la DB de prod todavia no corrio la
       // migracion el INSERT de abajo explota con "column does not exist".
       await client.query(
-        `ALTER TABLE "alquiloya"."propietarios"
+        `ALTER TABLE "${SCHEMA}"."propietarios"
            ADD COLUMN IF NOT EXISTS telefono_contacto text`
       );
 
       // 1. Resolver propietario_id.
       //   - Si el usuario es propietario directo (usuarioPropietarioId set),
-      //     usamos esa fila — la propiedad es PARA ese propietario.
+      //     usamos esa fila â€” la propiedad es PARA ese propietario.
       //   - Si es agente publicando para un tercero, buscamos por email/telefono
       //     del body y, si no existe, creamos abajo.
       let propietarioId: string | null = usuarioPropietarioId;
       if (!propietarioId && propEmail) {
         const r = await client.query<{ id: string }>(
-          `SELECT id FROM "alquiloya"."propietarios"
+          `SELECT id FROM "${SCHEMA}"."propietarios"
             WHERE empresa_id=$1::uuid AND lower(email)=lower($2) LIMIT 1`,
-          [ALQUILOYA_EMPRESA_ID, propEmail]
+          [EMPRESA_ID, propEmail]
         );
         if (r.rows[0]) propietarioId = r.rows[0].id;
       }
       if (!propietarioId && propTelefono) {
         const r = await client.query<{ id: string }>(
-          `SELECT id FROM "alquiloya"."propietarios"
+          `SELECT id FROM "${SCHEMA}"."propietarios"
             WHERE empresa_id=$1::uuid AND telefono=$2 LIMIT 1`,
-          [ALQUILOYA_EMPRESA_ID, propTelefono]
+          [EMPRESA_ID, propTelefono]
         );
         if (r.rows[0]) propietarioId = r.rows[0].id;
       }
@@ -409,18 +412,18 @@ export async function POST(request: Request) {
         if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(planRaw)) {
           planId = planRaw;
           const r = await client.query<{ billing: string | null; tier: string | null }>(
-            `SELECT billing, tier FROM "alquiloya"."planes_publicacion"
+            `SELECT billing, tier FROM "${SCHEMA}"."planes_publicacion"
               WHERE id = $1::uuid AND empresa_id = $2::uuid LIMIT 1`,
-            [planId, ALQUILOYA_EMPRESA_ID]
+            [planId, EMPRESA_ID]
           );
           const row = r.rows[0];
           planEsGratis = row?.billing === "gratis" || (row?.tier ?? "").toLowerCase().startsWith("gratuito");
         } else {
           const r = await client.query<{ id: string; billing: string | null; tier: string | null }>(
-            `SELECT id, billing, tier FROM "alquiloya"."planes_publicacion"
+            `SELECT id, billing, tier FROM "${SCHEMA}"."planes_publicacion"
               WHERE empresa_id = $1::uuid AND tier = $2 AND activo = true
               LIMIT 1`,
-            [ALQUILOYA_EMPRESA_ID, planRaw]
+            [EMPRESA_ID, planRaw]
           );
           const row = r.rows[0];
           planId = row?.id ?? null;
@@ -431,14 +434,14 @@ export async function POST(request: Request) {
 
       if (!propietarioId) {
         const r = await client.query<{ id: string }>(
-          `INSERT INTO "alquiloya"."propietarios" (
+          `INSERT INTO "${SCHEMA}"."propietarios" (
              empresa_id, nombre, email, telefono, telefono_contacto, documento,
              estado, activo, plan_publicacion_id, observaciones
            )
            VALUES ($1::uuid, $2, $3, $4, $5, $6, 'pendiente', true, $7, $8)
            RETURNING id`,
           [
-            ALQUILOYA_EMPRESA_ID,
+            EMPRESA_ID,
             propNombre,
             propEmail,
             propTelefono,
@@ -452,7 +455,7 @@ export async function POST(request: Request) {
       } else if (planId || notas || propTelefonoContacto) {
         // Actualizar plan / observaciones / telefono_contacto si llegaron y la fila ya existia
         await client.query(
-          `UPDATE "alquiloya"."propietarios"
+          `UPDATE "${SCHEMA}"."propietarios"
               SET plan_publicacion_id = COALESCE($1, plan_publicacion_id),
                   observaciones       = COALESCE($2, observaciones),
                   telefono_contacto   = COALESCE($3, telefono_contacto),
@@ -467,15 +470,15 @@ export async function POST(request: Request) {
       // propietario ya tenia uno gratis), chequeamos si tiene una propiedad
       // activa creada hace menos de 30 dias. Si si, bloqueamos: tiene que comprar
       // un plan pago para publicar otra. La regla aplica por propietario_id
-      // (vale tanto si publica un dueño directo como un agente publicando
+      // (vale tanto si publica un dueÃ±o directo como un agente publicando
       // para ese propietario).
       let efectivoPlanEsGratis = planEsGratis;
       if (!efectivoPlanEsGratis) {
         // Si no llego planId en este request, mirar el plan actual del propietario.
         const propPlan = await client.query<{ billing: string | null; tier: string | null }>(
           `SELECT pp.billing, pp.tier
-             FROM "alquiloya"."propietarios" p
-             LEFT JOIN "alquiloya"."planes_publicacion" pp ON pp.id = p.plan_publicacion_id
+             FROM "${SCHEMA}"."propietarios" p
+             LEFT JOIN "${SCHEMA}"."planes_publicacion" pp ON pp.id = p.plan_publicacion_id
             WHERE p.id = $1::uuid LIMIT 1`,
           [propietarioId]
         );
@@ -485,20 +488,20 @@ export async function POST(request: Request) {
       if (efectivoPlanEsGratis) {
         const dup = await client.query<{ n: number }>(
           `SELECT count(*)::int AS n
-             FROM "alquiloya"."propiedades"
+             FROM "${SCHEMA}"."propiedades"
             WHERE empresa_id = $1::uuid
               AND propietario_id = $2::uuid
               AND activo = true
               AND created_at > now() - interval '30 days'`,
-          [ALQUILOYA_EMPRESA_ID, propietarioId]
+          [EMPRESA_ID, propietarioId]
         );
         if ((dup.rows[0]?.n ?? 0) >= 1) {
           await client.query("ROLLBACK");
           return NextResponse.json(
             {
               error:
-                "Ya tenés una publicación gratuita activa de los últimos 30 días. " +
-                "Comprá un plan pago para publicar más propiedades.",
+                "Ya tenÃ©s una publicaciÃ³n gratuita activa de los Ãºltimos 30 dÃ­as. " +
+                "ComprÃ¡ un plan pago para publicar mÃ¡s propiedades.",
               code: "FREE_PLAN_LIMIT",
             },
             { status: 409 }
@@ -506,10 +509,10 @@ export async function POST(request: Request) {
         }
       }
 
-      // 2. Insertar propiedad — siempre como NO publicada/inactiva, linkeada
+      // 2. Insertar propiedad â€” siempre como NO publicada/inactiva, linkeada
       // al agente_id resuelto desde la sesion (ya no se crea con agente_id=NULL).
       const ins = await client.query<{ id: string; codigo: string | null }>(
-        `INSERT INTO "alquiloya"."propiedades" (
+        `INSERT INTO "${SCHEMA}"."propiedades" (
            empresa_id, propietario_id, agente_id, codigo, titulo, descripcion,
            tipo, operacion, estado, ciudad, barrio, direccion,
            precio, moneda, dormitorios, banos, cocheras,
@@ -528,7 +531,7 @@ export async function POST(request: Request) {
          )
          RETURNING id, codigo`,
         [
-          ALQUILOYA_EMPRESA_ID,
+          EMPRESA_ID,
           propietarioId,
           agenteId,
           titulo,
@@ -557,11 +560,11 @@ export async function POST(request: Request) {
         const url = sanitizeImageUrl(f?.url, 1024);
         if (!url) continue;
         await client.query(
-          `INSERT INTO "alquiloya"."propiedad_fotos"
+          `INSERT INTO "${SCHEMA}"."propiedad_fotos"
              (empresa_id, propiedad_id, url, alt, orden, es_portada, activo)
            VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, true)`,
           [
-            ALQUILOYA_EMPRESA_ID, propId, url,
+            EMPRESA_ID, propId, url,
             s(f?.alt, 240),
             orden,
             orden === 0 ? true : !!f?.es_portada,
@@ -570,17 +573,17 @@ export async function POST(request: Request) {
         orden++;
       }
 
-      // 4. Características
+      // 4. CaracterÃ­sticas
       let cOrden = 0;
       for (const c of carac) {
         const nombre = s(c?.nombre, 120);
         if (!nombre) continue;
         await client.query(
-          `INSERT INTO "alquiloya"."propiedad_caracteristicas"
+          `INSERT INTO "${SCHEMA}"."propiedad_caracteristicas"
              (empresa_id, propiedad_id, nombre, valor, icono, orden, activo)
            VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, true)`,
           [
-            ALQUILOYA_EMPRESA_ID, propId, nombre,
+            EMPRESA_ID, propId, nombre,
             s(c?.valor, 240),
             s(c?.icono, 60),
             cOrden,
@@ -618,7 +621,7 @@ export async function POST(request: Request) {
         estado: "inactiva",
         visible_web: false,
         activo: false,
-        message: "Tu propiedad fue enviada para revisión. El equipo de AlquiloYa la revisará antes de publicarla.",
+        message: "Tu propiedad fue enviada para revisiÃ³n. El equipo de AlquiloYa la revisarÃ¡ antes de publicarla.",
       });
     } catch (e) {
       await client.query("ROLLBACK").catch(() => {});

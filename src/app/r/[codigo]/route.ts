@@ -5,11 +5,13 @@ import { getChatServiceClientForEmpresa } from "@/lib/supabase/chat-service-role
 import type { AppSupabaseClient } from "@/lib/supabase/schema";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 
 /**
  * Branch AlquiloYa: cuando /r/{slug} se hits SIN `?sorteo=`, se interpreta
@@ -54,7 +56,7 @@ async function handleAlquiloyaReferralRedirect(
         AND lower(trim(l.slug)) = lower(trim($2))
       ORDER BY l.activo DESC, l.created_at ASC
       LIMIT 1`,
-    [ALQUILOYA_EMPRESA_ID, slug]
+    [EMPRESA_ID, slug]
   );
 
   const link = rows?.[0];
@@ -114,7 +116,7 @@ async function handleAlquiloyaReferralRedirect(
        )
        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [
-        ALQUILOYA_EMPRESA_ID,
+        EMPRESA_ID,
         link.id,
         slug,
         ipHash,

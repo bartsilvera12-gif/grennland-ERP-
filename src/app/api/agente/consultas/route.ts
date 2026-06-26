@@ -4,12 +4,13 @@ import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 
 function t(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
     if (!user?.id) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
     const supabase = createServiceRoleClient();
     const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
-    if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuario || usuario.empresa_id !== EMPRESA_ID) {
       return NextResponse.json({ error: "Usuario no resuelto" }, { status: 404 });
     }
     const { data: uExt } = await supabase
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
         WHERE c.empresa_id = $1::uuid AND c.agente_id = $2::uuid
         ORDER BY c.created_at DESC NULLS LAST
         LIMIT ${limit}`,
-      [ALQUILOYA_EMPRESA_ID, agenteId]
+      [EMPRESA_ID, agenteId]
     );
     return NextResponse.json({ success: true, consultas: rows ?? [] });
   } catch (err) {

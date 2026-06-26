@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { successResponse, errorResponse } from "@/lib/api/response";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 
 function s(v: unknown, max = 500): string | null {
   if (typeof v !== "string") return null;
@@ -45,7 +48,7 @@ export async function POST(request: Request) {
     const email = s(body.email, 160);
     const telefono = s(body.telefono, 40);
     if (!email && !telefono) {
-      return NextResponse.json(errorResponse("ingresá al menos email o telefono"), { status: 400 });
+      return NextResponse.json(errorResponse("ingresÃ¡ al menos email o telefono"), { status: 400 });
     }
 
     const empresa = s(body.empresa, 160);
@@ -104,14 +107,14 @@ export async function POST(request: Request) {
       : null;
 
     const cols: string[] = ["empresa_id", "tipo", "sub_tipo", "nombre", "email", "telefono", "empresa", "ciudad", "mensaje", "estado"];
-    const vals: unknown[] = [ALQUILOYA_EMPRESA_ID, tipo, subTipo, nombre, email, telefono, empresa, ciudad, mensaje, "pendiente"];
+    const vals: unknown[] = [EMPRESA_ID, tipo, subTipo, nombre, email, telefono, empresa, ciudad, mensaje, "pendiente"];
     if (hasPlanTier) { cols.push("plan_tier_solicitado"); vals.push(planTier); }
     if (hasTerminosAt && aceptoTerminos) { cols.push("terminos_aceptados_at"); vals.push(new Date().toISOString()); }
     if (hasTerminosVer && aceptoTerminos) { cols.push("terminos_version"); vals.push(terminosVersion); }
     if (hasTerminosIp && aceptoTerminos && terminosIp) { cols.push("terminos_ip"); vals.push(terminosIp); }
 
     const placeholders = cols.map((c, i) => (c === "empresa_id" ? `$${i + 1}::uuid` : `$${i + 1}`)).join(", ");
-    const sql = `INSERT INTO "alquiloya"."solicitudes_acceso" (${cols.map((c) => `"${c}"`).join(", ")})
+    const sql = `INSERT INTO "${SCHEMA}"."solicitudes_acceso" (${cols.map((c) => `"${c}"`).join(", ")})
                  VALUES (${placeholders})
                  RETURNING id`;
 

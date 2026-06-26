@@ -1,9 +1,10 @@
 import "server-only";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-export const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+export const EMPRESA_ID = getClientEmpresaId();
 
 function q(table: string): string {
   return `"${ALQUILOYA_SCHEMA}"."${table}"`;
@@ -58,7 +59,7 @@ export async function listErpAgentePosts(): Promise<AgentePostRow[]> {
          ON a.id = p.agente_id AND a.empresa_id = p.empresa_id
       WHERE p.empresa_id = $1::uuid
       ORDER BY p.updated_at DESC NULLS LAST, p.titulo ASC`,
-    [ALQUILOYA_EMPRESA_ID]
+    [EMPRESA_ID]
   );
   return rows ?? [];
 }

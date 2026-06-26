@@ -3,17 +3,18 @@ import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { readAvatarFile, uploadAvatar, extForMime } from "@/lib/alquiloya/avatar-storage";
+import { getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 
 /**
  * POST /api/agente/me/foto
  *
  * Sube/cambia la foto de perfil del agente autenticado. Multipart con campo
- * `file`. Guarda la imagen en el bucket público `avatars` y persiste la URL en
+ * `file`. Guarda la imagen en el bucket pÃºblico `avatars` y persiste la URL en
  * `alquiloya.agentes.foto_url`. Devuelve `{ success, foto_url }`.
  */
 export async function POST(request: Request) {
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
 
     const supabase = createServiceRoleClient();
     const usuario = await resolveUsuarioErpFromAuthUser(supabase, user);
-    if (!usuario || usuario.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuario || usuario.empresa_id !== EMPRESA_ID) {
       return NextResponse.json({ error: "Usuario no autorizado" }, { status: 403 });
     }
 
@@ -40,14 +41,14 @@ export async function POST(request: Request) {
     const parsed = await readAvatarFile(form?.get("file"));
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: parsed.status });
 
-    const objectPath = `agentes/${ALQUILOYA_EMPRESA_ID}/${agenteId}.${extForMime(parsed.mime)}`;
+    const objectPath = `agentes/${EMPRESA_ID}/${agenteId}.${extForMime(parsed.mime)}`;
     const fotoUrl = await uploadAvatar(supabase, objectPath, parsed.bytes, parsed.mime);
 
     const { error: updErr } = await supabase
       .from("agentes")
       .update({ foto_url: fotoUrl })
       .eq("id", agenteId)
-      .eq("empresa_id", ALQUILOYA_EMPRESA_ID);
+      .eq("empresa_id", EMPRESA_ID);
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
     return NextResponse.json({ success: true, foto_url: fotoUrl });

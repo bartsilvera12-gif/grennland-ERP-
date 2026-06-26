@@ -3,16 +3,19 @@ import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { sanitizeBlogHtml } from "@/lib/alquiloya/sanitize-blog-html";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 function slugify(s: string): string {
-  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+  return s.toLowerCase().normalize("NFD").replace(/[Ì€-Í¯]/g, "")
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
 }
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function s(v: unknown, max = 5000): string | null {
@@ -83,9 +86,9 @@ export async function PATCH(request: Request, ctx: Ctx) {
     }
     if (sets.length === 0) return NextResponse.json({ error: "sin cambios" }, { status: 400 });
 
-    vals.push(ALQUILOYA_EMPRESA_ID);
+    vals.push(EMPRESA_ID);
     vals.push(id);
-    const sql = `UPDATE "alquiloya"."agente_posts" SET ${sets.join(", ")}
+    const sql = `UPDATE "${SCHEMA}"."agente_posts" SET ${sets.join(", ")}
                   WHERE empresa_id=$${vals.length - 1}::uuid AND id=$${vals.length}::uuid
                   RETURNING id`;
     const r = await queryWithRetry<{ id: string }>(pool, sql, vals);
@@ -111,10 +114,10 @@ export async function DELETE(request: Request, ctx: Ctx) {
     if (!pool) return NextResponse.json({ error: "Pool no disponible" }, { status: 500 });
     const r = await queryWithRetry<{ id: string }>(
       pool,
-      `DELETE FROM "alquiloya"."agente_posts"
+      `DELETE FROM "${SCHEMA}"."agente_posts"
         WHERE empresa_id=$1::uuid AND id=$2::uuid
         RETURNING id`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
     if (!r.rows || r.rows.length === 0) return NextResponse.json({ error: "no encontrado" }, { status: 404 });
     return NextResponse.json({ success: true, id: r.rows[0].id });

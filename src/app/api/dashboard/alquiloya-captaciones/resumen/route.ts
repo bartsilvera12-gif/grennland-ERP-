@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 
 export async function GET(request: Request) {
   try {
@@ -37,9 +40,9 @@ export async function GET(request: Request) {
          count(*) FILTER (WHERE etapa='rechazado')::int                     AS rechazado,
          count(*) FILTER (WHERE created_at >= now() - interval '7 days')::int  AS ult_7,
          count(*) FILTER (WHERE created_at >= now() - interval '30 days')::int AS ult_30
-       FROM "alquiloya"."agente_captaciones"
+       FROM "${SCHEMA}"."agente_captaciones"
        WHERE empresa_id = $1::uuid`,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
     const c = cards.rows[0] ?? {
       total: 0, nuevo: 0, contacto: 0, negocio_activo: 0,
@@ -71,16 +74,16 @@ export async function GET(request: Request) {
          count(*) FILTER (WHERE c.etapa='negocio_activo')::int AS negocio_activo,
          count(*) FILTER (WHERE c.etapa='cerrado')::int        AS cerrado,
          count(*) FILTER (WHERE c.etapa='rechazado')::int      AS rechazado
-       FROM "alquiloya"."agente_captaciones" c
-       LEFT JOIN "alquiloya"."agentes" a
+       FROM "${SCHEMA}"."agente_captaciones" c
+       LEFT JOIN "${SCHEMA}"."agentes" a
          ON a.id = c.agente_id AND a.empresa_id = c.empresa_id
        WHERE c.empresa_id = $1::uuid
        GROUP BY c.agente_id, a.nombre
        ORDER BY total DESC, a.nombre ASC NULLS LAST`,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
 
-    // 3. By date — últimos 30 días por día (serie completa, incluye días sin captaciones)
+    // 3. By date â€” Ãºltimos 30 dÃ­as por dÃ­a (serie completa, incluye dÃ­as sin captaciones)
     const byDate = await queryWithRetry<{ dia: string; total: number }>(
       pool,
       `WITH dias AS (
@@ -92,13 +95,13 @@ export async function GET(request: Request) {
          FROM dias d
          LEFT JOIN (
            SELECT date_trunc('day', created_at)::date AS dia, count(*)::int AS n
-             FROM "alquiloya"."agente_captaciones"
+             FROM "${SCHEMA}"."agente_captaciones"
             WHERE empresa_id = $1::uuid
               AND created_at >= now() - interval '30 days'
             GROUP BY 1
          ) c ON c.dia = d.dia
         ORDER BY d.dia ASC`,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
 
     // 4. By status (flat)
@@ -110,20 +113,20 @@ export async function GET(request: Request) {
       { etapa: "rechazado", n: c.rechazado },
     ];
 
-    // 5. Recent items (últimas 20)
+    // 5. Recent items (Ãºltimas 20)
     const recent = await queryWithRetry(
       pool,
       `SELECT c.id, c.propietario_nombre, c.propietario_email, c.propietario_telefono,
               c.propiedad_titulo, c.ciudad, c.barrio, c.etapa, c.estado,
               c.created_at::text AS created_at,
               c.agente_id, a.nombre AS agente_nombre
-         FROM "alquiloya"."agente_captaciones" c
-         LEFT JOIN "alquiloya"."agentes" a
+         FROM "${SCHEMA}"."agente_captaciones" c
+         LEFT JOIN "${SCHEMA}"."agentes" a
            ON a.id = c.agente_id AND a.empresa_id = c.empresa_id
         WHERE c.empresa_id = $1::uuid
         ORDER BY c.created_at DESC
         LIMIT 20`,
-      [ALQUILOYA_EMPRESA_ID]
+      [EMPRESA_ID]
     );
 
     return NextResponse.json({

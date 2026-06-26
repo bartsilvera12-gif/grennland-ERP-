@@ -5,12 +5,13 @@ import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { sendMail } from "@/lib/email/send-mail";
 import { renderAccesoAprobadoEmail } from "@/lib/email/templates/acceso-aprobado";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function t(table: string): string {
@@ -23,9 +24,9 @@ function s(v: unknown): string | null {
   return x.length > 0 ? x : null;
 }
 
-/** Genera contraseña temporal robusta (no se guarda en DB). */
+/** Genera contraseÃ±a temporal robusta (no se guarda en DB). */
 function generateTempPassword(): string {
-  // 24 chars con base64url + suffix de un símbolo para satisfacer policies.
+  // 24 chars con base64url + suffix de un sÃ­mbolo para satisfacer policies.
   const bytes = new Uint8Array(18);
   crypto.getRandomValues(bytes);
   const b64 = Buffer.from(bytes).toString("base64").replace(/\+/g, "A").replace(/\//g, "B").replace(/=/g, "");
@@ -36,16 +37,16 @@ type PostBody = {
   tipo?: "agente" | "propietario" | "referido_partner";
   id?: string;
   email?: string;
-  // Para referido_partner el admin puede definir la contraseña.
-  // Si no se envía, se genera una temporal como en los otros flujos.
+  // Para referido_partner el admin puede definir la contraseÃ±a.
+  // Si no se envÃ­a, se genera una temporal como en los otros flujos.
   password?: string;
 };
 
 /**
- * Busca un usuario en Supabase Auth por email recorriendo páginas de listUsers.
+ * Busca un usuario en Supabase Auth por email recorriendo pÃ¡ginas de listUsers.
  * Se usa solo cuando createUser falla por email duplicado.
- * El tipo de `admin` se acota con `unknown`/cast local para evitar fricción
- * con los genéricos de `SupabaseClient` (que cambian entre versiones).
+ * El tipo de `admin` se acota con `unknown`/cast local para evitar fricciÃ³n
+ * con los genÃ©ricos de `SupabaseClient` (que cambian entre versiones).
  */
 async function findAuthUserByEmail(
   admin: {
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
         pool,
         `SELECT email, nombre FROM ${t("agentes")}
           WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-        [ALQUILOYA_EMPRESA_ID, targetId]
+        [EMPRESA_ID, targetId]
       );
       if (!r.rows || r.rows.length === 0) {
         return NextResponse.json({ error: "agente no encontrado" }, { status: 404 });
@@ -125,7 +126,7 @@ export async function POST(request: Request) {
         pool,
         `SELECT email, nombre, usuario_id FROM ${t("propietarios")}
           WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-        [ALQUILOYA_EMPRESA_ID, targetId]
+        [EMPRESA_ID, targetId]
       );
       if (!r.rows || r.rows.length === 0) {
         return NextResponse.json({ error: "propietario no encontrado" }, { status: 404 });
@@ -138,7 +139,7 @@ export async function POST(request: Request) {
         pool,
         `SELECT email, nombre, usuario_id FROM ${t("referral_partners")}
           WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-        [ALQUILOYA_EMPRESA_ID, targetId]
+        [EMPRESA_ID, targetId]
       );
       if (!r.rows || r.rows.length === 0) {
         return NextResponse.json({ error: "referido no encontrado" }, { status: 404 });
@@ -156,7 +157,7 @@ export async function POST(request: Request) {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Si el admin define password (caso típico de referido_partner) la usamos
+    // Si el admin define password (caso tÃ­pico de referido_partner) la usamos
     // tal cual; si no, generamos una temporal. NUNCA se guarda en DB.
     const passwordToUse = passwordOverride ?? generateTempPassword();
     const passwordWasAdminProvided = !!passwordOverride;
@@ -186,10 +187,10 @@ export async function POST(request: Request) {
           return NextResponse.json(
             {
               error:
-                `El email "${email}" ya está registrado en Supabase Auth. ` +
+                `El email "${email}" ya estÃ¡ registrado en Supabase Auth. ` +
                 `No reutilizamos cuentas existentes para evitar vincular un ` +
-                `propietario/agente a una cuenta que no es suya. Eliminá la ` +
-                `cuenta existente en Supabase Dashboard → Authentication → Users, ` +
+                `propietario/agente a una cuenta que no es suya. EliminÃ¡ la ` +
+                `cuenta existente en Supabase Dashboard â†’ Authentication â†’ Users, ` +
                 `o pediles que usen un email distinto.`,
             },
             { status: 409 }
@@ -245,7 +246,7 @@ export async function POST(request: Request) {
         ? "propietario_publicador"
         : "referido_partner";
 
-    // ¿Hay ya una fila en usuarios para este auth_user_id?
+    // Â¿Hay ya una fila en usuarios para este auth_user_id?
     const existsByAuth = await queryWithRetry<{ id: string }>(
       pool,
       `SELECT id FROM ${t("usuarios")} WHERE auth_user_id = $1::uuid LIMIT 1`,
@@ -255,7 +256,7 @@ export async function POST(request: Request) {
     let usuarioErpId: string;
     if (existsByAuth.rows && existsByAuth.rows.length > 0) {
       usuarioErpId = existsByAuth.rows[0].id;
-      // Actualizamos sólo lo necesario; no pisamos datos personales si ya existían.
+      // Actualizamos sÃ³lo lo necesario; no pisamos datos personales si ya existÃ­an.
       if (tipo === "agente") {
         await queryWithRetry(
           pool,
@@ -266,7 +267,7 @@ export async function POST(request: Request) {
                   activo = true,
                   estado = COALESCE(estado, 'activo')
             WHERE id = $4::uuid`,
-          [ALQUILOYA_EMPRESA_ID, rol, targetId, usuarioErpId]
+          [EMPRESA_ID, rol, targetId, usuarioErpId]
         );
       } else {
         await queryWithRetry(
@@ -277,7 +278,7 @@ export async function POST(request: Request) {
                   activo = true,
                   estado = COALESCE(estado, 'activo')
             WHERE id = $3::uuid`,
-          [ALQUILOYA_EMPRESA_ID, rol, usuarioErpId]
+          [EMPRESA_ID, rol, usuarioErpId]
         );
       }
     } else {
@@ -290,7 +291,7 @@ export async function POST(request: Request) {
         "activo",
         "estado",
       ];
-      const insertVals: unknown[] = [email, nombre, rol, ALQUILOYA_EMPRESA_ID, authUserId, true, "activo"];
+      const insertVals: unknown[] = [email, nombre, rol, EMPRESA_ID, authUserId, true, "activo"];
       if (tipo === "agente") {
         insertCols.push("agente_id");
         insertVals.push(targetId);
@@ -318,7 +319,7 @@ export async function POST(request: Request) {
             SET usuario_id = $1::uuid, updated_at = now()
           WHERE empresa_id = $2::uuid AND id = $3::uuid
             AND (usuario_id IS NULL OR usuario_id <> $1::uuid)`,
-        [usuarioErpId, ALQUILOYA_EMPRESA_ID, targetId]
+        [usuarioErpId, EMPRESA_ID, targetId]
       );
     } else if (tipo === "referido_partner") {
       await queryWithRetry(
@@ -327,7 +328,7 @@ export async function POST(request: Request) {
             SET usuario_id = $1::uuid, updated_at = now()
           WHERE empresa_id = $2::uuid AND id = $3::uuid
             AND (usuario_id IS NULL OR usuario_id <> $1::uuid)`,
-        [usuarioErpId, ALQUILOYA_EMPRESA_ID, targetId]
+        [usuarioErpId, EMPRESA_ID, targetId]
       );
     }
 
@@ -356,11 +357,11 @@ export async function POST(request: Request) {
         if (result.sent) emailSent = true;
         else {
           emailError = result.reason;
-          console.warn("[alquiloya-accesos] sendMail no envió:", result.reason);
+          console.warn("[alquiloya-accesos] sendMail no enviÃ³:", result.reason);
         }
       } catch (e) {
         emailError = e instanceof Error ? e.message : "Error enviando mail";
-        console.warn("[alquiloya-accesos] excepción en sendMail:", emailError);
+        console.warn("[alquiloya-accesos] excepciÃ³n en sendMail:", emailError);
       }
     }
 
@@ -368,7 +369,7 @@ export async function POST(request: Request) {
       success: true,
       email,
       rol,
-      // Si el admin definió el password, no lo devolvemos (lo conoce).
+      // Si el admin definiÃ³ el password, no lo devolvemos (lo conoce).
       // Si lo generamos, lo devolvemos UNA vez para mostrar en modal.
       temporary_password: createdNewAuthUser && !passwordWasAdminProvided ? passwordToUse : null,
       password_was_admin_provided: passwordWasAdminProvided,

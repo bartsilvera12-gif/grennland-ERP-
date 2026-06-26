@@ -26,6 +26,15 @@ import { ClienteDatosSifenReceptorForm } from "@/components/clientes/ClienteDato
 import type { ClienteTipoServicioRow } from "@/lib/clientes/tipo-servicio-catalogo";
 import { filasTiposDesdeSistemaEstatico, fetchTiposFormCliente } from "@/lib/clientes/fetch-tipos-servicio-form";
 import type { Plan } from "@/lib/planes/types";
+import { SUPABASE_APP_SCHEMA } from "@/lib/supabase/schema";
+
+/**
+ * Modo simplificado del formulario para instancias inmobiliarias (GreenLand).
+ * Oculta: Tipo de servicio, SIFEN receptor, Mensual en condición de pago,
+ * vendedor responsable/asignado, origen, sección de Plan. La data se sigue
+ * persistiendo igual (con valores por defecto), solo cambia la UI.
+ */
+const SIMPLE_CLIENTE = SUPABASE_APP_SCHEMA === "greenland";
 
 export type ClienteNuevoFormProps = {
   variant?: "page" | "modal";
@@ -449,6 +458,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel }: Client
               </div>
             )}
 
+            {!SIMPLE_CLIENTE && (
             <div>
               <label className={labelClass}>Tipo de servicio</label>
               <select
@@ -465,6 +475,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel }: Client
                 ))}
               </select>
             </div>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
@@ -600,6 +611,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel }: Client
               </div>
             </div>
 
+            {!SIMPLE_CLIENTE && (
             <ClienteDatosSifenReceptorForm
               value={{
                 sifen_receptor_manual: form.sifen_receptor_manual,
@@ -666,6 +678,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel }: Client
                 });
               }}
             />
+            )}
           </div>
         </section>
 
@@ -673,7 +686,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel }: Client
         <section className={sectionWrap}>
           <SectionTitle>Datos comerciales</SectionTitle>
           <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className={`grid gap-4 ${SIMPLE_CLIENTE ? "sm:grid-cols-2" : "sm:grid-cols-2 xl:grid-cols-3"}`}>
               <div>
                 <label className={labelClass}>Condición de pago</label>
                 <select
@@ -687,7 +700,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel }: Client
                   <option value="30 DÍAS">30 días</option>
                   <option value="60 DÍAS">60 días</option>
                   <option value="90 DÍAS">90 días</option>
-                  <option value="MENSUAL">Mensual</option>
+                  {!SIMPLE_CLIENTE && <option value="MENSUAL">Mensual</option>}
                 </select>
               </div>
               <div>
@@ -702,6 +715,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel }: Client
                   <option value="USD">Dólares (USD)</option>
                 </select>
               </div>
+              {!SIMPLE_CLIENTE && (
               <div>
                 <label className={labelClass}>Vendedor responsable (usuario ERP)</label>
                 <select
@@ -723,6 +737,8 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel }: Client
                   <p className="mt-1 text-xs text-slate-500">No hay usuarios activos disponibles para asignar.</p>
                 ) : null}
               </div>
+              )}
+              {!SIMPLE_CLIENTE && (
               <div>
                 <label className={labelClass}>Vendedor asignado (texto libre)</label>
                 <input
@@ -734,9 +750,11 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel }: Client
                   className={`${inputClass} uppercase`}
                 />
               </div>
+              )}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className={`grid gap-4 ${SIMPLE_CLIENTE ? "grid-cols-1" : "sm:grid-cols-2"}`}>
+              {!SIMPLE_CLIENTE && (
               <div>
                 <label className={labelClass}>Origen del cliente</label>
                 <select
@@ -751,6 +769,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel }: Client
                   <option value="VENTA">Venta</option>
                 </select>
               </div>
+              )}
               <div>
                 <label className={labelClass}>Estado inicial</label>
                 <select
@@ -765,6 +784,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel }: Client
               </div>
             </div>
 
+            {!SIMPLE_CLIENTE && (
             <div className={planBoxCls}>
               <SectionTitle>Plan</SectionTitle>
               <div>
@@ -790,6 +810,7 @@ function ClienteNuevoFormInner({ variant = "page", onCreated, onCancel }: Client
                 </select>
               </div>
             </div>
+            )}
 
             {form.condicion_pago === "CONTADO" && (
               <div className={planBoxCls}>

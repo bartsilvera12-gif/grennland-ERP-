@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function s(v: unknown): string | null {
@@ -51,6 +54,7 @@ type PatchBody = {
   free_boosts?: number | string | null;
   orden?: number | string;
   activo?: boolean;
+  image_url?: string | null;
 };
 
 export async function PATCH(
@@ -75,7 +79,7 @@ export async function PATCH(
 
     const upd = await queryWithRetry(
       pool,
-      `UPDATE "alquiloya"."planes_publicacion" SET
+      `UPDATE "${SCHEMA}"."planes_publicacion" SET
          tier = $1,
          target = $2,
          nombre = $3,
@@ -90,13 +94,14 @@ export async function PATCH(
          free_boosts = $12,
          orden = COALESCE($13, orden),
          activo = $14,
+         image_url = $15,
          updated_at = now()
-       WHERE id = $15::uuid AND empresa_id = $16::uuid
+       WHERE id = $16::uuid AND empresa_id = $17::uuid
        RETURNING id, tier, target, nombre,
                  precio::float8 AS precio, moneda, billing, badge,
                  COALESCE(bullets, '[]'::jsonb)  AS bullets,
                  COALESCE(excluded, '[]'::jsonb) AS excluded,
-                 cta, highlighted, free_boosts, orden, activo`,
+                 cta, highlighted, free_boosts, orden, activo, image_url`,
       [
         tier,
         s(body.target),
@@ -112,8 +117,9 @@ export async function PATCH(
         i(body.free_boosts),
         i(body.orden),
         b(body.activo, true),
+        s(body.image_url),
         id,
-        ALQUILOYA_EMPRESA_ID,
+        EMPRESA_ID,
       ]
     );
 

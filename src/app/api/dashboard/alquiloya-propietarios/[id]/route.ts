@@ -3,12 +3,13 @@ import { getChatPostgresPool } from "@/lib/supabase/chat-pg-pool";
 import { queryWithRetry } from "@/lib/supabase/pg-retry";
 import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_SCHEMA = "alquiloya";
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const ALQUILOYA_SCHEMA = getClientSchema();
+const EMPRESA_ID = getClientEmpresaId();
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function t(table: string): string {
@@ -40,7 +41,7 @@ export async function GET(_req: Request, ctx: Ctx) {
               estado, activo, plan_publicacion_id, observaciones
          FROM ${t("propietarios")}
         WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
     if (!rows || rows.length === 0) return NextResponse.json({ error: "no encontrado" }, { status: 404 });
     return NextResponse.json({ success: true, data: rows[0] });
@@ -67,14 +68,14 @@ export async function DELETE(request: Request, ctx: Ctx) {
       const chk = await queryWithRetry<{ activo: boolean }>(
         pool,
         `SELECT activo FROM ${t("propietarios")} WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
       if (!chk.rows || chk.rows.length === 0) {
         return NextResponse.json({ error: "no encontrado" }, { status: 404 });
       }
       if (chk.rows[0].activo) {
         return NextResponse.json(
-          { error: "Para eliminar definitivamente, primero desactivá el propietario." },
+          { error: "Para eliminar definitivamente, primero desactivÃ¡ el propietario." },
           { status: 409 }
         );
       }
@@ -88,14 +89,14 @@ export async function DELETE(request: Request, ctx: Ctx) {
           `SELECT id, auth_user_id::text AS auth_user_id
              FROM ${t("usuarios")}
             WHERE empresa_id=$1::uuid AND propietario_id=$2::uuid`,
-          [ALQUILOYA_EMPRESA_ID, id]
+          [EMPRESA_ID, id]
         );
         if (linkedUsers.length > 0) {
           await queryWithRetry(
             pool,
             `DELETE FROM ${t("usuarios")}
               WHERE empresa_id=$1::uuid AND propietario_id=$2::uuid`,
-            [ALQUILOYA_EMPRESA_ID, id]
+            [EMPRESA_ID, id]
           );
           const supabaseAdmin = createServiceRoleClient();
           for (const u of linkedUsers) {
@@ -117,7 +118,7 @@ export async function DELETE(request: Request, ctx: Ctx) {
           `DELETE FROM ${t("propietarios")}
              WHERE empresa_id=$1::uuid AND id=$2::uuid
              RETURNING id`,
-          [ALQUILOYA_EMPRESA_ID, id]
+          [EMPRESA_ID, id]
         );
         if (!r.rows || r.rows.length === 0) {
           return NextResponse.json({ error: "no encontrado" }, { status: 404 });
@@ -140,7 +141,7 @@ export async function DELETE(request: Request, ctx: Ctx) {
       `UPDATE ${t("propietarios")} SET activo = false, updated_at = now()
         WHERE empresa_id = $1::uuid AND id = $2::uuid
         RETURNING id`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
     if (!r.rows || r.rows.length === 0) {
       return NextResponse.json({ error: "no encontrado" }, { status: 404 });
@@ -206,7 +207,7 @@ export async function PATCH(request: Request, ctx: Ctx) {
 
     if (sets.length === 0) return NextResponse.json({ error: "sin cambios" }, { status: 400 });
 
-    vals.push(ALQUILOYA_EMPRESA_ID);
+    vals.push(EMPRESA_ID);
     vals.push(id);
     const sql = `UPDATE ${t("propietarios")} SET ${sets.join(", ")}
                   WHERE empresa_id=$${vals.length - 1}::uuid AND id=$${vals.length}::uuid

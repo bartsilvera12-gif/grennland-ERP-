@@ -5,21 +5,23 @@ import { getAuthUserForApiRoute } from "@/lib/auth/get-auth-user-for-api-route";
 import { createServiceRoleClient } from "@/lib/supabase/service-admin";
 import { resolveUsuarioErpFromAuthUser } from "@/lib/auth/resolve-usuario-erp";
 import { bustOverviewCache } from "@/lib/cache/dashboard-overview-cache";
-import { getClientSchema } from "@/lib/env/instance-mode";
+import { getClientSchema, getClientEmpresaId } from "@/lib/env/instance-mode";
+
+const SCHEMA = getClientSchema();
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALQUILOYA_EMPRESA_ID = "cf5df6fb-7705-4c4e-b29c-97bf5f314d8f";
+const EMPRESA_ID = getClientEmpresaId();
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Bootstrap idempotente del CHECK constraint de estado.
 // Mezcla las migraciones:
 //   - 20260705120000 (estado 'eliminada' para soft-delete)
 //   - 20260706120000 (formas femeninas 'activa'/'alquilada'/'reservada' que
-//     usa el panel del dueño y antes explotaban en el UPDATE por CHECK)
+//     usa el panel del dueÃ±o y antes explotaban en el UPDATE por CHECK)
 // asegura que prod no quede esperando a que alguien corra las migraciones.
 // Corre UNA vez por proceso del Next server.
 let estadoConstraintReady = false;
@@ -73,10 +75,10 @@ const ensureEstadoEliminada = ensureEstadoConstraint;
 
 export async function GET(request: NextRequest, ctx: RouteCtx) {
   const { id } = await ctx.params;
-  // Si el caller es el dueño (agente o propietario) de la propiedad, devolvemos
-  // la ficha aunque esté pausada / pendiente / no visible — sino el wizard del
+  // Si el caller es el dueÃ±o (agente o propietario) de la propiedad, devolvemos
+  // la ficha aunque estÃ© pausada / pendiente / no visible â€” sino el wizard del
   // panel agente no puede prefillear para editarla y aparece "No pudimos cargar
-  // la propiedad para editar". Para visitantes anónimos seguimos aplicando el
+  // la propiedad para editar". Para visitantes anÃ³nimos seguimos aplicando el
   // filtro de visible_web=true + activo=true.
   if (UUID_RE.test(id)) {
     try {
@@ -84,7 +86,7 @@ export async function GET(request: NextRequest, ctx: RouteCtx) {
       if (authUser?.id) {
         const supabase = createServiceRoleClient();
         const usuarioErp = await resolveUsuarioErpFromAuthUser(supabase, authUser);
-        if (usuarioErp && usuarioErp.empresa_id === ALQUILOYA_EMPRESA_ID) {
+        if (usuarioErp && usuarioErp.empresa_id === EMPRESA_ID) {
           const { data: uExt } = await supabase
             .from("usuarios")
             .select("agente_id, propietario_id")
@@ -98,9 +100,9 @@ export async function GET(request: NextRequest, ctx: RouteCtx) {
             if (pool) {
               const own = await pool.query<{ propietario_id: string | null; agente_id: string | null }>(
                 `SELECT propietario_id::text AS propietario_id, agente_id::text AS agente_id
-                   FROM "alquiloya"."propiedades"
+                   FROM "${SCHEMA}"."propiedades"
                   WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-                [ALQUILOYA_EMPRESA_ID, id]
+                [EMPRESA_ID, id]
               );
               const owns =
                 own.rows.length > 0 &&
@@ -112,15 +114,15 @@ export async function GET(request: NextRequest, ctx: RouteCtx) {
         }
       }
     } catch (e) {
-      // No bloqueamos la GET pública por un fallo de auth — caemos al filtro
-      // público estricto.
+      // No bloqueamos la GET pÃºblica por un fallo de auth â€” caemos al filtro
+      // pÃºblico estricto.
       console.warn("[api/public/alquiloya/propiedades/[id] GET ownership]", e instanceof Error ? e.message : e);
     }
   }
   return getPublicPropiedad(id);
 }
 
-// ── PATCH público — edicion por el dueño desde el panel agente/propietario ──
+// â”€â”€ PATCH pÃºblico â€” edicion por el dueÃ±o desde el panel agente/propietario â”€â”€
 //
 // El usuario logueado puede editar SU propia propiedad (match por
 // propietario_id o agente_id contra alquiloya.usuarios). Reemplaza fotos y
@@ -190,7 +192,7 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
     }
     const supabase = createServiceRoleClient();
     const usuarioErp = await resolveUsuarioErpFromAuthUser(supabase, authUser);
-    if (!usuarioErp || usuarioErp.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuarioErp || usuarioErp.empresa_id !== EMPRESA_ID) {
       return NextResponse.json({ error: "Usuario no autorizado" }, { status: 403 });
     }
     const { data: uExt } = await supabase
@@ -211,9 +213,9 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
     // Ownership check.
     const own = await pool.query<{ propietario_id: string | null; agente_id: string | null }>(
       `SELECT propietario_id::text AS propietario_id, agente_id::text AS agente_id
-         FROM "alquiloya"."propiedades"
+         FROM "${SCHEMA}"."propiedades"
         WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
     if (own.rows.length === 0) {
       return NextResponse.json({ error: "no encontrada" }, { status: 404 });
@@ -302,7 +304,7 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
       }
     }
 
-    // ─── Re-moderacion automatica ─────────────────────────────────────
+    // â”€â”€â”€ Re-moderacion automatica â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Si el dueno edita cualquier campo de CONTENIDO (titulo, fotos,
     // precio, etc.) la propiedad sale de publicacion y vuelve a la cola
     // del admin. Las propiedades ya aprobadas tienen aprobada_at != null.
@@ -326,7 +328,7 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
     }
 
     // Si el PATCH toca estado, aseguramos que el CHECK constraint acepte el
-    // nuevo valor antes de intentar el UPDATE. Antes el panel del dueño
+    // nuevo valor antes de intentar el UPDATE. Antes el panel del dueÃ±o
     // veia "no se pudo cambiar el estado" porque la DB rechazaba "activa".
     if (body.estado !== undefined) {
       await ensureEstadoConstraint(pool);
@@ -336,10 +338,10 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
     try {
       await client.query("BEGIN");
       if (sets.length > 0) {
-        vals.push(ALQUILOYA_EMPRESA_ID);
+        vals.push(EMPRESA_ID);
         vals.push(id);
         await client.query(
-          `UPDATE "alquiloya"."propiedades"
+          `UPDATE "${SCHEMA}"."propiedades"
              SET ${sets.join(", ")}, updated_at = now()
             WHERE empresa_id=$${vals.length - 1}::uuid AND id=$${vals.length}::uuid`,
           vals
@@ -350,19 +352,19 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
       // vienen, no las tocamos.
       if (Array.isArray(body.fotos)) {
         await client.query(
-          `DELETE FROM "alquiloya"."propiedad_fotos" WHERE empresa_id=$1::uuid AND propiedad_id=$2::uuid`,
-          [ALQUILOYA_EMPRESA_ID, id]
+          `DELETE FROM "${SCHEMA}"."propiedad_fotos" WHERE empresa_id=$1::uuid AND propiedad_id=$2::uuid`,
+          [EMPRESA_ID, id]
         );
         let orden = 0;
         for (const f of body.fotos as { url?: unknown; alt?: unknown; es_portada?: unknown }[]) {
           const url = sanitizeImageUrl(f?.url, 1024);
           if (!url) continue;
           await client.query(
-            `INSERT INTO "alquiloya"."propiedad_fotos"
+            `INSERT INTO "${SCHEMA}"."propiedad_fotos"
                (empresa_id, propiedad_id, url, alt, orden, es_portada, activo)
              VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, true)`,
             [
-              ALQUILOYA_EMPRESA_ID, id, url,
+              EMPRESA_ID, id, url,
               s(f?.alt, 240) ?? null,
               orden,
               orden === 0 ? true : !!f?.es_portada,
@@ -374,19 +376,19 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
 
       if (Array.isArray(body.caracteristicas)) {
         await client.query(
-          `DELETE FROM "alquiloya"."propiedad_caracteristicas" WHERE empresa_id=$1::uuid AND propiedad_id=$2::uuid`,
-          [ALQUILOYA_EMPRESA_ID, id]
+          `DELETE FROM "${SCHEMA}"."propiedad_caracteristicas" WHERE empresa_id=$1::uuid AND propiedad_id=$2::uuid`,
+          [EMPRESA_ID, id]
         );
         let co = 0;
         for (const c of body.caracteristicas as { nombre?: unknown; valor?: unknown; icono?: unknown }[]) {
           const nombre = s(c?.nombre, 120);
           if (!nombre) continue;
           await client.query(
-            `INSERT INTO "alquiloya"."propiedad_caracteristicas"
+            `INSERT INTO "${SCHEMA}"."propiedad_caracteristicas"
                (empresa_id, propiedad_id, nombre, valor, icono, orden, activo)
              VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, true)`,
             [
-              ALQUILOYA_EMPRESA_ID, id, nombre,
+              EMPRESA_ID, id, nombre,
               s(c?.valor, 240) ?? null,
               s(c?.icono, 60) ?? null,
               co,
@@ -413,7 +415,7 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
   }
 }
 
-// ── DELETE — soft-delete del dueno ──────────────────────────────────────────
+// â”€â”€ DELETE â€” soft-delete del dueno â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // No borramos la fila: marcamos activo=false + visible_web=false. Asi queda
 // auditable y reversible desde el admin global si el usuario se arrepiente.
 export async function DELETE(request: Request, ctx: RouteCtx) {
@@ -428,7 +430,7 @@ export async function DELETE(request: Request, ctx: RouteCtx) {
     }
     const supabase = createServiceRoleClient();
     const usuarioErp = await resolveUsuarioErpFromAuthUser(supabase, authUser);
-    if (!usuarioErp || usuarioErp.empresa_id !== ALQUILOYA_EMPRESA_ID) {
+    if (!usuarioErp || usuarioErp.empresa_id !== EMPRESA_ID) {
       return NextResponse.json({ error: "Usuario no autorizado" }, { status: 403 });
     }
     const { data: uExt } = await supabase
@@ -448,9 +450,9 @@ export async function DELETE(request: Request, ctx: RouteCtx) {
 
     const own = await pool.query<{ propietario_id: string | null; agente_id: string | null }>(
       `SELECT propietario_id::text AS propietario_id, agente_id::text AS agente_id
-         FROM "alquiloya"."propiedades"
+         FROM "${SCHEMA}"."propiedades"
         WHERE empresa_id=$1::uuid AND id=$2::uuid LIMIT 1`,
-      [ALQUILOYA_EMPRESA_ID, id]
+      [EMPRESA_ID, id]
     );
     if (own.rows.length === 0) {
       return NextResponse.json({ error: "no encontrada" }, { status: 404 });
@@ -468,29 +470,29 @@ export async function DELETE(request: Request, ctx: RouteCtx) {
     await ensureEstadoEliminada(pool);
     try {
       await pool.query(
-        `UPDATE "alquiloya"."propiedades"
+        `UPDATE "${SCHEMA}"."propiedades"
             SET activo = false, visible_web = false, estado = 'eliminada', updated_at = now()
           WHERE empresa_id=$1::uuid AND id=$2::uuid`,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
     } catch {
       // Fallback (CHECK constraint todavia sin 'eliminada'): minimo dejamos
       // la propiedad inactiva y fuera de la web. Reintentar el bootstrap
       // luego termina de limpiarla cuando alguien borre la proxima.
       await pool.query(
-        `UPDATE "alquiloya"."propiedades"
+        `UPDATE "${SCHEMA}"."propiedades"
             SET activo = false, visible_web = false, updated_at = now()
           WHERE empresa_id=$1::uuid AND id=$2::uuid`,
-        [ALQUILOYA_EMPRESA_ID, id]
+        [EMPRESA_ID, id]
       );
     }
     // Invalida el cache SWR del overview del dashboard. Sin esto, el contador
     // "Pendientes de aprobacion" sigue mostrando el numero viejo hasta 30 min
-    // despues de que el dueno borra su propiedad — la lista de pendientes ya
+    // despues de que el dueno borra su propiedad â€” la lista de pendientes ya
     // esta vacia pero la tarjeta del dashboard miente.
     bustOverviewCache(
       getClientSchema(),
-      process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || ALQUILOYA_EMPRESA_ID
+      process.env.NEURA_CLIENT_EMPRESA_ID?.trim() || EMPRESA_ID
     );
     return NextResponse.json({ success: true, id, message: "Propiedad eliminada." });
   } catch (err) {
