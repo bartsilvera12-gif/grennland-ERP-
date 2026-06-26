@@ -1,0 +1,1045 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<!--
+  IMPORTANT: cuando el middleware reescribe "/" del dominio publico
+  (alquiloya.com.py) a "/alquiloya-legacy/index.html", el browser sigue
+  viendo "/" en la barra. Sin <base> los scripts relativos (brand.jsx,
+  home.jsx, etc.) los pediria desde la raiz -> 404. Esta etiqueta hace
+  que TODA URL relativa de este documento se resuelva contra el folder
+  legacy. Las URLs absolutas (/portal-agentes/login, /alquiloya-legacy/
+  assets/icono.png) ignoran el <base>, asi que no las afecta.
+-->
+<base href="/alquiloya-legacy/" />
+<title>AlquiloYa — Donde encontrás más rápido</title>
+<link rel="icon" type="image/png" href="/alquiloya-legacy/assets/icono.png" />
+<link rel="apple-touch-icon" href="/alquiloya-legacy/assets/icono.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="preconnect" href="https://unpkg.com" crossorigin />
+<link rel="dns-prefetch" href="https://unpkg.com" />
+<!-- Preload de los assets críticos de React (más chicos y prioridad alta). -->
+<link rel="preload" as="script" href="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin />
+<link rel="preload" as="script" href="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,800;1,900&family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&family=Nunito:wght@700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<!-- Leaflet defer: solo lo usa /publico#agent y /publico#detail, no bloquea el primer paint. -->
+<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+  :root {
+    --blue: #0058A5;
+    --blue-700: #003e74;
+    --blue-50: #eaf2fb;
+    --blue-100: #d4e6f7;
+    --yellow: #F9B000;
+    --yellow-600: #db9c00;
+    --yellow-50: #fff7e3;
+    --ink: #0b1622;
+    --ink-2: #2a3543;
+    --ink-3: #5b6573;
+    --ink-4: #8893a1;
+    --line: #e7ebf0;
+    --line-2: #eef1f4;
+    --bg: #ffffff;
+    --bg-2: #f6f8fb;
+    --bg-3: #eef2f7;
+    --green: #1f8a5b;
+    --red: #c33636;
+    --radius: 14px;
+    --radius-lg: 20px;
+    --shadow-sm: 0 1px 2px rgba(11,22,34,.05), 0 1px 1px rgba(11,22,34,.04);
+    --shadow: 0 2px 6px rgba(11,22,34,.06), 0 8px 24px rgba(11,22,34,.06);
+    --shadow-lg: 0 10px 30px rgba(11,22,34,.10), 0 30px 60px rgba(11,22,34,.08);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg-2); color: var(--ink); font-family: 'Poppins', system-ui, sans-serif; font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  h1,h2,h3,h4,h5 { font-family: 'Montserrat', sans-serif; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); margin: 0; }
+  h1 { font-size: 56px; line-height: 1.05; letter-spacing: -0.02em; font-weight: 900; }
+  h2 { font-size: 36px; line-height: 1.1; letter-spacing: -0.02em; }
+  h3 { font-size: 22px; line-height: 1.2; }
+  p { margin: 0; color: var(--ink-2); }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: 15px; color: var(--ink); }
+  a { color: inherit; text-decoration: none; }
+  ::selection { background: var(--yellow); color: var(--ink); }
+
+  /* App shell */
+  .app-shell { min-height: 100vh; }
+  .container { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+  .container-wide { max-width: 1440px; margin: 0 auto; padding: 0 32px; }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border-radius: 999px; font-weight: 600; font-size: 14.5px; border: none; transition: transform .15s ease, box-shadow .15s ease, background .15s ease; white-space: nowrap; }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--yellow); color: var(--ink); }
+  .btn-primary:hover { background: var(--yellow-600); box-shadow: 0 6px 18px rgba(249,176,0,.35); }
+  .btn-blue { background: var(--blue); color: #fff; }
+  .btn-blue:hover { background: var(--blue-700); box-shadow: 0 6px 18px rgba(0,88,165,.35); }
+  .btn-ghost { background: transparent; color: var(--ink); }
+  .btn-ghost:hover { background: var(--bg-3); }
+  .btn-outline { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+  .btn-outline:hover { border-color: var(--ink-3); }
+  .btn-wa { background: #25D366; color: #fff; }
+  .btn-wa:hover { background: #1ebd5b; }
+  .btn-sm { padding: 8px 14px; font-size: 13px; }
+  .btn-lg { padding: 16px 24px; font-size: 16px; }
+
+  /* Badges */
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 1; }
+  .badge-verified { background: var(--blue); color: #fff; }
+  .badge-featured { background: var(--yellow); color: var(--ink); }
+  .badge-new { background: var(--green); color: #fff; }
+  .badge-temporal { background: #6e3ad1; color: #fff; }
+  .badge-soft { background: var(--blue-50); color: var(--blue); }
+  .badge-soft-yellow { background: var(--yellow-50); color: #8a5e00; }
+
+  /* Cards */
+  .card { background: #fff; border-radius: var(--radius); border: 1px solid var(--line); box-shadow: var(--shadow-sm); }
+  .card-soft { background: var(--bg-2); border-radius: var(--radius); border: 1px solid var(--line-2); }
+
+  /* Inputs */
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12.5px; font-weight: 600; color: var(--ink-3); letter-spacing: .02em; text-transform: uppercase; }
+  .input, .select { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: #fff; outline: none; transition: border-color .15s, box-shadow .15s; }
+  .input:focus, .select:focus { border-color: var(--blue); box-shadow: 0 0 0 4px var(--blue-50); }
+
+  /* Pretty select — applies globally to every native select */
+  select, .select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%230058A5' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 14px;
+    padding-right: 38px !important;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s, background-color .15s;
+  }
+  select:hover, .select:hover { border-color: var(--blue-100); }
+  select:focus, .select:focus { border-color: var(--blue); box-shadow: 0 0 0 4px var(--blue-50); }
+  /* Style the dropdown options (Chromium/Edge support partial — best effort) */
+  select option { padding: 10px 14px; font-size: 14px; color: var(--ink); background: #fff; }
+  select option:checked { background: var(--blue-50); color: var(--blue); font-weight: 600; }
+  /* Remove the chevron for the borderless inline selects in HeroSearch (they have their own chevron rendered by React) */
+  .hero-search-select { background-image: none !important; padding-right: 0 !important; }
+  .checkbox { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+  .checkbox input { width: 16px; height: 16px; accent-color: var(--blue); }
+
+  /* Util */
+  .row { display: flex; align-items: center; }
+  .col { display: flex; flex-direction: column; }
+  .between { justify-content: space-between; }
+  .gap-4 { gap: 4px; } .gap-8 { gap: 8px; } .gap-12 { gap: 12px; } .gap-16 { gap: 16px; } .gap-20 { gap: 20px; } .gap-24 { gap: 24px; } .gap-32 { gap: 32px; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .muted { color: var(--ink-3); }
+  .mut2 { color: var(--ink-4); }
+  .small { font-size: 13px; }
+  .xs { font-size: 12px; }
+  .tag { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--blue); }
+  .divider { height: 1px; background: var(--line); }
+  .pill { padding: 6px 12px; border-radius: 999px; background: var(--bg-3); font-size: 13px; font-weight: 500; color: var(--ink-2); }
+  .pill-active { background: var(--ink); color: #fff; }
+
+  /* Animations */
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(12px);} to { opacity: 1; transform: none;} }
+  @keyframes fadeIn { from { opacity: 0;} to { opacity: 1;} }
+  .fade-up { animation: fadeUp .5s ease both; }
+  .fade-in { animation: fadeIn .4s ease both; }
+
+  /* Featured property cards — staggered reveal on scroll */
+  @keyframes featuredReveal {
+    0%   { opacity: 0; transform: translateY(28px) scale(.96); }
+    60%  { opacity: 1; }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .featured-reveal {
+    animation: featuredReveal .65s cubic-bezier(.22,1,.36,1) both;
+    will-change: transform, opacity;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .featured-reveal { animation: none !important; opacity: 1 !important; transform: none !important; }
+  }
+
+  /* VIVIO typing indicator dots */
+  @keyframes vivioBlink {
+    0%, 80%, 100% { opacity: .25; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-2px); }
+  }
+
+  /* Hide decorative hero illustration in header on smaller screens */
+  @media (max-width: 900px) {
+    .header-hero-deco { display: none !important; }
+  }
+
+  /* Hero "rápido" emphasis — runs ONCE on page entry (~900ms), then stays static */
+  @keyframes rapidoBounce {
+    0%   { transform: scale(.88); opacity: 0; }
+    55%  { transform: scale(1.08); opacity: 1; }
+    75%  { transform: scale(.97); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes rapidoShimmer {
+    0%   { background-position: 200% 50%; }
+    100% { background-position: -50% 50%; }
+  }
+  @keyframes rapidoUnderlineDraw {
+    0%   { stroke-dashoffset: 220; }
+    100% { stroke-dashoffset: 0; }
+  }
+  .rapido-emph {
+    display: inline-block;
+    transform-origin: center bottom;
+    will-change: transform, opacity;
+    background-image: linear-gradient(100deg, transparent 30%, rgba(255,255,255,.6) 50%, transparent 70%);
+    background-size: 200% 100%;
+    background-position: 200% 50%;
+    background-repeat: no-repeat;
+    -webkit-background-clip: text;
+    background-clip: text;
+    animation:
+      rapidoBounce 900ms cubic-bezier(.34,1.56,.64,1) .15s both,
+      rapidoShimmer 900ms ease-out .35s both;
+  }
+  .rapido-underline {
+    stroke-dasharray: 220;
+    stroke-dashoffset: 220;
+    animation: rapidoUnderlineDraw 800ms ease-out .55s both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rapido-emph { animation: none !important; background-image: none !important; opacity: 1; transform: none; }
+    .rapido-underline { animation: none !important; stroke-dasharray: none; stroke-dashoffset: 0 !important; }
+  }
+
+  /* Photo placeholders */
+  .photo { background: linear-gradient(135deg, #c9d6e6, #eaf2fb); position: relative; overflow: hidden; }
+  .photo::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, rgba(255,255,255,0) 0 14px, rgba(255,255,255,.35) 14px 16px); pointer-events: none; opacity: .55; }
+  .photo img { width: 100%; height: 100%; object-fit: cover; display: block; position: relative; z-index: 1; }
+  .photo-label { position: absolute; bottom: 10px; left: 10px; z-index: 2; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: rgba(0,0,0,.5); background: rgba(255,255,255,.85); padding: 4px 8px; border-radius: 6px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #ccd5e0; border-radius: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  /* Tooltip-like floating note */
+  .float-note { position: fixed; bottom: 16px; right: 16px; background: var(--ink); color: #fff; padding: 10px 14px; border-radius: 10px; font-size: 12.5px; font-family: 'JetBrains Mono', monospace; opacity: .9; z-index: 50; }
+
+  /* ===== Responsive / adaptive layer (visual only) ===== */
+  img, video, svg { max-width: 100%; height: auto; }
+  /* Evita scroll horizontal por elementos posicionados con right/bottom negativos
+     o por contenedores que exceden el viewport. Aplica GLOBAL (desktop + mobile),
+     antes solo aplicaba <=760px y dejaba pasar la barra blanca en >760px. */
+  html, body { overflow-x: hidden; max-width: 100%; }
+
+  /* Tablet */
+  @media (max-width: 1100px) {
+    .container, .container-wide { padding: 0 24px; }
+    h1 { font-size: 44px !important; line-height: 1.1 !important; }
+    h2 { font-size: 30px !important; }
+    h3 { font-size: 20px !important; }
+  }
+
+  /* Header: nav scrollable horizontalmente en tablet+ chico para que el "Ingresar"
+     no se vaya de pantalla. */
+  @media (max-width: 1024px) {
+    #neura-public-header nav,
+    header nav.row {
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      max-width: calc(100vw - 220px);
+    }
+    header nav.row::-webkit-scrollbar { display: none; }
+  }
+  /* En mobile, el nav del header pasa a ser un menu hamburguesa simple */
+  @media (max-width: 760px) {
+    header nav.row {
+      position: fixed !important;
+      top: 96px !important;
+      left: 0 !important;
+      right: 0 !important;
+      background: #fff !important;
+      border-bottom: 1px solid var(--line) !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 0 !important;
+      padding: 8px 16px !important;
+      max-height: 0 !important;
+      overflow: hidden !important;
+      transition: max-height .2s ease, padding .2s ease !important;
+      box-shadow: 0 8px 20px rgba(0,0,0,.08) !important;
+      z-index: 39 !important;
+    }
+    header nav.row.is-open {
+      max-height: 60vh !important;
+      padding: 12px 16px !important;
+    }
+    header nav.row button {
+      width: 100% !important;
+      text-align: left !important;
+      padding: 12px 8px !important;
+      border-bottom: 1px solid var(--line-2) !important;
+    }
+    .nav-hamburger { display: inline-flex !important; }
+  }
+  .nav-hamburger {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .nav-hamburger:hover { background: var(--bg-2); }
+
+  /* Mobile */
+  @media (max-width: 760px) {
+    html, body { font-size: 15px; }
+    .container, .container-wide { padding: 0 16px; max-width: 100%; }
+    h1 { font-size: 30px !important; line-height: 1.15 !important; }
+    h2 { font-size: 22px !important; line-height: 1.2 !important; }
+    h3 { font-size: 17px !important; }
+    .btn { padding: 11px 16px; font-size: 14px; }
+    .btn-lg { padding: 13px 18px; font-size: 15px; }
+
+    /* Force common desktop layouts to stack */
+    [style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+    [style*="display: grid"] { gap: 16px !important; }
+    [style*="display:grid"]  { gap: 16px !important; }
+
+    /* Flex rows wrap on narrow screens */
+    [style*="display: flex"]:not(.no-wrap), [style*="display:flex"]:not(.no-wrap) { flex-wrap: wrap; }
+    .row:not(.no-wrap) { flex-wrap: wrap !important; }
+    /* Reducir gaps grandes en mobile para que entren los items wrapeados */
+    .row.gap-32 { gap: 16px !important; }
+    .row.gap-24 { gap: 14px !important; }
+    .row.gap-20 { gap: 12px !important; }
+
+    /* Common large fixed paddings → softer on mobile */
+    [style*="padding: 80px"], [style*="padding:80px"] { padding: 40px 16px !important; }
+    [style*="padding: 64px"], [style*="padding:64px"] { padding: 32px 16px !important; }
+    [style*="padding: 56px"], [style*="padding:56px"] { padding: 28px 16px !important; }
+    [style*="padding: 48px"], [style*="padding:48px"] { padding: 24px 16px !important; }
+    [style*="padding: 40px"], [style*="padding:40px"] { padding: 20px 16px !important; }
+
+    /* Anything with a fixed pixel width becomes fluid */
+    [style*="width: 1440px"], [style*="width:1440px"],
+    [style*="width: 1280px"], [style*="width:1280px"],
+    [style*="width: 1200px"], [style*="width:1200px"],
+    [style*="width: 1100px"], [style*="width:1100px"],
+    [style*="width: 1024px"], [style*="width:1024px"],
+    [style*="width: 960px"],  [style*="width:960px"],
+    [style*="width: 900px"],  [style*="width:900px"],
+    [style*="width: 800px"],  [style*="width:800px"],
+    [style*="width: 720px"],  [style*="width:720px"],
+    [style*="width: 640px"],  [style*="width:640px"],
+    [style*="width: 600px"],  [style*="width:600px"],
+    [style*="width: 560px"],  [style*="width:560px"],
+    [style*="width: 520px"],  [style*="width:520px"],
+    [style*="width: 480px"],  [style*="width:480px"],
+    [style*="min-width: 1024px"], [style*="min-width:1024px"],
+    [style*="min-width: 900px"],  [style*="min-width:900px"],
+    [style*="min-width: 800px"],  [style*="min-width:800px"],
+    [style*="min-width: 720px"],  [style*="min-width:720px"],
+    [style*="min-width: 640px"],  [style*="min-width:640px"],
+    [style*="min-width: 600px"],  [style*="min-width:600px"],
+    [style*="min-width: 480px"],  [style*="min-width:480px"] {
+      width: 100% !important;
+      min-width: 0 !important;
+      max-width: 100% !important;
+    }
+
+    /* Floating note → don't cover full screen */
+    .float-note { left: 16px; right: 16px; text-align: center; font-size: 11.5px; }
+  }
+
+  /* Very small phones */
+  @media (max-width: 400px) {
+    h1 { font-size: 28px; }
+    h2 { font-size: 22px; }
+    .container, .container-wide { padding: 0 12px; }
+  }
+
+  /* Targeted mobile fixes — secciones del home con grid fijo */
+  @media (max-width: 760px) {
+    /* Hero search: 5 columnas → 1 columna apilada y compacta */
+    .hero-search-grid {
+      grid-template-columns: 1fr !important;
+      gap: 0 !important;
+    }
+    .hero-search-grid > * {
+      border-right: none !important;
+      border-bottom: 1px solid var(--line-2);
+      width: 100% !important;
+      padding: 8px 14px !important;
+    }
+    .hero-search-grid > *:last-child { border-bottom: none; }
+    /* Etiquetas (CIUDAD, BARRIO, etc.) más chicas */
+    .hero-search-grid > * > div:first-child {
+      font-size: 10px !important;
+      margin-bottom: 2px !important;
+    }
+    /* Valor de los selects inline más chico */
+    .hero-search-grid button span,
+    .hero-search-grid button {
+      font-size: 13.5px !important;
+    }
+    .hero-search-grid > button {
+      margin: 10px !important;
+      padding: 11px 20px !important;
+      width: calc(100% - 20px) !important;
+      justify-content: center !important;
+      font-size: 14px !important;
+    }
+
+    /* Tabs de tipo de inmueble en el hero — grid 2x2 prolijo en mobile */
+    .hero-type-tabs {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 8px !important;
+      max-width: 100%;
+      margin-bottom: 10px;
+    }
+    .hero-type-tabs > button {
+      padding: 10px 8px !important;
+      font-size: 12.5px !important;
+      border-radius: 12px !important;
+      top: 0 !important;
+      background: rgba(255,255,255,.85) !important;
+      box-shadow: 0 1px 3px rgba(11,22,34,.08) !important;
+      justify-content: center !important;
+      width: 100%;
+      gap: 6px !important;
+    }
+    .hero-type-tabs > button > span svg { width: 14px !important; height: 14px !important; }
+
+    /* Stats hero: 4 columnas → 2x2, números más chicos */
+    .hero-stats-grid {
+      grid-template-columns: 1fr 1fr !important;
+      gap: 12px 0 !important;
+    }
+    .hero-stats-grid > * {
+      border-right: none !important;
+      padding: 6px 10px !important;
+    }
+    .hero-stats-grid > * > div:first-child { font-size: 20px !important; }
+    .hero-stats-grid > * > div:nth-child(2) { font-size: 11px !important; }
+
+    /* Cualquier grid de 4 columnas (categorias, etc.) → 2 columnas */
+    .home-grid-4 {
+      grid-template-columns: 1fr 1fr !important;
+      gap: 12px !important;
+    }
+    .home-grid-4 button {
+      padding: 16px !important;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .hero-stats-grid { grid-template-columns: 1fr !important; }
+    .home-grid-4 { grid-template-columns: 1fr !important; }
+  }
+
+  /* === Admin panel (admin-agent / admin-global) en mobile ===
+     El layout es grid "260px 1fr". El catch-all general lo colapsa a 1col
+     y stackea la sidebar arriba — pesa mucho UX porque obliga a scrollear
+     toda la lista de items para llegar al contenido. Convertimos la
+     sidebar en una barra horizontal scrollable con chips. */
+  @media (max-width: 900px) {
+    /* La aside del admin (cualquier .fade-in > div > aside con padding 24/16) */
+    .fade-in > div > aside,
+    aside[style*="border-right"] {
+      min-height: 0 !important;
+      padding: 10px 12px !important;
+      border-right: none !important;
+      border-bottom: 1px solid var(--line) !important;
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      scrollbar-width: none !important;
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: nowrap !important;
+      align-items: center !important;
+      gap: 8px !important;
+    }
+    .fade-in > div > aside::-webkit-scrollbar,
+    aside[style*="border-right"]::-webkit-scrollbar { display: none; }
+    /* Header de la cuenta (Panel de gestion / Admin Empresas) compacto */
+    .fade-in > div > aside > div[style*="border-bottom"],
+    aside[style*="border-right"] > div[style*="border-bottom"] {
+      border-bottom: none !important;
+      padding: 0 8px 0 0 !important;
+      margin-bottom: 0 !important;
+      margin-right: 8px !important;
+      border-right: 1px solid var(--line-2) !important;
+      flex-shrink: 0 !important;
+    }
+    /* Boton "Volver al sitio" -> chip compacto */
+    aside button[title="Volver al sitio"] {
+      width: auto !important;
+      flex-shrink: 0 !important;
+      margin: 0 8px 0 0 !important;
+      padding: 6px 10px !important;
+      font-size: 12px !important;
+    }
+    /* Nav items en linea horizontal */
+    aside nav.col {
+      flex-direction: row !important;
+      flex-wrap: nowrap !important;
+      gap: 4px !important;
+      flex: 0 0 auto !important;
+    }
+    aside nav.col button {
+      flex-shrink: 0 !important;
+      white-space: nowrap !important;
+      padding: 8px 12px !important;
+      font-size: 13px !important;
+    }
+    /* "Sin plan asignado" / banner del plan en horizontal */
+    aside > div[style*="border-top"],
+    aside > div[style*="padding"] {
+      flex-shrink: 0 !important;
+    }
+  }
+
+  /* === Catalogo en mobile: el sidebar de filtros stackea ARRIBA del grid de
+     resultados, lo cual fuerza al usuario a scrollear muchos campos antes de
+     ver propiedades. Cambiamos el order para que primero aparezca el grid de
+     propiedades y los filtros queden abajo (alternativa: un drawer, pero el
+     reorder es no-disruptivo y resuelve el peor problema). */
+  @media (max-width: 760px) {
+    /* CatalogPage grid: 290px 1fr -> stack con grid items en su default
+       order. Marcamos aside como order:2 para que vaya al final, y el div
+       de resultados como order:1. Solo aplica dentro del catalogo. */
+    .container[style*="290px"] > aside,
+    .container[style*="290px 1fr"] > aside {
+      order: 2 !important;
+    }
+    .container[style*="290px"] > aside ~ div,
+    .container[style*="290px 1fr"] > aside ~ div {
+      order: 1 !important;
+    }
+    /* sticky en el filter panel en mobile es contraproducente (queda pegado
+       al borde superior tapando contenido al hacer scroll). Lo desactivamos. */
+    aside[style*="position: sticky"],
+    aside[style*="position:sticky"] {
+      position: static !important;
+      top: auto !important;
+    }
+  }
+
+  /* === Publish wizard en mobile: la sidebar derecha de "Vista previa"
+     (360px hardcoded) ocupa demasiado espacio cuando stackea abajo. La
+     ocultamos en mobile — el usuario ya esta en el flujo del wizard, la
+     vista previa solo distrae. En desktop sigue visible. */
+  @media (max-width: 760px) {
+    /* El grid del wizard es "1fr 360px". Detectamos el aside-like del
+       lado derecho (card sticky con titulo "Vista previa") y lo ocultamos. */
+    [style*="1fr 360px"] > div:last-child,
+    [style*="1fr 360px"] > aside:last-child {
+      display: none !important;
+    }
+  }
+
+  /* === Detail page sticky AgentCard en mobile: el sidebar sticky (380px)
+     queda en su contenedor stackeado abajo. position:sticky con top:92
+     puede tapar contenido al scrollear. Lo hacemos static en mobile. */
+  @media (max-width: 760px) {
+    [style*="position: sticky"][style*="top: 92"],
+    [style*="position:sticky"][style*="top:92"] {
+      position: static !important;
+      top: auto !important;
+    }
+  }
+
+  /* === Modales en mobile: paddings interiores demasiado grandes. Reducimos
+     el padding del header/body/footer y aseguramos que los inputs no
+     desborden. Aplica a cualquier modal con padding hardcodeado de 24-28px. */
+  @media (max-width: 760px) {
+    /* Modales del wizard (publish.jsx) y modal de captacion. */
+    [style*="padding: 24px 28px"],
+    [style*="padding:24px 28px"],
+    [style*="padding: 20px 24px"],
+    [style*="padding:20px 24px"],
+    [style*="padding: 16px 28px"],
+    [style*="padding:16px 28px"],
+    [style*="padding: 14px 28px"],
+    [style*="padding:14px 28px"] {
+      padding: 14px 16px !important;
+    }
+    /* Grid 1fr 1fr dentro de modales (VerificationModal CCC + Catastral,
+       AgentPickerModal contacto) -> 1col. Ya lo hace el catch-all, pero
+       reforzamos en .field para que el label + input queden agrupados. */
+    .field { min-width: 0 !important; }
+    .field input.input, .field textarea.input, .field select.input {
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+  }
+
+  /* === HelpPage en mobile: 2 columnas de contact cards -> 1 col. La
+     sidebar de categorias (260px sticky) se vuelve un dropdown plegable
+     visualmente (no JS, solo deshabilitamos sticky y reducimos padding). */
+  @media (max-width: 760px) {
+    /* HelpPage aside (categorias) */
+    .container > div[style*="260px 1fr"] > aside {
+      position: static !important;
+      top: auto !important;
+      padding: 10px 14px !important;
+    }
+    /* Contact cards: 2col -> 1col handled by catch-all. */
+  }
+
+  /* === PostersPage en mobile: el grid de carteles QR no debe forzar
+     scroll horizontal cuando los items son grandes. */
+  @media (max-width: 760px) {
+    /* PostersPage usa grids variados; el catch-all stackea. Lo que
+       agregamos: cards de QR no expanden la imagen mas del ancho. */
+    [style*="width: 260px"][style*="height: 260px"],
+    [style*="width:260px"][style*="height:260px"] {
+      width: min(260px, 80vw) !important;
+      height: auto !important;
+      aspect-ratio: 1 !important;
+    }
+  }
+
+  /* === TemporalPage en mobile: layouts varios — el catch-all stackea. */
+  @media (max-width: 760px) {
+    /* Asegurar que el calendario no haga overflow horizontal */
+    [class*="calendar"], [style*="grid-template-columns: repeat(7"],
+    [style*="grid-template-columns:repeat(7"] {
+      grid-template-columns: repeat(7, 1fr) !important;
+      gap: 2px !important;
+      font-size: 11px !important;
+    }
+  }
+
+  /* === Wizard step indicator (5 pasos): en mobile el row de pasos puede
+     overflowearse. Lo hacemos scroll horizontal. */
+  @media (max-width: 760px) {
+    /* El stepper esta dentro de .card con padding 20px 24px y contiene
+       una row con justify-content: space-between. La hacemos scroll. */
+    .card .row[style*="justify-content: space-between"]:has(.row.gap-12),
+    .card .row[style*="justify-content:space-between"]:has(.row.gap-12) {
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      flex-wrap: nowrap !important;
+      scrollbar-width: none !important;
+      padding-bottom: 4px !important;
+    }
+    .card .row > .row.gap-12 {
+      flex-shrink: 0 !important;
+      flex: 0 0 auto !important;
+    }
+  }
+
+  /* === Gallery thumbnails en detail.jsx: 5 thumbs uniformes. En mobile
+     muy estrecho (<375), pueden no caber. Forzamos auto-fit minmax. */
+  @media (max-width: 760px) {
+    [style*="grid-template-columns: repeat(5, 1fr)"][style*="aspect-ratio"],
+    [style*="grid-template-columns:repeat(5,1fr)"][style*="aspect-ratio"] {
+      grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)) !important;
+    }
+  }
+
+  /* === Brochure preview modal: contiene paginas A4 que en mobile causan
+     scroll horizontal. Hacemos zoom-fit al ancho del modal. */
+  @media (max-width: 760px) {
+    [style*="width: 794px"],
+    [style*="width:794px"] {
+      width: 100% !important;
+      max-width: 100% !important;
+      transform: scale(var(--brochure-scale, 0.45)) !important;
+      transform-origin: top left !important;
+    }
+  }
+
+  /* === FormGrid (publish.jsx) — wrap a 1col en mobile en lugar de 2col */
+  @media (max-width: 760px) {
+    [style*="grid-template-columns: 1fr 1fr"][style*="gap: 12"],
+    [style*="grid-template-columns:1fr 1fr"][style*="gap:12"],
+    [style*="grid-template-columns: 1fr 1fr"][style*="gap: 14"],
+    [style*="grid-template-columns:1fr 1fr"][style*="gap:14"] {
+      grid-template-columns: 1fr !important;
+      gap: 12px !important;
+    }
+  }
+
+  /* === Sub-menu / chips de filtros en CatalogHeader (tipos) — wrap */
+  @media (max-width: 760px) {
+    /* CatalogHeader chips row mantenia overflow horizontal cuando hay
+       muchos chips de tipo. Forzamos scroll horizontal en lugar de wrap
+       feo. */
+    [style*="border-bottom: 1px solid var(--line)"] > .container > .row.gap-8 {
+      overflow-x: auto !important;
+      flex-wrap: nowrap !important;
+      scrollbar-width: none !important;
+    }
+  }
+
+  /* === Planes: ajustes finos en mobile ===
+     El catch-all general (linea ~308) ya colapsa el grid 2x2 de PlanCard a 1col.
+     Aca afinamos gap, padding y typografia para que se lea bien en celular,
+     y forzamos a la tabla comparativa "Todo lo que incluye cada plan" a hacer
+     scroll horizontal en vez de stackearse verticalmente (queda ilegible si
+     stackea: 5 columnas con 14 filas se aplastan). */
+  @media (max-width: 760px) {
+    .plans-grid {
+      gap: 14px !important;
+      margin-top: 24px !important;
+    }
+    .plans-grid .card {
+      padding: 22px 18px !important;
+    }
+    .plans-grid .card h3,
+    .plans-grid .card > div[style*="font-size: 26"] {
+      font-size: 22px !important;
+    }
+    .plans-grid .card .col.gap-12 {
+      gap: 10px !important;
+    }
+    .plans-grid .card .col.gap-12 .row.gap-10 span:last-child {
+      font-size: 13.5px !important;
+      line-height: 1.4 !important;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      min-width: 0;
+    }
+    /* P2C: en mobile reemplazamos la tabla comparativa (que obligaba a swipe
+       lateral) por 4 cards apiladas verticalmente (.plans-compare-stack).
+       Ocultamos la tabla y mostramos el stack. */
+    .plans-compare-card {
+      display: none !important;
+    }
+    .plans-compare-stack {
+      display: block !important;
+    }
+  }
+  /* Desktop / tablet (>760px): mostramos la tabla y ocultamos el stack. */
+  @media (min-width: 761px) {
+    .plans-compare-stack {
+      display: none !important;
+    }
+  }
+
+  /* === FIX responsive tablet (761–1024px): usar el mismo menú hamburguesa que en mobile === */
+  @media (max-width: 1024px) {
+    .nav-hamburger { display: inline-flex !important; }
+
+    /* Override del estado "scrollable" intermedio que desbordaba (usa selector con ID,
+       por eso acá también se incluye #neura-public-header nav para ganarle). */
+    #neura-public-header nav, header nav.row {
+      overflow-x: hidden !important;
+      max-width: 100% !important;
+      position: fixed !important;
+      top: 96px !important; left: 0 !important; right: 0 !important;
+      background: #fff !important;
+      border-bottom: 1px solid var(--line) !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 0 !important;
+      padding: 8px 16px !important;
+      box-shadow: 0 8px 20px rgba(0,0,0,.08) !important;
+      z-index: 39 !important;
+    }
+
+    /* Altura: baja especificidad para que .is-open pueda ganarle.
+       Cuando el nav esta cerrado, ademas de max-height:0 ANULAMOS padding
+       vertical y border-bottom — sino, el nav fijo (top:96) queda como una
+       franja blanca de ~17px (8px+8px+1px) edge-to-edge debajo del header
+       (P2C: bug reportado por el cliente en mobile). */
+    header nav.row {
+      max-height: 0 !important;
+      overflow-y: hidden !important;
+      padding: 0 16px !important;
+      border-bottom: 0 !important;
+      transition: max-height .2s ease, padding .2s ease, border-bottom-width .2s ease !important;
+    }
+    header nav.row.is-open {
+      max-height: 70vh !important;
+      overflow-y: auto !important;
+      padding: 12px 16px !important;
+      border-bottom: 1px solid var(--line) !important;
+    }
+
+    header nav.row button {
+      width: 100% !important; text-align: left !important;
+      padding: 12px 8px !important; border-bottom: 1px solid var(--line-2) !important;
+    }
+  }
+
+  /* Contenido HTML del blog del agente (renderizado desde TipTap). */
+  .post-html h1 { font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 28px; line-height: 1.2; margin: 24px 0 12px; }
+  .post-html h2 { font-family: 'Montserrat', sans-serif; font-weight: 800; font-size: 22px; line-height: 1.25; margin: 22px 0 10px; }
+  .post-html h3 { font-family: 'Montserrat', sans-serif; font-weight: 700; font-size: 18px; line-height: 1.3; margin: 18px 0 8px; }
+  .post-html p { margin: 0 0 14px; }
+  .post-html ul, .post-html ol { margin: 0 0 14px 22px; padding: 0; }
+  .post-html ul { list-style: disc; }
+  .post-html ol { list-style: decimal; }
+  .post-html li { margin: 4px 0; }
+  .post-html a { color: var(--blue); text-decoration: underline; }
+  .post-html blockquote { margin: 14px 0; padding: 8px 14px; border-left: 3px solid var(--line); color: var(--ink-3); font-style: italic; }
+  .post-html code { background: var(--bg-3); border-radius: 4px; padding: 2px 6px; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+  .post-html pre { background: var(--bg-3); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+  .post-html strong { font-weight: 700; }
+  .post-html em { font-style: italic; }
+
+  /* ===========================================================================
+     Legibilidad y layout en móvil (web pública). Va al final para ganar a las
+     reglas previas con la misma especificidad. Scope: solo <=760px → no toca
+     desktop. Apunta a "texto/elementos muy chicos" y "columnas mal armadas".
+     =========================================================================== */
+  @media (max-width: 760px) {
+    /* Base más grande: mejora todo el texto relativo (rem/em) y la densidad. */
+    html, body { font-size: 16px; }
+
+    /* Pisos de legibilidad para utilidades de texto chico. */
+    .xs { font-size: 13px !important; }
+    .tag { font-size: 12px !important; }
+    .muted { line-height: 1.5; }
+
+    /* Targets táctiles cómodos (botones/links de acción). */
+    .btn { min-height: 44px; padding: 12px 18px; font-size: 15px; }
+    .btn-sm { min-height: 40px; padding: 10px 15px !important; font-size: 14px !important; }
+    a.btn, button.btn { display: inline-flex; align-items: center; justify-content: center; }
+
+    /* Tarjetas apiladas: full width y respiro consistente. */
+    .card { width: 100%; }
+
+    /* Grillas de estadísticas/atributos chicos: mejor 2 columnas que una sola
+       fila larga y vacía (la regla global las pasaba todas a 1fr). Aplica solo
+       a grids que pedían 3+ columnas de ancho fijo o repeat(N). */
+    [style*="repeat(3, 1fr)"],
+    [style*="repeat(3,1fr)"],
+    [style*="repeat(4, 1fr)"],
+    [style*="repeat(4,1fr)"] {
+      grid-template-columns: 1fr 1fr !important;
+    }
+    /* Listados principales (propiedades/agentes/posts) sí a 1 columna full. */
+    [style*="minmax(280px"],
+    [style*="minmax(300px"],
+    [style*="minmax(260px"] {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
+  /* Teléfonos chicos: priorizar 1 columna real y texto cómodo. */
+  @media (max-width: 460px) {
+    [style*="repeat(3, 1fr)"],
+    [style*="repeat(3,1fr)"],
+    [style*="repeat(4, 1fr)"],
+    [style*="repeat(4,1fr)"] {
+      grid-template-columns: 1fr !important;
+    }
+    .btn, .btn-sm { width: 100%; }
+    .row.gap-8 .btn, .row.gap-10 .btn, .row.gap-12 .btn { width: auto; }
+  }
+
+  /* Ficha de propiedad — "Características principales": en desktop es una
+     grilla de 6 columnas (icono arriba, label+valor abajo). En móvil quedaba
+     apilada en una sola columna (efecto de la regla global de colapsar grids)
+     con cada ítem ocupando una fila enorme y sin sentido. Acá lo hacemos
+     compacto: 3 columnas en móvil y 2 en teléfonos chicos, con el icono al
+     costado y label+valor al lado (formato horizontal). */
+  @media (max-width: 760px) {
+    .prop-features-grid {
+      grid-template-columns: repeat(3, 1fr) !important;
+      gap: 12px !important;
+    }
+    .prop-features-grid .prop-feature {
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center;
+      gap: 10px;
+    }
+    .prop-features-grid .prop-feature-icon {
+      width: 36px !important; height: 36px !important;
+    }
+    .prop-features-grid .prop-feature-text { flex: 1; min-width: 0; }
+    .prop-features-grid .prop-feature-label {
+      margin-top: 0 !important;
+      font-size: 11.5px !important;
+      line-height: 1.2;
+    }
+    .prop-features-grid .prop-feature-value {
+      font-size: 14px !important;
+      line-height: 1.2;
+      margin-top: 1px;
+    }
+  }
+  @media (max-width: 460px) {
+    .prop-features-grid {
+      grid-template-columns: repeat(2, 1fr) !important;
+    }
+  }
+
+  /* ===========================================================================
+     PANEL ADMIN (agente / propietario) — responsive.
+     Desktop: sidebar fijo 260px + contenido. Mobile: sidebar como drawer
+     deslizante desde la izquierda, abierto con el boton burger, contenido
+     ocupa 100% del ancho. Sin esto el panel se veia con un sidebar de 260px
+     pegado al borde y el main reducido, obligando scroll horizontal.
+     =========================================================================== */
+  .admin-shell { display: grid; grid-template-columns: 260px 1fr; }
+  .admin-burger { display: none; }
+  .admin-backdrop { display: none; }
+  @media (max-width: 900px) {
+    .admin-shell { grid-template-columns: 1fr; }
+    .admin-aside {
+      position: fixed !important; top: 0; bottom: 0; left: 0;
+      width: 280px; max-width: 84vw;
+      transform: translateX(-100%);
+      transition: transform .22s ease;
+      z-index: 60;
+      box-shadow: 0 24px 60px -10px rgba(0,0,0,.35);
+      overflow-y: auto;
+    }
+    .admin-aside.open { transform: translateX(0); }
+    .admin-main { padding: 12px 14px !important; }
+    .admin-burger {
+      display: inline-flex !important; align-items: center; justify-content: center;
+      width: 40px; height: 40px; border-radius: 10px;
+      background: var(--bg-2); border: 1px solid var(--line-2);
+      color: var(--ink-2); cursor: pointer; flex-shrink: 0;
+    }
+    .admin-backdrop.open {
+      display: block; position: fixed; inset: 0;
+      background: rgba(11,22,34,.5); z-index: 55;
+    }
+    /* Header del main: el titulo deja de ser una row entre titulo + acciones
+       y se apila para que el burger no quede aplastado. */
+    .admin-main-header { flex-wrap: wrap; gap: 12px; }
+    /* KPI strips y grids del panel: 2 columnas en mobile (4 desktop). */
+    .admin-main [style*="repeat(4, 1fr)"],
+    .admin-main [style*="repeat(4,1fr)"] {
+      grid-template-columns: repeat(2, 1fr) !important;
+    }
+    /* Panel admin (agente / propietario): colapsar grids inline en mobile. */
+    .admin-main [style*="grid-template-columns: 1.4fr 1fr"],
+    .admin-main [style*="grid-template-columns:1.4fr 1fr"],
+    .admin-main [style*="grid-template-columns: 1.6fr 1fr"],
+    .admin-main [style*="grid-template-columns:1.6fr 1fr"],
+    .admin-main [style*="grid-template-columns: 1fr 1fr 1fr"],
+    .admin-main [style*="grid-template-columns:1fr 1fr 1fr"],
+    .admin-main [style*="grid-template-columns: 1fr 1fr"]:not([style*="1fr 1fr 1fr"]),
+    .admin-main [style*="grid-template-columns:1fr 1fr"]:not([style*="1fr 1fr 1fr"]),
+    .admin-main [style*="repeat(3, 1fr)"],
+    .admin-main [style*="repeat(3,1fr)"] {
+      grid-template-columns: 1fr !important;
+    }
+    /* KPI strips de 5 columnas → 2 en mobile. */
+    .admin-main [style*="repeat(5, 1fr)"],
+    .admin-main [style*="repeat(5,1fr)"] {
+      grid-template-columns: repeat(2, 1fr) !important;
+    }
+    /* Evita overflow horizontal por imagenes/cards anchas. */
+    .admin-main { min-width: 0; overflow-x: hidden; }
+    .admin-main .card { max-width: 100%; }
+    .admin-main img { max-width: 100%; height: auto; }
+    /* Botones que estiran fila completa cuando hay poco espacio. */
+    .admin-main .row { flex-wrap: wrap; }
+  }
+
+  /* Breakpoint phone: incluso los KPI de 4 columnas se vuelven 1. */
+  @media (max-width: 480px) {
+    .admin-main [style*="repeat(4, 1fr)"],
+    .admin-main [style*="repeat(4,1fr)"],
+    .admin-main [style*="repeat(5, 1fr)"],
+    .admin-main [style*="repeat(5,1fr)"],
+    .admin-main [style*="repeat(2, 1fr)"],
+    .admin-main [style*="repeat(2,1fr)"] {
+      grid-template-columns: 1fr !important;
+    }
+    .admin-main h1 { font-size: 22px !important; }
+    .admin-main h2 { font-size: 18px !important; }
+  }
+
+  /* ===========================================================================
+     MODALES PORTAL (fixed inset:0 z-index:1000): Quiero este plan / Solicitar acceso /
+     RequestPlanModal / wizard de publicar. En mobile, el padding 16 del overlay
+     + maxHeight 100dvh dejaba el footer (botones Cancelar / Enviar) fuera de la
+     vista. Forzamos full-screen con padding minimo y 100svh (small viewport
+     height — sobrevive al notch y a la address bar de iOS Safari).
+     =========================================================================== */
+  @media (max-width: 600px) {
+    body > div[style*="position: fixed"][style*="inset: 0"][style*="z-index: 1000"] {
+      padding: 8px !important;
+      align-items: stretch !important;
+      padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    }
+    body > div[style*="position: fixed"][style*="inset: 0"][style*="z-index: 1000"] > * {
+      max-height: calc(100svh - 16px) !important;
+      max-height: calc(100dvh - 16px) !important;
+      max-width: 100% !important;
+      width: 100% !important;
+      margin: 0 !important;
+    }
+    /* Headers / footers de modales: padding lateral mas chico para que entren
+       textos largos sin truncar. */
+    body > div[style*="position: fixed"][style*="inset: 0"][style*="z-index: 1000"] [style*="padding: 20px 24px"],
+    body > div[style*="position: fixed"][style*="inset: 0"][style*="z-index: 1000"] [style*="padding: 14px 24px"],
+    body > div[style*="position: fixed"][style*="inset: 0"][style*="z-index: 1000"] [style*="padding: 16px 24px"] {
+      padding-left: 16px !important;
+      padding-right: 16px !important;
+    }
+  }
+
+  /* Selector de estado en "Mis propiedades" del panel publicador: el <select>
+     inline no muestra la flechita en algunos browsers (Edge/Chromium con
+     ciertos estilos custom). Forzamos chevron SVG via background. */
+  select.ay-state-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'><path d='M1 1l4 4 4-4' stroke='%23475569' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 24px !important;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<!--
+  PERF: los .jsx ahora se precompilan a build/*.js con esbuild durante el
+  `next build` (ver scripts/build-legacy-jsx.cjs). Esto elimina:
+    - @babel/standalone del navegador (~2.9MB de descarga)
+    - la transpilación de ~517KB de JSX en runtime, que bloqueaba el hilo
+      principal varios segundos en celular.
+  Todos los scripts son clásicos con `defer`: se ejecutan EN ORDEN de
+  documento después del parse, sin bloquear el primer paint. El orden es
+  load-bearing (cada archivo usa globals definidos por los anteriores).
+-->
+<!-- Builds de producción de React: minificados, ~7x más chicos. -->
+<script defer src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script defer src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+<!-- Chatbot (define SENDPULSE_CONFIG/vivioSendpulse usado por shared) -->
+<script defer src="build/vivio-sendpulse.js?v=qr-fix-1"></script>
+
+<!-- Núcleo + páginas, orden estricto de dependencias -->
+<script defer src="build/brand.js?v=qr-fix-1"></script>
+<script defer src="build/data.js?v=qr-fix-1"></script>
+<script defer src="build/api-data.js?v=qr-fix-1"></script>
+<script defer src="build/shared.js?v=qr-fix-1"></script>
+<script defer src="build/home.js?v=qr-fix-1"></script>
+<script defer src="build/catalog.js?v=qr-fix-1"></script>
+<script defer src="build/detail.js?v=qr-fix-1"></script>
+<script defer src="build/temporal.js?v=qr-fix-1"></script>
+<script defer src="build/plans.js?v=qr-fix-1"></script>
+<script defer src="build/publish.js?v=qr-fix-1"></script>
+<script defer src="build/posters.js?v=qr-fix-1"></script>
+<script defer src="build/admin.js?v=qr-fix-1"></script>
+<script defer src="build/agent.js?v=qr-fix-1"></script>
+<script defer src="build/help.js?v=qr-fix-1"></script>
+<script defer src="build/app.js?v=qr-fix-1"></script>
+</body>
+</html>
