@@ -42,3 +42,18 @@ export function getClientSchema(): string {
 export function getClientName(): string {
   return readTrimmed(process.env.NEURA_CLIENT_NAME);
 }
+
+/**
+ * UUID de la fila en `<schema>.empresas` que representa al tenant.
+ * Antes era una constante hardcodeada (ALQUILOYA_EMPRESA_ID) replicada en 70+
+ * archivos. Ahora viene del env `NEURA_CLIENT_EMPRESA_ID`; si no esta seteada,
+ * default a GreenLand (la instancia activa).
+ *
+ * Para otra instancia se setea la var con el UUID correspondiente.
+ */
+const DEFAULT_CLIENT_EMPRESA_ID = "9c539bf1-f005-424f-ae46-87701f4f6f71"; // GreenLand
+
+export function getClientEmpresaId(): string {
+  const v = readTrimmed(process.env.NEURA_CLIENT_EMPRESA_ID);
+  return v.length > 0 ? v : DEFAULT_CLIENT_EMPRESA_ID;
+}
